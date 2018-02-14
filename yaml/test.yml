@@ -1,0 +1,7 @@
+environment: really?
+classes:
+  nfs:
+    exports:
+      - /srv/share1
+      - test2 
+parameters: test

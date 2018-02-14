@@ -1,0 +1,53 @@
+hash: 7e85817f354a1a2fe0e342c3096d2f2923bda861333a6aa1d7e2512c53ac547d
+updated: 2018-02-15T02:12:51.91628324+09:00
+imports:
+- name: github.com/bradfitz/gomemcache
+  version: 1952afaa557dc08e8e0d89eafab110fb501c1a2b
+  subpackages:
+  - memcache
+- name: github.com/fsnotify/fsnotify
+  version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
+- name: github.com/hashicorp/hcl
+  version: 23c074d0eceb2b8a5bfdbb271ab780cde70f05a8
+  subpackages:
+  - hcl/ast
+  - hcl/parser
+  - hcl/printer
+  - hcl/scanner
+  - hcl/strconv
+  - hcl/token
+  - json/parser
+  - json/scanner
+  - json/token
+- name: github.com/magiconair/properties
+  version: c0201468d0087f514096f0349a854771c774d83b
+- name: github.com/mitchellh/mapstructure
+  version: a4e142e9c047c904fa2f1e144d9a84e6133024bc
+- name: github.com/pelletier/go-toml
+  version: acdc4509485b587f5e675510c4f2c63e90ff68a8
+- name: github.com/phayes/permbits
+  version: 529f712b661aa1075f21a3d7380f3a998556c1a2
+- name: github.com/spf13/afero
+  version: bbf41cb36dffe15dff5bf7e18c447801e7ffe163
+  subpackages:
+  - mem
+- name: github.com/spf13/cast
+  version: acbeb36b902d72a7a4c18e8f3241075e7ab763e4
+- name: github.com/spf13/jwalterweatherman
+  version: 7c0cea34c8ece3fbeb2b27ab9b59511d360fb394
+- name: github.com/spf13/pflag
+  version: 6a877ebacf28c5fc79846f4fcd380a5d9872b997
+- name: github.com/spf13/viper
+  version: aafc9e6bc7b7bb53ddaa75a5ef49a17d6e654be5
+- name: golang.org/x/sys
+  version: 37707fdb30a5b38865cfb95e5aab41707daec7fd
+  subpackages:
+  - unix
+- name: golang.org/x/text
+  version: 4e4a3210bb54bb31f6ab2cdca2edcc0b50c420c1
+  subpackages:
+  - transform
+  - unicode/norm
+- name: gopkg.in/yaml.v2
+  version: d670f9405373e636a5a2765eea47fac0c9bc91a4
+testImports: []

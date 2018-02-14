@@ -1,0 +1,13 @@
+package: github.com/jasonyangshadow/lpmx
+homepage: https://github.com/jasonyangshadow/lpmx
+license: MIT
+owners:
+  - name: Xu Yang
+    email: jasonyangshadow@gmail.com
+    homepage: https://jasonyangshadow.github.io
+import:
+  - package: github.com/spf13/viper
+  - package: github.com/bradfitz/gomemcache/memcache
+  - package: github.com/phayes/permbits
+testimport:
+  - package: github.com/arschles/assert
