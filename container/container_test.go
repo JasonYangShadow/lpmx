@@ -6,6 +6,10 @@ import (
 )
 
 func TestContainer1(t *testing.T) {
-	con, err := CreateContainer("./", "test")
-	fmt.Printf(con)
+	con, _ := CreateContainer(".", "test")
+	fmt.Println(Walkfs(con))
+}
+
+func TestContainer2(t *testing.T) {
+	fmt.Println(Command("ls", "-al"))
 }

@@ -15,10 +15,10 @@ const (
 
 //InitServer is used for initializing memcache server using default configuration
 func InitServer() (*Client, *Error) {
-	server := fmt.Sprintf("%s:%s", MEM_SERVER, MEM_PORT)
+	server := fmt.Sprintf("%s:%d", MEM_SERVER, MEM_PORT)
 	client := New(server)
 	if client == nil {
-		err := ErrNew(ErrServerError, fmt.Sprintf("can't create server through the config %s:%s", MEM_SERVER, MEM_PORT))
+		err := ErrNew(ErrServerError, fmt.Sprintf("can't create server through the config %s:%d", MEM_SERVER, MEM_PORT))
 		return nil, &err
 	}
 	return client, nil

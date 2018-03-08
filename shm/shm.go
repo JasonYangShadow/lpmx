@@ -1,10 +1,9 @@
 package shm
 
-import(
+import (
 	"fmt"
 )
 
 func setValue() {
 	fmt.Println("main")
 }
-<`0`>
