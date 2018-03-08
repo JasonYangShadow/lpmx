@@ -25,21 +25,21 @@ var (
 )
 
 type Container struct {
-	id                    string
-	root_path             string
-	status                int8
-	log_path              string
-	elfpatcher_path       string
-	fakechroot_path       string
-	setting_conf_path     string
-	setting_conf          map[string]interface{}
-	start_time            string
-	image_name            string
-	container_name        string
-	create_user           string
-	memcached_server_list string
-	shm_files             string
-	ipc_files             string
+	Id                  string
+	RootPath            string
+	Status              int8
+	LogPath             string
+	ElfPatcherPath      string
+	FakechrootPath      string
+	SettingConfPath     string
+	SettingConf         map[string]interface{}
+	StartTime           string
+	ImageName           string
+	ContainerName       string
+	CreateUser          string
+	MemcachedServerList string
+	ShmFiles            string
+	IpcFiles            string
 }
 
 func findAvailableId() (int, *Error) {
@@ -59,18 +59,18 @@ func CreateContainer(cwd string, image_name string) (*Container, *Error) {
 	id, err := findAvailableId()
 	if err == nil {
 		var con Container
-		con.id = fmt.Sprintf("container-%d", id)
+		con.Id = fmt.Sprintf("container-%d", id)
 		for strings.HasSuffix(cwd, "/") {
 			cwd = strings.TrimSuffix(cwd, "/")
 		}
-		con.root_path = fmt.Sprintf("%s/%s/instance", cwd, con.id)
-		con.status = STOPPED
-		con.log_path = fmt.Sprintf("%s/%s/log", cwd, con.id)
-		con.elfpatcher_path = fmt.Sprintf("%s/%s/elf/", cwd, con.id)
-		con.fakechroot_path = fmt.Sprintf("%s/%s/fakechroot/", cwd, con.id)
-		con.setting_conf_path = fmt.Sprintf("%s/%s/settings/", cwd, con.id)
-		con.setting_conf, _ = GetMap("setting.yml", []string{con.setting_conf_path})
-		con.image_name = image_name
+		con.RootPath = fmt.Sprintf("%s/%s/instance", cwd, con.Id)
+		con.Status = STOPPED
+		con.LogPath = fmt.Sprintf("%s/%s/log", cwd, con.Id)
+		con.ElfPatcherPath = fmt.Sprintf("%s/%s/elf/", cwd, con.Id)
+		con.FakechrootPath = fmt.Sprintf("%s/%s/fakechroot/", cwd, con.Id)
+		con.SettingConfPath = fmt.Sprintf("%s/%s/settings/", cwd, con.Id)
+		con.SettingConf, _ = GetMap("setting.yml", []string{con.SettingConfPath})
+		con.ImageName = image_name
 		return &con, nil
 	}
 	return nil, err
@@ -79,7 +79,7 @@ func CreateContainer(cwd string, image_name string) (*Container, *Error) {
 func Walkfs(con *Container) ([]string, *Error) {
 	fileList := []string{}
 
-	err := filepath.Walk(con.root_path, func(path string, f os.FileInfo, err error) error {
+	err := filepath.Walk(con.RootPath, func(path string, f os.FileInfo, err error) error {
 		ftype, err := FileType(path)
 		if err != nil {
 			return err
