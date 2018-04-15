@@ -1,5 +1,5 @@
-hash: 7e85817f354a1a2fe0e342c3096d2f2923bda861333a6aa1d7e2512c53ac547d
-updated: 2018-02-15T02:12:51.91628324+09:00
+hash: 912b4f03cb62319ae7b26ae9a109fea310d8ee92cfc69bb2952d32749b6a015b
+updated: 2018-04-14T22:23:44.30675624+09:00
 imports:
 - name: github.com/bradfitz/gomemcache
   version: 1952afaa557dc08e8e0d89eafab110fb501c1a2b
@@ -33,6 +33,10 @@ imports:
   - mem
 - name: github.com/spf13/cast
   version: acbeb36b902d72a7a4c18e8f3241075e7ab763e4
+- name: github.com/spf13/cobra
+  version: a1f051bc3eba734da4772d60e2d677f47cf93ef4
+  subpackages:
+  - cobra
 - name: github.com/spf13/jwalterweatherman
   version: 7c0cea34c8ece3fbeb2b27ab9b59511d360fb394
 - name: github.com/spf13/pflag
