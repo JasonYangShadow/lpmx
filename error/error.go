@@ -13,6 +13,8 @@ var (
 	ErrExist    = errors.New("Exist error")
 	ErrMismatch = errors.New("Type mismatch error")
 	ErrFileStat = errors.New("file stat error")
+	ErrUnknown  = errors.New("Unknown error")
+	ErrDirMake  = errors.New("Error when making a folder")
 )
 
 type Error struct {

@@ -24,6 +24,12 @@ var (
 	AvailableContainerIds = [MAX_CONTAINER_COUNT]int8{0}
 )
 
+type MemContainers struct {
+	ContainersMap map[string]*Container
+	RootDir       string
+	SettingConf   map[string]interface{}
+}
+
 type Container struct {
 	Id                  string
 	RootPath            string
@@ -76,8 +82,22 @@ func createContainer(dir string, name string) (*Container, *Error) {
 	return nil, err
 }
 
+func Init(conf []string) (*MemContainers, *Error) {
+	var cons MemContainers
+	cons.SettingConf, err = GetMap("setting.yml", conf)
+	if err == nil {
+		cons.RootDir = cons.SettingConf["RootDir"].(string)
+		val, err = MakeDir(cons.RootDir)
+		if err != nil {
+			return nil, err
+		}
+		return &cons, nil
+	}
+	return nil, err
+}
+
 func RunContainer(dir string, name string) (*Container, *Error) {
-	fmt.Printf("dir:%s, name: %s\n", dir, name)
+
 	return nil, nil
 }
 

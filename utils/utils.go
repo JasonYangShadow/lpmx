@@ -101,3 +101,12 @@ func FilePermission(file interface{}, permType int8) (bool, *Error) {
 	}
 
 }
+
+func MakeDir(dir string) (bool, *Error) {
+	err := os.MkdirAll(dir, 0777)
+	if err == nil {
+		return true, nil
+	}
+	cerr := ErrNew(ErrDirMake, fmt.Sprintf("creating %s folder error", dir))
+	return false, &cerr
+}
