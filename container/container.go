@@ -55,25 +55,35 @@ func findAvailableId() (int, *Error) {
 	return -1, &cerr
 }
 
-func CreateContainer(cwd string, image_name string) (*Container, *Error) {
+func createContainer(dir string, name string) (*Container, *Error) {
 	id, err := findAvailableId()
 	if err == nil {
 		var con Container
 		con.Id = fmt.Sprintf("container-%d", id)
-		for strings.HasSuffix(cwd, "/") {
-			cwd = strings.TrimSuffix(cwd, "/")
+		for strings.HasSuffix(dir, "/") {
+			dir = strings.TrimSuffix(dir, "/")
 		}
-		con.RootPath = fmt.Sprintf("%s/%s/instance", cwd, con.Id)
+		con.RootPath = fmt.Sprintf("%s/%s/instance", dir, con.Id)
 		con.Status = STOPPED
-		con.LogPath = fmt.Sprintf("%s/%s/log", cwd, con.Id)
-		con.ElfPatcherPath = fmt.Sprintf("%s/%s/elf/", cwd, con.Id)
-		con.FakechrootPath = fmt.Sprintf("%s/%s/fakechroot/", cwd, con.Id)
-		con.SettingConfPath = fmt.Sprintf("%s/%s/settings/", cwd, con.Id)
+		con.LogPath = fmt.Sprintf("%s/%s/log", dir, con.Id)
+		con.ElfPatcherPath = fmt.Sprintf("%s/%s/elf/", dir, con.Id)
+		con.FakechrootPath = fmt.Sprintf("%s/%s/fakechroot/", dir, con.Id)
+		con.SettingConfPath = fmt.Sprintf("%s/%s/settings/", dir, con.Id)
 		con.SettingConf, _ = GetMap("setting.yml", []string{con.SettingConfPath})
-		con.ImageName = image_name
+		con.ImageName = name
 		return &con, nil
 	}
 	return nil, err
+}
+
+func RunContainer(dir string, name string) (*Container, *Error) {
+	fmt.Printf("dir:%s, name: %s\n", dir, name)
+	return nil, nil
+}
+
+func DestroyContainer(name string) (*Container, *Error) {
+	fmt.Printf("name: %s\n", name)
+	return nil, nil
 }
 
 func Walkfs(con *Container) ([]string, *Error) {
