@@ -97,7 +97,7 @@ func Init(conf []string) (*MemContainers, *Error) {
 }
 
 func RunContainer(dir string, name string) (*Container, *Error) {
-
+	con, err := createContainer(dir, name)
 	return nil, nil
 }
 
