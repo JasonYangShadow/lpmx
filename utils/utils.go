@@ -22,10 +22,19 @@ const (
 )
 
 func FileExist(file string) bool {
-	if _, err := os.Stat(file); os.IsNotExist(err) {
-		return false
+	ftype, err := FileType(file)
+	if err == nil && ftype == TYPE_REGULAR {
+		return true
 	}
-	return true
+	return false
+}
+
+func FolderExist(folder string) bool {
+	ftype, err := FileType(folder)
+	if err == nil && ftype == TYPE_DIR {
+		return true
+	}
+	return false
 }
 
 func FileType(file string) (int8, *Error) {

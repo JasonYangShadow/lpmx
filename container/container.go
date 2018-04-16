@@ -1,13 +1,10 @@
 package container
 
 import (
-	"bytes"
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/error"
 	. "github.com/jasonyangshadow/lpmx/utils"
 	. "github.com/jasonyangshadow/lpmx/yaml"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -82,12 +79,34 @@ func createContainer(dir string, name string) (*Container, *Error) {
 	return nil, err
 }
 
+func walkfs(dir string) ([]string, *Error) {
+	fileList := []string{}
+
+	err := filepath.Walk(dir, func(path string, f os.FileInfo, err error) error {
+		ftype, err := FileType(path)
+		if err != nil {
+			return err
+		}
+		if ftype == TYPE_REGULAR {
+			_, err := FilePermission(path, PERM_EXE)
+			if err != nil {
+				return nil
+			}
+			fileList = append(fileList, path)
+		}
+		return nil
+	})
+	cerr := ErrNew(err, fmt.Sprintf("walkfs: %s error", dir))
+	return fileList, &cerr
+}
+
 func Init(conf []string) (*MemContainers, *Error) {
 	var cons MemContainers
-	cons.SettingConf, err = GetMap("setting.yml", conf)
+	val, err := GetMap("setting.yml", conf)
+	cons.SettingConf = val
 	if err == nil {
 		cons.RootDir = cons.SettingConf["RootDir"].(string)
-		val, err = MakeDir(cons.RootDir)
+		_, err := MakeDir(cons.RootDir)
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +117,7 @@ func Init(conf []string) (*MemContainers, *Error) {
 
 func RunContainer(dir string, name string) (*Container, *Error) {
 	con, err := createContainer(dir, name)
-	return nil, nil
+	return con, err
 }
 
 func DestroyContainer(name string) (*Container, *Error) {
@@ -106,49 +125,10 @@ func DestroyContainer(name string) (*Container, *Error) {
 	return nil, nil
 }
 
-func Walkfs(con *Container) ([]string, *Error) {
-	fileList := []string{}
-
-	err := filepath.Walk(con.RootPath, func(path string, f os.FileInfo, err error) error {
-		ftype, err := FileType(path)
-		if err != nil {
-			return err
-		}
-		if ftype == TYPE_REGULAR {
-			_, err := FilePermission(path, PERM_EXE)
-			if err != nil {
-				return err
-			}
-			fileList = append(fileList, path)
-		}
-		return nil
-	})
-	cerr := ErrNew(err, "walkfs error")
-	return fileList, &cerr
+func WalkContainerRoot(con *Container) ([]string, *Error) {
+	return walkfs(con.RootPath)
 }
 
-func Command(cmdStr string, arg ...string) (string, *Error) {
-	cmd := exec.Command(cmdStr, arg...)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	err := cmd.Run()
-	if err != nil {
-		cerr := ErrNew(err, "cmd running error")
-		return "", &cerr
-	}
-	return out.String(), nil
-}
-
-func CommandEnv(cmdStr string, env map[string]string, arg ...string) (string, *Error) {
-	cmd := exec.Command(cmdStr, arg...)
-	var out bytes.Buffer
-	for key, value := range env {
-		cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%s", key, value))
-	}
-	cmd.Stdout = &out
-	if err := cmd.Run(); err != nil {
-		cerr := ErrNew(err, "commandenv error")
-		return "", &cerr
-	}
-	return out.String(), nil
+func WalkSpecificDir(dir string) ([]string, *Error) {
+	return walkfs(dir)
 }

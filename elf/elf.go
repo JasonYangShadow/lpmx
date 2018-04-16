@@ -19,8 +19,8 @@ const (
 var PARAMS = []string{"--set-interpreter", "--set-soname", "--set-rpath", "--add-needed", "--remove-rpath", "--remove-needed", "--replace-needed"}
 
 func elfPatch(op int, con *Container, arg ...string) (string, *Error) {
-	flag = PARAMS[int]
-	cmd = fmt.Sprintf("%s %s", con.ElfPatcherPath, flag)
+	flag := PARAMS[op]
+	cmd := fmt.Sprintf("%s %s", con.ElfPatcherPath, flag)
 	out, err := Command(cmd, arg)
 	if err == nil {
 		return out, nil

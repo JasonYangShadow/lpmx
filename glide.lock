@@ -1,5 +1,5 @@
 hash: 912b4f03cb62319ae7b26ae9a109fea310d8ee92cfc69bb2952d32749b6a015b
-updated: 2018-04-14T22:23:44.30675624+09:00
+updated: 2018-04-16T23:41:53.68268627+09:00
 imports:
 - name: github.com/bradfitz/gomemcache
   version: 1952afaa557dc08e8e0d89eafab110fb501c1a2b
@@ -19,6 +19,8 @@ imports:
   - json/parser
   - json/scanner
   - json/token
+- name: github.com/inconshreveable/mousetrap
+  version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/magiconair/properties
   version: c0201468d0087f514096f0349a854771c774d83b
 - name: github.com/mitchellh/mapstructure
