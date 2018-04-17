@@ -2,7 +2,6 @@ package elf
 
 import (
 	"fmt"
-	. "github.com/jasonyangshadow/lpmx/container"
 	. "github.com/jasonyangshadow/lpmx/error"
 )
 
@@ -18,9 +17,9 @@ const (
 
 var PARAMS = []string{"--set-interpreter", "--set-soname", "--set-rpath", "--add-needed", "--remove-rpath", "--remove-needed", "--replace-needed"}
 
-func elfPatch(op int, con *Container, arg ...string) (string, *Error) {
+func elfPatch(op int, elfpath string, arg ...string) (string, *Error) {
 	flag := PARAMS[op]
-	cmd := fmt.Sprintf("%s %s", con.ElfPatcherPath, flag)
+	cmd := fmt.Sprintf("%s %s", elfpath, flag)
 	out, err := Command(cmd, arg)
 	if err == nil {
 		return out, nil
@@ -28,8 +27,8 @@ func elfPatch(op int, con *Container, arg ...string) (string, *Error) {
 	return "", err
 }
 
-func ElfSetInterpreter(con *Container, lib string, prog string) (bool, *Error) {
-	out, err := elfPatch(SET_INTERPRETER, con, lib, prog)
+func ElfSetInterpreter(elfpath string, lib string, prog string) (bool, *Error) {
+	out, err := elfPatch(SET_INTERPRETER, elfpath, lib, prog)
 	if err == nil {
 		return true, nil
 	} else {
@@ -37,8 +36,8 @@ func ElfSetInterpreter(con *Container, lib string, prog string) (bool, *Error) {
 	}
 }
 
-func ElfSetSoname(con *Container, lib string, prog string) (bool, *Error) {
-	out, err := elfPatch(SET_SONAME, con, lib, prog)
+func ElfSetSoname(elfpath string, lib string, prog string) (bool, *Error) {
+	out, err := elfPatch(SET_SONAME, elfpath, lib, prog)
 	if err == nil {
 		return true, nil
 	} else {
@@ -46,8 +45,8 @@ func ElfSetSoname(con *Container, lib string, prog string) (bool, *Error) {
 	}
 }
 
-func ElfRPath(con *Container, lib string, prog string) (bool, *Error) {
-	out, err := elfPatch(SET_RPATH, con, lib, prog)
+func ElfRPath(elfpath string, lib string, prog string) (bool, *Error) {
+	out, err := elfPatch(SET_RPATH, elfpath, lib, prog)
 	if err == nil {
 		return true, nil
 	} else {
@@ -55,9 +54,9 @@ func ElfRPath(con *Container, lib string, prog string) (bool, *Error) {
 	}
 }
 
-func ElfAddNeeded(con *Container, libs []string, prog string) (bool, *Error) {
+func ElfAddNeeded(elfpath string, libs []string, prog string) (bool, *Error) {
 	for lib := range libs {
-		out, err := elfPatch(ADD_NEEDED, con, lib, prog)
+		out, err := elfPatch(ADD_NEEDED, elfpath, lib, prog)
 		if err != nil {
 			return false, err
 		}
@@ -65,9 +64,9 @@ func ElfAddNeeded(con *Container, libs []string, prog string) (bool, *Error) {
 	return true, nil
 }
 
-func ElfRemoveNeeded(con *Container, libs []string, prog string) (bool, *Error) {
+func ElfRemoveNeeded(elfpath string, libs []string, prog string) (bool, *Error) {
 	for lib := range libs {
-		out, err := elfPatch(REMOVE_NEEDED, con, lib, prog)
+		out, err := elfPatch(REMOVE_NEEDED, elfpath, lib, prog)
 		if err != nil {
 			return false, err
 		}
@@ -75,8 +74,8 @@ func ElfRemoveNeeded(con *Container, libs []string, prog string) (bool, *Error) 
 	return true, nil
 }
 
-func ElfRemoveRPath(con *Container, lib string, prog string) (bool, *Error) {
-	out, err := elfPatch(REMOVE_RPATH, con, lib, prog)
+func ElfRemoveRPath(elfpath string, lib string, prog string) (bool, *Error) {
+	out, err := elfPatch(REMOVE_RPATH, elfpath, lib, prog)
 	if err != nil {
 		return false, err
 	} else {
@@ -84,8 +83,8 @@ func ElfRemoveRPath(con *Container, lib string, prog string) (bool, *Error) {
 	}
 }
 
-func ElfReplaceNeeded(con *Container, lib_old string, lib_new string, prog string) (bool, *Error) {
-	out, err := elfPatch(REPLACE_NEEDED, con, lib_old, lib_nwe, prog)
+func ElfReplaceNeeded(elfpath string, lib_old string, lib_new string, prog string) (bool, *Error) {
+	out, err := elfPatch(REPLACE_NEEDED, elfpath, lib_old, lib_nwe, prog)
 	if err != nil {
 		return false, err
 	} else {

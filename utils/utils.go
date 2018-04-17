@@ -4,6 +4,7 @@ import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/error"
 	"github.com/phayes/permbits"
+	"io/ioutil"
 	"os"
 )
 
@@ -118,4 +119,24 @@ func MakeDir(dir string) (bool, *Error) {
 	}
 	cerr := ErrNew(ErrDirMake, fmt.Sprintf("creating %s folder error", dir))
 	return false, &cerr
+}
+
+func ReadFromFile(dir string) ([]byte, *Error) {
+	data, err := ioutil.ReadFile(dir)
+	if err == nil {
+		return data, nil
+	} else {
+		err := ErrNew(ErrFileIO, fmt.Sprintf("reading file %s error", dir))
+		return false, &cerr
+	}
+}
+
+func WriteToFile(data []byte, dir name) *Error {
+	err := ioutil.WriteFile(dir, data, 0644)
+	if err == nil {
+		return nil
+	} else {
+		err := ErrNew(ErrFileIO, fmt.Sprintf("writing file %s error", dir))
+		return false, &cerr
+	}
 }

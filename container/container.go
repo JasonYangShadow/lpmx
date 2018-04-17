@@ -139,7 +139,7 @@ func (mem *MemContainers) CreateContainer(dir string, name string) (*Container, 
 func (mem *MemContainers) RunContainer(id string) (*Container, *Error) {
 	if con, ok := mem.ContainersMap[id]; ok {
 		con.Status = RUNNING
-		err := PaeudoShell(con.RootPath)
+		err := ContainerPaeduShell(con)
 		if err == nil {
 			return con, nil
 		}

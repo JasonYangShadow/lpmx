@@ -12,6 +12,18 @@ func main() {
 		Long:  "lpmx could not only manage the local packages installed on users' systems but also create and run your package in specific rootless container, which could provide users flexible runtime environments",
 	}
 
+	var CreateSource string
+	var CreateName string
+	var createCmd = &cobra.Command{
+		Use:   "create",
+		Short: "create container based on the location of folder and the given name",
+		Long:  "create command is the basic command of lpmx, which is used for creating container structure and patching the elf headers inside the contianer",
+		Args:  cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+
+		},
+	}
+
 	var RunSource string
 	var RunName string
 

@@ -15,6 +15,8 @@ var (
 	ErrFileStat = errors.New("file stat error")
 	ErrUnknown  = errors.New("Unknown error")
 	ErrDirMake  = errors.New("Error when making a folder")
+	ErrMarshal  = errors.New("Error while marshaling or unmarshaling data")
+	ErrFileIO   = errors.New("Error while reading or writing files")
 )
 
 type Error struct {
