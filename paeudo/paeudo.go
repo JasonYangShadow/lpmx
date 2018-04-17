@@ -1,9 +1,10 @@
-package main
+package paeudo
 
 import (
 	"bufio"
 	"bytes"
 	"fmt"
+	. "github.com/jasonyangshadow/lpmx/container"
 	. "github.com/jasonyangshadow/lpmx/error"
 	. "github.com/jasonyangshadow/lpmx/utils"
 	"os"
@@ -62,6 +63,27 @@ func PaeudoShell(dir string) *Error {
 	return &cerr
 }
 
-func main() {
-	PaeudoShell("/home/jason/go")
+func ContainerPaeudoShell(con *Container) *Error {
+	if FolderExist(con.RootPath) {
+		fmt.Print(fmt.Sprintf("@%s>> ", con.Id))
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			text := scanner.Text()
+			if text == "exit" {
+				break
+			}
+			cmds := strings.Fields(text)
+			cmd := fmt.Sprintf("LD_PRELOAD=%s %s", con.FakechrootPath, cmds[0])
+			val, err := Command(cmd, cmds[1:]...)
+			if err == nil {
+				fmt.Println(val)
+			} else {
+				fmt.Println(err)
+			}
+			fmt.Print(fmt.Sprintf("@%s>> ", con.Id))
+		}
+		return nil
+	}
+	cerr := ErrNew(ErrNExist, fmt.Sprintf("can't locate container root folder %s", con.RootPath))
+	return &cerr
 }
