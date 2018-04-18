@@ -7,6 +7,7 @@ import (
 	. "github.com/jasonyangshadow/lpmx/paeudo"
 	. "github.com/jasonyangshadow/lpmx/utils"
 	. "github.com/jasonyangshadow/lpmx/yaml"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -122,8 +123,8 @@ func (mem *MemContainers) CreateContainer(dir string, name string) (*Container, 
 	if err == nil {
 		files, err := WalkContainerRoot(con)
 		if err == nil {
-			for file := range files {
-				if val, err := ElfRPath(con, con.SettingConf["libpath"], file); val || err != nil {
+			for _, file := range files {
+				if val, err := ElfRPath(con.ElfPatcherPath, con.SettingConf["libpath"].(string), file); val || err != nil {
 					return con, err
 				}
 			}
@@ -131,26 +132,24 @@ func (mem *MemContainers) CreateContainer(dir string, name string) (*Container, 
 			return con, err
 		}
 		mem.ContainersMap[con.Id] = con
-	} else {
-		return nil, err
 	}
+	return nil, err
 }
 
 func (mem *MemContainers) RunContainer(id string) (*Container, *Error) {
 	if con, ok := mem.ContainersMap[id]; ok {
 		con.Status = RUNNING
-		err := ContainerPaeduShell(con)
+		err := ContainerPaeudoShell(con.FakechrootPath, con.RootPath, con.ContainerName)
 		if err == nil {
 			return con, nil
 		}
-	} else {
-		err := ErrNew(ErrNExist, fmt.Sprintf("Container ID: %s doesn't exist, please create it firstly", id))
-		return nil, &err
 	}
+	err := ErrNew(ErrNExist, fmt.Sprintf("Container ID: %s doesn't exist, please create it firstly", id))
+	return nil, &err
 }
 
 func (mem *MemContainers) DestroyContainer(id string) *Error {
-	if con, ok := mem.ContainersMap[id]; ok {
+	if _, ok := mem.ContainersMap[id]; ok {
 		delete(mem.ContainersMap, id)
 		return nil
 	} else {

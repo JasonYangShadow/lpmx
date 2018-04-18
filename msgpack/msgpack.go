@@ -1,6 +1,7 @@
 package msgpack
 
 import (
+	. "github.com/jasonyangshadow/lpmx/container"
 	. "github.com/jasonyangshadow/lpmx/error"
 	"github.com/vmihailenco/msgpack"
 )
@@ -15,13 +16,30 @@ func StructMarshal(data interface{}) ([]byte, *Error) {
 	}
 }
 
-func StructUnmarshal(data []byte) (interface{}, *Error) {
-	var val interface{}
-	err := msgpack.Unmarshal(data, &val)
-	if err == nil {
-		return val, nil
-	} else {
-		err := ErrNew(ErrMarshal, "unmarshaling data error")
-		return nil, &err
+func StructUnmarshal(data []byte, vtype interface{}) *Error {
+	switch vtype.(type) {
+	case *MemContainers:
+		{
+			err := msgpack.Unmarshal(data, vtype)
+			if err == nil {
+				return nil
+			}
+			cerr := ErrNew(err, "unmarshaling to struct MemContainers encounters error")
+			return &cerr
+		}
+	case *Container:
+		{
+			err := msgpack.Unmarshal(data, vtype)
+			if err == nil {
+				return nil
+			}
+			cerr := ErrNew(err, "unmarshaling to struct Container encounters error")
+			return &cerr
+		}
+	default:
+		{
+			cerr := ErrNew(ErrType, "unmarshaling to unknown struct")
+			return &cerr
+		}
 	}
 }

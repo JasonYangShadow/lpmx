@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	. "github.com/jasonyangshadow/lpmx/container"
 	. "github.com/jasonyangshadow/lpmx/error"
 	. "github.com/jasonyangshadow/lpmx/utils"
 	"os"
@@ -63,9 +62,9 @@ func PaeudoShell(dir string) *Error {
 	return &cerr
 }
 
-func ContainerPaeudoShell(con *Container) *Error {
-	if FolderExist(con.RootPath) {
-		fmt.Print(fmt.Sprintf("@%s>> ", con.Id))
+func ContainerPaeudoShell(fakechrootpath string, rootpath string, name string) *Error {
+	if FolderExist(rootpath) {
+		fmt.Print(fmt.Sprintf("@%s>> ", name))
 		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
 			text := scanner.Text()
@@ -73,17 +72,17 @@ func ContainerPaeudoShell(con *Container) *Error {
 				break
 			}
 			cmds := strings.Fields(text)
-			cmd := fmt.Sprintf("LD_PRELOAD=%s %s", con.FakechrootPath, cmds[0])
+			cmd := fmt.Sprintf("LD_PRELOAD=%s %s", fakechrootpath, cmds[0])
 			val, err := Command(cmd, cmds[1:]...)
 			if err == nil {
 				fmt.Println(val)
 			} else {
 				fmt.Println(err)
 			}
-			fmt.Print(fmt.Sprintf("@%s>> ", con.Id))
+			fmt.Print(fmt.Sprintf("@%s>> ", name))
 		}
 		return nil
 	}
-	cerr := ErrNew(ErrNExist, fmt.Sprintf("can't locate container root folder %s", con.RootPath))
+	cerr := ErrNew(ErrNExist, fmt.Sprintf("can't locate container root folder %s", rootpath))
 	return &cerr
 }

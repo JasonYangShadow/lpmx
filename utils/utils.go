@@ -127,16 +127,16 @@ func ReadFromFile(dir string) ([]byte, *Error) {
 		return data, nil
 	} else {
 		err := ErrNew(ErrFileIO, fmt.Sprintf("reading file %s error", dir))
-		return false, &cerr
+		return nil, &err
 	}
 }
 
-func WriteToFile(data []byte, dir name) *Error {
+func WriteToFile(data []byte, dir string) *Error {
 	err := ioutil.WriteFile(dir, data, 0644)
 	if err == nil {
 		return nil
 	} else {
 		err := ErrNew(ErrFileIO, fmt.Sprintf("writing file %s error", dir))
-		return false, &cerr
+		return &err
 	}
 }
