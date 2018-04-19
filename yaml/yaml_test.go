@@ -20,4 +20,5 @@ func TestYaml2(t *testing.T) {
 	if real_result != "value1" || err != nil {
 		t.Fatalf("real: %s => expect: %s", real_result, "value1")
 	}
+	t.Log(GetMap(CONFIG, []string{".", "~/go"}))
 }

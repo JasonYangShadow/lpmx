@@ -61,7 +61,38 @@ func findAvailableId() (int, *Error) {
 	return -1, &cerr
 }
 
-func createContainer(dir string, name string) (*Container, *Error) {
+func createSysFolders(con *Container, sysroot string, dir string, name string) *Error {
+	_, err := MakeDir(fmt.Sprintf("%s/%s", sysroot, con.Id))
+	if err != nil {
+		return err
+	}
+	con.RootPath = dir
+	con.Status = STOPPED
+	con.LogPath = fmt.Sprintf("%s/%s/log/", sysroot, con.Id)
+	con.ElfPatcherPath = fmt.Sprintf("%s/%s/elf/", sysroot, con.Id)
+	con.FakechrootPath = fmt.Sprintf("%s/%s/fakechroot/", sysroot, con.Id)
+	con.SettingConfPath = fmt.Sprintf("%s/%s/settings/", sysroot, con.Id)
+	con.ContainerName = name
+	_, err = MakeDir(con.LogPath)
+	if err != nil {
+		return err
+	}
+	_, err = MakeDir(con.ElfPatcherPath)
+	if err != nil {
+		return err
+	}
+	_, err = MakeDir(con.FakechrootPath)
+	if err != nil {
+		return err
+	}
+	_, err = MakeDir(con.SettingConfPath)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func createContainer(sysroot string, dir string, name string) (*Container, *Error) {
 	id, err := findAvailableId()
 	if err == nil {
 		var con Container
@@ -69,14 +100,10 @@ func createContainer(dir string, name string) (*Container, *Error) {
 		for strings.HasSuffix(dir, "/") {
 			dir = strings.TrimSuffix(dir, "/")
 		}
-		con.RootPath = fmt.Sprintf("%s/%s/instance", dir, con.Id)
-		con.Status = STOPPED
-		con.LogPath = fmt.Sprintf("%s/%s/log", dir, con.Id)
-		con.ElfPatcherPath = fmt.Sprintf("%s/%s/elf/", dir, con.Id)
-		con.FakechrootPath = fmt.Sprintf("%s/%s/fakechroot/", dir, con.Id)
-		con.SettingConfPath = fmt.Sprintf("%s/%s/settings/", dir, con.Id)
-		con.SettingConf, _ = GetMap("setting.yml", []string{con.SettingConfPath})
-		con.ImageName = name
+		err := createSysFolders(&con, sysroot, dir, name)
+		if err != nil {
+			return nil, err
+		}
 		return &con, nil
 	}
 	return nil, err
@@ -105,10 +132,10 @@ func walkfs(dir string) ([]string, *Error) {
 
 func Init(conf []string) (*MemContainers, *Error) {
 	var cons MemContainers
-	val, err := GetMap("setting.yml", conf)
+	val, err := GetMap("setting", conf)
 	cons.SettingConf = val
 	if err == nil {
-		cons.RootDir = cons.SettingConf["RootDir"].(string)
+		cons.RootDir = cons.SettingConf["rootdir"].(string)
 		_, err := MakeDir(cons.RootDir)
 		if err != nil {
 			return nil, err
@@ -119,7 +146,7 @@ func Init(conf []string) (*MemContainers, *Error) {
 }
 
 func (mem *MemContainers) CreateContainer(dir string, name string) (*Container, *Error) {
-	con, err := createContainer(dir, name)
+	con, err := createContainer(mem.RootDir, dir, name)
 	if err == nil {
 		files, err := WalkContainerRoot(con)
 		if err == nil {
