@@ -4,4 +4,3 @@ classes:
     exports:
       - /srv/share1
       - test2 
-parameters: test

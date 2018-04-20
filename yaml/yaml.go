@@ -7,6 +7,7 @@ import (
 )
 
 func SetLocalValue(file string, key string, value interface{}) *Error {
+	viper.SetConfigFile("yaml")
 	viper.AddConfigPath(".")
 	viper.SetConfigName(file)
 	err := viper.ReadInConfig()
@@ -19,6 +20,7 @@ func SetLocalValue(file string, key string, value interface{}) *Error {
 }
 
 func GetLocalValue(file string, key string) (interface{}, *Error) {
+	viper.SetConfigFile("yaml")
 	viper.AddConfigPath(".")
 	viper.SetConfigName(file)
 	err := viper.ReadInConfig()
@@ -30,6 +32,7 @@ func GetLocalValue(file string, key string) (interface{}, *Error) {
 }
 
 func GetLocalStrValue(file string, key string) (string, *Error) {
+	viper.SetConfigFile("yaml")
 	viper.AddConfigPath(".")
 	viper.SetConfigName(file)
 	err := viper.ReadInConfig()
@@ -41,6 +44,7 @@ func GetLocalStrValue(file string, key string) (string, *Error) {
 }
 
 func SetValue(file string, config []string, key string, value interface{}) *Error {
+	viper.SetConfigFile("yaml")
 	for i := range config {
 		viper.AddConfigPath(config[i])
 	}
@@ -55,6 +59,7 @@ func SetValue(file string, config []string, key string, value interface{}) *Erro
 }
 
 func GetValue(file string, config []string, key string) (interface{}, *Error) {
+	viper.SetConfigFile("yaml")
 	for i := range config {
 		viper.AddConfigPath(config[i])
 	}
@@ -68,6 +73,7 @@ func GetValue(file string, config []string, key string) (interface{}, *Error) {
 }
 
 func GetStrValue(file string, config []string, key string) (string, *Error) {
+	viper.SetConfigFile("yaml")
 	for i := range config {
 		viper.AddConfigPath(config[i])
 	}
@@ -81,6 +87,7 @@ func GetStrValue(file string, config []string, key string) (string, *Error) {
 }
 
 func GetMap(file string, config []string) (map[string]interface{}, *Error) {
+	viper.SetConfigFile("yaml")
 	for i := range config {
 		viper.AddConfigPath(config[i])
 	}
@@ -91,4 +98,19 @@ func GetMap(file string, config []string) (map[string]interface{}, *Error) {
 		return nil, &cerr
 	}
 	return viper.AllSettings(), nil
+}
+
+func MultiGetMap(file string, config []string) (*viper.Viper, map[string]interface{}, *Error) {
+	v := viper.New()
+	v.SetConfigType("yaml")
+	for i := range config {
+		v.AddConfigPath(config[i])
+	}
+	v.SetConfigName(file)
+	err := v.ReadInConfig()
+	if err != nil {
+		cerr := ErrNew(ErrNil, fmt.Sprintf("can't open file %s in dirs", file))
+		return v, nil, &cerr
+	}
+	return v, v.AllSettings(), nil
 }

@@ -1,51 +1,35 @@
 package container
 
 import (
-	. "github.com/jasonyangshadow/lpmx/elf"
 	. "github.com/jasonyangshadow/lpmx/error"
 	. "github.com/jasonyangshadow/lpmx/yaml"
 	"testing"
 )
 
 var mem struct {
-	pointer *MemContainers
+	p_mem *MemContainers
+	p_con *Container
 }
 
 func TestContainerInit(t *testing.T) {
 	confs := []string{".", "/tmp/lpmx_root"}
 	val, _ := GetMap("setting", confs)
 	var err *Error
-	mem.pointer, err = Init(confs)
-	mem.pointer.SettingConf = val
+	mem.p_mem, err = Init(confs)
+	mem.p_mem.SettingConf = val
 	if err == nil {
-		t.Log(mem.pointer)
+		t.Log(mem.p_mem)
 	} else {
 		t.Error(err)
 	}
 }
 
-func TestContainerCreate(t *testing.T) {
-	t.Log(mem.pointer)
-	con, err := createContainer(mem.pointer.RootDir, "/tmp/lpmx_test", "test")
-	if err == nil {
-		t.Log(con)
-		files, err := WalkContainerRoot(con)
-		t.Log(files)
-		if err == nil {
-			for _, file := range files {
-				val, err := ElfRPath(con.ElfPatcherPath, con.SettingConf["libpath"].(string), file)
-				if err == nil {
-					t.Log(val)
-				} else {
-					t.Error(err)
-				}
-			}
-		}
-	}
-	/**con, err := mem.pointer.CreateContainer("/tmp/lpmx_test", "test")
-	if err == nil {
-		t.Log(con)
-	} else {
+func TestContainerCreateContainer(t *testing.T) {
+	var err *Error
+	mem.p_con, err = mem.p_mem.CreateContainer("/tmp/lpmx_test", "test")
+	if err != nil {
 		t.Error(err)
-	}**/
+	} else {
+		t.Log(mem.p_con)
+	}
 }
