@@ -213,6 +213,7 @@ func (con *Container) refreshElf(key string, value []string, prog string) *Error
 func (mem *MemContainers) CreateContainer(dir string, name string) (*Container, *Error) {
 	con, err := createContainer(mem.RootDir, dir, name)
 	if err == nil {
+		mem.ContainersMap[con.Id] = con
 		bineries, _, err := WalkContainerRoot(con)
 		if err == nil {
 			for _, binery := range bineries {

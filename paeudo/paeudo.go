@@ -72,8 +72,9 @@ func ContainerPaeudoShell(fakechrootpath string, rootpath string, name string) *
 				break
 			}
 			cmds := strings.Fields(text)
-			cmd := fmt.Sprintf("LD_PRELOAD=%s %s", fakechrootpath, cmds[0])
-			val, err := Command(cmd, cmds[1:]...)
+			env := make(map[string]string)
+			env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", fakechrootpath)
+			val, err := CommandEnv(cmds[0], env, cmds[1:]...)
 			if err == nil {
 				fmt.Println(val)
 			} else {
