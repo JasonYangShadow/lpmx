@@ -14,5 +14,10 @@ func TestUtils1(t *testing.T) {
 func TestUtils2(t *testing.T) {
 	src := "/tmp/log"
 	dst := "/tmp/log.bak"
-	CopyFile(src, dst)
+	val, err := CopyFile(src, dst)
+	if val {
+		t.Log("successfully copied")
+	} else {
+		t.Error(err)
+	}
 }
