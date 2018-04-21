@@ -106,6 +106,14 @@ func createSysFolders(con *Container, sysroot string, dir string, name string) *
 	if err != nil {
 		return err
 	}
+	_, err = CopyFile(fmt.Sprintf("%s/patchelf", sysroot), con.ElfPatcherPath)
+	if err != nil {
+		return err
+	}
+	_, err = CopyFile(fmt.Sprintf("%s/libfakechroot.so", sysroot), con.FakechrootPath)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 

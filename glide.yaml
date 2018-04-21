@@ -17,3 +17,5 @@ import:
   - cobra
 - package: github.com/vmihailenco/msgpack
   version: v3.3.1
+- package: github.com/sergi/go-diff
+  version: v1.0.0
