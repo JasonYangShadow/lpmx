@@ -61,29 +61,3 @@ func PaeudoShell(dir string) *Error {
 	cerr := ErrNew(ErrNExist, fmt.Sprintf("input folder: %s doesn't exist", dir))
 	return &cerr
 }
-
-func ContainerPaeudoShell(fakechrootpath string, rootpath string, name string) *Error {
-	if FolderExist(rootpath) {
-		fmt.Print(fmt.Sprintf("@%s>> ", name))
-		scanner := bufio.NewScanner(os.Stdin)
-		for scanner.Scan() {
-			text := scanner.Text()
-			if text == "exit" {
-				break
-			}
-			cmds := strings.Fields(text)
-			env := make(map[string]string)
-			env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", fakechrootpath)
-			val, err := CommandEnv(cmds[0], env, cmds[1:]...)
-			if err == nil {
-				fmt.Println(val)
-			} else {
-				fmt.Println(err)
-			}
-			fmt.Print(fmt.Sprintf("@%s>> ", name))
-		}
-		return nil
-	}
-	cerr := ErrNew(ErrNExist, fmt.Sprintf("can't locate container root folder %s", rootpath))
-	return &cerr
-}

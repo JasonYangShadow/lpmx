@@ -1,6 +1,7 @@
 package container
 
 import (
+	"bufio"
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/elf"
 	. "github.com/jasonyangshadow/lpmx/error"
@@ -81,6 +82,10 @@ func createSysFolders(con *Container, sysroot string, dir string, name string) *
 	paths := []string{con.SettingConfPath}
 	con.ContainerName = name
 	con.Qchan = InitQueue(DEFAULT_SIZE)
+	con.CreateUser, err = Command("whoami")
+	if err != nil {
+		return err
+	}
 	con.V, con.SettingConf, err = MultiGetMap("setting", paths)
 	if err != nil {
 		return err
@@ -210,6 +215,32 @@ func (con *Container) refreshElf(key string, value []string, prog string) *Error
 	return nil
 }
 
+func (con *Container) ContainerPaeudoShell() *Error {
+	if FolderExist(con.RootPath) {
+		fmt.Println(fmt.Sprintf("%s@%s>>", con.CreateUser, con.ContainerName))
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			text := scanner.Text()
+			if text == "exit" {
+				break
+			}
+			cmds := strings.Fields(text)
+			env := make(map[string]string)
+			env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
+			val, err := CommandEnv(cmds[0], env, cmds[1:]...)
+			if err == nil {
+				fmt.Println(val)
+			} else {
+				fmt.Println(err)
+			}
+			fmt.Println(fmt.Sprintf("%s@%s>>", con.CreateUser, con.ContainerName))
+		}
+		return nil
+	}
+	cerr := ErrNew(ErrNExist, fmt.Sprintf("can't locate container root folder %s", con.RootPath))
+	return &cerr
+}
+
 func (mem *MemContainers) CreateContainer(dir string, name string) (*Container, *Error) {
 	con, err := createContainer(mem.RootDir, dir, name)
 	if err == nil {
@@ -247,7 +278,7 @@ func (mem *MemContainers) CreateContainer(dir string, name string) (*Container, 
 func (mem *MemContainers) RunContainer(id string) (*Container, *Error) {
 	if con, ok := mem.ContainersMap[id]; ok {
 		con.Status = RUNNING
-		err := ContainerPaeudoShell(con.FakechrootPath, con.RootPath, con.ContainerName)
+		err := con.ContainerPaeudoShell()
 		if err == nil {
 			return con, nil
 		}

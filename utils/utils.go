@@ -4,6 +4,7 @@ import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/error"
 	"github.com/phayes/permbits"
+	"io"
 	"io/ioutil"
 	"os"
 )
@@ -139,4 +140,50 @@ func WriteToFile(data []byte, dir string) *Error {
 		err := ErrNew(ErrFileIO, fmt.Sprintf("writing file %s error", dir))
 		return &err
 	}
+}
+
+func CopyFile(src string, dst string) (bool, *Error) {
+	if !FileExist(src) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("source file %s doesn't exist", src))
+		return false, &cerr
+	}
+	ft, err := FileType(src)
+	if err != nil {
+		cerr := ErrNew(ErrType, fmt.Sprintf("checking source file %s type encounters error", src))
+		return false, &cerr
+	}
+	if ft != TYPE_REGULAR {
+		cerr := ErrNew(ErrType, fmt.Sprintf("source file %s is not regular type file", src))
+		return false, &cerr
+	}
+	if FileExist(dst) {
+		cerr := ErrNew(ErrExist, fmt.Sprintf("target file %s exist, can't override", src))
+		return false, &cerr
+	}
+	in, ierr := os.Open(src)
+	if ierr != nil {
+		cerr := ErrNew(ierr, fmt.Sprintf("can't open file %s", src))
+		return false, &cerr
+	}
+	defer in.Close()
+	out, oerr := os.Create(dst)
+	if oerr != nil {
+		cerr := ErrNew(oerr, fmt.Sprintf("can't open file %s", dst))
+		return false, &cerr
+	} else {
+		defer out.Close()
+	}
+
+	if _, yerr := io.Copy(out, in); err != nil {
+		cerr := ErrNew(yerr, fmt.Sprintf("copy file encounters error src: %s, dst: %s", src, dst))
+		return false, &cerr
+	}
+
+	serr := out.Sync()
+	if err != nil {
+		cerr := ErrNew(serr, fmt.Sprintf("can't sync file %s", dst))
+		return false, &cerr
+	}
+
+	return true, nil
 }
