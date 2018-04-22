@@ -149,34 +149,51 @@ func (con *Container) paeudoShell() *Error {
 		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
 			text := scanner.Text()
-			text = strings.TrimSpace(text)
-			text = strings.ToLower(text)
-			if text == "exit" {
-				break
-			} else if text == "switch" {
-				if con.CreateUser != "root" {
-					con.CreateUser = "root"
+			cmds := strings.Fields(text)
+			if len(cmds) > 0 {
+				cmdStr := strings.ToLower(cmds[0])
+				if cmdStr == "exit" {
+					break
+				} else if cmdStr == "switch" {
+					if con.CreateUser != "root" {
+						con.CreateUser = "root"
+					} else {
+						user, _ := Command("whoami")
+						con.CreateUser = strings.TrimSuffix(user, "\n")
+					}
+					fmt.Print(fmt.Sprintf("%s@%s>> ", con.CreateUser, con.Id))
+				} else if cmdStr == ELFOP[0] || cmdStr == ELFOP[1] || cmdStr == ELFOP[2] || cmdStr == ELFOP[3] {
+					var value []string
+					for _, val := range cmds[2:] {
+						value = append(value, val)
+					}
+					err := con.refreshElf(cmdStr, value, cmds[1])
+					if err != nil {
+						fmt.Println(err)
+					} else {
+						fmt.Println("Done")
+					}
+					fmt.Print(fmt.Sprintf("%s@%s>> ", con.CreateUser, con.Id))
 				} else {
-					user, _ := Command("whoami")
-					con.CreateUser = strings.TrimSuffix(user, "\n")
+					env := make(map[string]string)
+					env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
+					var err *Error
+					var val string
+					if con.CreateUser == "root" {
+						val, err = CommandEnv("fakeroot", env, con.RootPath, cmds[0:]...)
+					} else {
+						val, err = CommandEnv(cmds[0], env, con.RootPath, cmds[1:]...)
+					}
+					if err == nil {
+						fmt.Println(val)
+					} else {
+						fmt.Println(err)
+					}
+					fmt.Print(fmt.Sprintf("%s@%s>> ", con.CreateUser, con.Id))
 				}
-				fmt.Print(fmt.Sprintf("%s@%s>> ", con.CreateUser, con.Id))
+
 			} else {
-				cmds := strings.Fields(text)
-				env := make(map[string]string)
-				env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
-				var err *Error
-				var val string
-				if con.CreateUser == "root" {
-					val, err = CommandEnv("fakeroot", env, con.RootPath, cmds[0:]...)
-				} else {
-					val, err = CommandEnv(cmds[0], env, con.RootPath, cmds[1:]...)
-				}
-				if err == nil {
-					fmt.Println(val)
-				} else {
-					fmt.Println(err)
-				}
+				fmt.Println("Unrecognized Command")
 				fmt.Print(fmt.Sprintf("%s@%s>> ", con.CreateUser, con.Id))
 			}
 		}
