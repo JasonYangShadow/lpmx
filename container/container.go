@@ -10,6 +10,7 @@ import (
 	. "github.com/jasonyangshadow/lpmx/utils"
 	. "github.com/jasonyangshadow/lpmx/yaml"
 	"github.com/spf13/viper"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,12 +21,11 @@ const (
 	PAUSE
 	STOPPED
 
-	MAX_CONTAINER_COUNT = 1024
+	IDLENGTH = 10
 )
 
 var (
-	AvailableContainerIds = [MAX_CONTAINER_COUNT]int8{0}
-	ELFOP                 = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath"}
+	ELFOP = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath"}
 )
 
 type Container struct {
@@ -145,23 +145,40 @@ func (con *Container) refreshElf(key string, value []string, prog string) *Error
 
 func (con *Container) paeudoShell() *Error {
 	if FolderExist(con.RootPath) {
-		fmt.Println(fmt.Sprintf("%s@%s>>", con.CreateUser, con.ContainerName))
+		fmt.Print(fmt.Sprintf("%s@%s>> ", con.CreateUser, con.Id))
 		scanner := bufio.NewScanner(os.Stdin)
 		for scanner.Scan() {
 			text := scanner.Text()
+			text = strings.TrimSpace(text)
+			text = strings.ToLower(text)
 			if text == "exit" {
 				break
-			}
-			cmds := strings.Fields(text)
-			env := make(map[string]string)
-			env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
-			val, err := CommandEnv(cmds[0], env, cmds[1:]...)
-			if err == nil {
-				fmt.Println(val)
+			} else if text == "switch" {
+				if con.CreateUser != "root" {
+					con.CreateUser = "root"
+				} else {
+					user, _ := Command("whoami")
+					con.CreateUser = strings.TrimSuffix(user, "\n")
+				}
+				fmt.Print(fmt.Sprintf("%s@%s>> ", con.CreateUser, con.Id))
 			} else {
-				fmt.Println(err)
+				cmds := strings.Fields(text)
+				env := make(map[string]string)
+				env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
+				var err *Error
+				var val string
+				if con.CreateUser == "root" {
+					val, err = CommandEnv("fakeroot", env, con.RootPath, cmds[0:]...)
+				} else {
+					val, err = CommandEnv(cmds[0], env, con.RootPath, cmds[1:]...)
+				}
+				if err == nil {
+					fmt.Println(val)
+				} else {
+					fmt.Println(err)
+				}
+				fmt.Print(fmt.Sprintf("%s@%s>> ", con.CreateUser, con.Id))
 			}
-			fmt.Println(fmt.Sprintf("%s@%s>>", con.CreateUser, con.ContainerName))
 		}
 		return nil
 	}
@@ -181,14 +198,15 @@ func (con *Container) createContainer(config string) *Error {
 }
 
 func (con *Container) createSysFolders(config string) *Error {
+	con.Id = randomString(IDLENGTH)
 	con.LogPath = fmt.Sprintf("%s/log", con.ConfigPath)
 	con.ElfPatcherPath = fmt.Sprintf("%s/elf", con.ConfigPath)
 	con.FakechrootPath = fmt.Sprintf("%s/fakechroot", con.ConfigPath)
-	var err *Error
-	con.CreateUser, err = Command("whoami")
+	user, err := Command("whoami")
 	if err != nil {
 		return err
 	}
+	con.CreateUser = strings.TrimSuffix(user, "\n")
 	con.V, con.SettingConf, err = LoadConfig(config)
 	if err != nil {
 		return err
@@ -230,15 +248,19 @@ func (con *Container) patchBineries() *Error {
 					if d1, o1 := data.([]interface{}); o1 {
 						for _, d1_1 := range d1 {
 							if d1_11, o1_11 := d1_1.(interface{}); o1_11 {
-								for k, v := range d1_11.(map[string]interface{}) {
+								for k, v := range d1_11.(map[interface{}]interface{}) {
 									if v1, vo1 := v.([]interface{}); vo1 {
 										var libs []string
 										for _, vv1 := range v1 {
 											libs = append(libs, vv1.(string))
 										}
-										err := con.refreshElf(op, libs, k)
-										if err != nil {
-											return err
+										if k1, ok1 := k.(string); ok1 {
+											if FileExist(k1) {
+												err := con.refreshElf(op, libs, k1)
+												if err != nil {
+													return err
+												}
+											}
 										}
 									}
 								}
@@ -252,9 +274,11 @@ func (con *Container) patchBineries() *Error {
 							rpaths = append(rpaths, d1_1.(string))
 						}
 						for _, binery := range bineries {
-							err := con.refreshElf(op, rpaths, binery)
-							if err != nil {
-								return err
+							if FileExist(binery) {
+								err := con.refreshElf(op, rpaths, binery)
+								if err != nil {
+									return err
+								}
 							}
 						}
 					}
@@ -321,15 +345,11 @@ func walkfs(dir string) ([]string, *Error) {
 	return fileList, nil
 }
 
-func findAvailableId() (int, *Error) {
-	for i := 0; i < MAX_CONTAINER_COUNT; i++ {
-		if AvailableContainerIds[i] == 0 {
-			AvailableContainerIds[i] = 1
-			return i, nil
-		} else {
-			continue
-		}
+func randomString(n int) string {
+	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letter[rand.Intn(len(letter))]
 	}
-	cerr := ErrNew(ErrFull, "No available container id could be generated")
-	return -1, &cerr
+	return string(b)
 }

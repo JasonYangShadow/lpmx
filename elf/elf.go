@@ -20,7 +20,6 @@ var PARAMS = []string{"--set-interpreter", "--set-soname", "--set-rpath", "--add
 
 func elfPatch(elfpath string, arg ...string) (string, *Error) {
 	cmd := fmt.Sprintf("%s/patchelf", elfpath)
-	fmt.Println(cmd, arg)
 	out, err := Command(cmd, arg...)
 	if err == nil {
 		return out, nil
