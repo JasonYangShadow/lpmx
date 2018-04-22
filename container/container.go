@@ -5,8 +5,8 @@ import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/elf"
 	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/msgpack"
 	. "github.com/jasonyangshadow/lpmx/paeudo"
-	. "github.com/jasonyangshadow/lpmx/queue"
 	. "github.com/jasonyangshadow/lpmx/utils"
 	. "github.com/jasonyangshadow/lpmx/yaml"
 	"github.com/spf13/viper"
@@ -28,156 +28,76 @@ var (
 	ELFOP                 = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath"}
 )
 
-type MemContainers struct {
-	ContainersMap map[string]*Container
-	RootDir       string
-	SettingConf   map[string]interface{}
-	V             *viper.Viper
-}
-
 type Container struct {
 	Id                  string
 	RootPath            string
+	ConfigPath          string
 	Status              int8
 	LogPath             string
 	ElfPatcherPath      string
 	FakechrootPath      string
-	SettingConfPath     string
 	SettingConf         map[string]interface{}
 	StartTime           string
-	ImageName           string
 	ContainerName       string
 	CreateUser          string
 	MemcachedServerList string
 	ShmFiles            string
 	IpcFiles            string
 	V                   *viper.Viper
-	Qchan               chan Queue
 }
 
-func findAvailableId() (int, *Error) {
-	for i := 0; i < MAX_CONTAINER_COUNT; i++ {
-		if AvailableContainerIds[i] == 0 {
-			AvailableContainerIds[i] = 1
-			return i, nil
-		} else {
-			continue
-		}
-	}
-	cerr := ErrNew(ErrFull, "No available container id could be generated")
-	return -1, &cerr
-}
-
-func createSysFolders(con *Container, sysroot string, dir string, name string) *Error {
-	_, err := MakeDir(fmt.Sprintf("%s/%s", sysroot, con.Id))
-	if err != nil {
-		return err
-	}
+func Run(dir string, config string) *Error {
+	rootdir := fmt.Sprintf("%s/.lpmx", dir)
+	var con Container
 	con.RootPath = dir
-	con.Status = STOPPED
-	con.LogPath = fmt.Sprintf("%s/%s/log", sysroot, con.Id)
-	con.ElfPatcherPath = fmt.Sprintf("%s/%s/elf", sysroot, con.Id)
-	con.FakechrootPath = fmt.Sprintf("%s/%s/fakechroot", sysroot, con.Id)
-	con.SettingConfPath = fmt.Sprintf("%s/%s/settings", sysroot, con.Id)
-	paths := []string{con.SettingConfPath}
-	con.ContainerName = name
-	con.Qchan = InitQueue(DEFAULT_SIZE)
-	con.CreateUser, err = Command("whoami")
-	if err != nil {
-		return err
-	}
-	con.V, con.SettingConf, err = MultiGetMap("setting", paths)
-	if err != nil {
-		return err
-	}
-	_, err = MakeDir(con.LogPath)
-	if err != nil {
-		return err
-	}
-	_, err = MakeDir(con.ElfPatcherPath)
-	if err != nil {
-		return err
-	}
-	_, err = MakeDir(con.FakechrootPath)
-	if err != nil {
-		return err
-	}
-	_, err = MakeDir(con.SettingConfPath)
-	if err != nil {
-		return err
-	}
-	_, err = CopyFile(fmt.Sprintf("%s/patchelf", sysroot), con.ElfPatcherPath)
-	if err != nil {
-		return err
-	}
-	_, err = CopyFile(fmt.Sprintf("%s/libfakechroot.so", sysroot), con.FakechrootPath)
-	if err != nil {
-		return err
-	}
-	return nil
-}
+	con.ConfigPath = rootdir
 
-func createContainer(sysroot string, dir string, name string) (*Container, *Error) {
-	id, err := findAvailableId()
-	if err == nil {
-		var con Container
-		con.Id = fmt.Sprintf("container-%d", id)
-		for strings.HasSuffix(dir, "/") {
-			dir = strings.TrimSuffix(dir, "/")
+	defer func() {
+		data, _ := StructMarshal(&con)
+		WriteToFile(data, fmt.Sprintf("%s/.info", rootdir))
+	}()
+
+	if FolderExist(rootdir) {
+		info := fmt.Sprintf("%s/.info", rootdir)
+		if FileExist(info) {
+			data, err := ReadFromFile(info)
+			if err == nil {
+				err := StructUnmarshal(data, &con)
+				if err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		} else {
+			cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist", rootdir))
+			return &cerr
 		}
-		err := createSysFolders(&con, sysroot, dir, name)
-		if err != nil {
-			return nil, err
-		}
-		return &con, nil
-	}
-	return nil, err
-}
-
-func walkfs(dir string) ([]string, *Error) {
-	fileList := []string{}
-
-	err := filepath.Walk(dir, func(path string, f os.FileInfo, err error) error {
+	} else {
+		_, err := MakeDir(rootdir)
 		if err != nil {
 			return err
 		}
-		ftype, ferr := FileType(path)
-		if ferr != nil {
-			return ferr
+		err = con.createContainer(config)
+		if err != nil {
+			return err
 		}
-		if ftype == TYPE_REGULAR {
-			ok, err := FilePermission(path, PERM_EXE)
-			if err != nil {
-				return err
-			}
-			if ok {
-				fileList = append(fileList, path)
-			}
+		err = con.patchBineries()
+		if err != nil {
+			return err
 		}
-		return nil
-	})
-	if err != nil {
-		cerr := ErrNew(err, "walkfs encountered error")
-		return nil, &cerr
 	}
-	return fileList, nil
+	err := con.paeudoShell()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func Init(conf []string) (*MemContainers, *Error) {
-	var cons MemContainers
-	var err *Error
-	cons.V, cons.SettingConf, err = MultiGetMap("setting", conf)
-	cons.ContainersMap = make(map[string]*Container)
-	if err == nil {
-		cons.RootDir = cons.SettingConf["rootdir"].(string)
-		_, err := MakeDir(cons.RootDir)
-		if err != nil {
-			return nil, err
-		}
-		return &cons, nil
-	}
-	return nil, err
-}
+/**
+container methods
+**/
 
 func (con *Container) refreshElf(key string, value []string, prog string) *Error {
 	switch key {
@@ -223,7 +143,7 @@ func (con *Container) refreshElf(key string, value []string, prog string) *Error
 	return nil
 }
 
-func (con *Container) ContainerPaeudoShell() *Error {
+func (con *Container) paeudoShell() *Error {
 	if FolderExist(con.RootPath) {
 		fmt.Println(fmt.Sprintf("%s@%s>>", con.CreateUser, con.ContainerName))
 		scanner := bufio.NewScanner(os.Stdin)
@@ -249,63 +169,110 @@ func (con *Container) ContainerPaeudoShell() *Error {
 	return &cerr
 }
 
-func (mem *MemContainers) CreateContainer(dir string, name string) (*Container, *Error) {
-	con, err := createContainer(mem.RootDir, dir, name)
+func (con *Container) createContainer(config string) *Error {
+	for strings.HasSuffix(con.ConfigPath, "/") {
+		con.ConfigPath = strings.TrimSuffix(con.ConfigPath, "/")
+	}
+	err := con.createSysFolders(config)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (con *Container) createSysFolders(config string) *Error {
+	con.LogPath = fmt.Sprintf("%s/log", con.ConfigPath)
+	con.ElfPatcherPath = fmt.Sprintf("%s/elf", con.ConfigPath)
+	con.FakechrootPath = fmt.Sprintf("%s/fakechroot", con.ConfigPath)
+	var err *Error
+	con.CreateUser, err = Command("whoami")
+	if err != nil {
+		return err
+	}
+	con.V, con.SettingConf, err = LoadConfig(config)
+	if err != nil {
+		return err
+	}
+	_, err = MakeDir(con.LogPath)
+	if err != nil {
+		return err
+	}
+	_, err = MakeDir(con.ElfPatcherPath)
+	if err != nil {
+		return err
+	}
+	_, err = MakeDir(con.FakechrootPath)
+	if err != nil {
+		return err
+	}
+	if FileExist("./patchelf") {
+		_, err = CopyFile("./patchelf", fmt.Sprintf("%s/patchelf", con.ElfPatcherPath))
+		if err != nil {
+			return err
+		}
+	}
+	if FileExist("./libfakechroot.so") {
+		_, err = CopyFile("./libfakechroot.so", fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (con *Container) patchBineries() *Error {
+	bineries, _, err := walkContainerRoot(con)
 	if err == nil {
-		mem.ContainersMap[con.Id] = con
-		bineries, _, err := WalkContainerRoot(con)
-		if err == nil {
-			for _, binery := range bineries {
-				for _, op := range ELFOP {
-					if val, ok := con.SettingConf[op]; ok {
-						if vs, vok := val.([]interface{}); vok {
-							var valstrs []string
-							for _, v := range vs {
-								valstrs = append(valstrs, v.(string))
+		for _, op := range ELFOP {
+			if data, ok := con.SettingConf[op]; ok {
+				switch op {
+				case ELFOP[0], ELFOP[1]:
+					d1, o1 := data.([]interface{})
+					if o1 == nil {
+						for d11 := range d1 {
+							d111, o111 := d11.(map[string]interface{})
+							if o111 == nil {
+								for k, v := range d111 {
+									vs, _ := v.([]interface{})
+									var libs []string
+									for v1 := range vs {
+										libs = append(libs, v1.(string))
+									}
+									err := con.refreshElf(op, libs, k)
+									if err != nil {
+										return err
+									}
+								}
 							}
-							err := con.refreshElf(op, valstrs, binery)
-							return con, err
-						} else if vs, vok := val.(string); vok {
-							err := con.refreshElf(op, []string{vs}, binery)
-							return con, err
-						} else {
-							cerr := ErrNew(ErrMismatch, "elf operation is not right")
-							return con, &cerr
+						}
+					}
+				case ELFOP[2], ELFOP[3]:
+					d1, o1 := data.([]interface{})
+					if o1 == nil {
+						var rpaths []string
+						for d11 := range d1 {
+							rpaths = append(rpaths, d11.(string))
+						}
+						for binery := range bineries {
+							err := con.refreshElf(op, rpaths, binery)
+							if err != nil {
+								return err
+							}
 						}
 					}
 				}
 			}
-		} else {
-			return con, err
-		}
-		mem.ContainersMap[con.Id] = con
-	}
-	return nil, err
-}
 
-func (mem *MemContainers) RunContainer(id string) (*Container, *Error) {
-	if con, ok := mem.ContainersMap[id]; ok {
-		con.Status = RUNNING
-		err := con.ContainerPaeudoShell()
-		if err == nil {
-			return con, nil
+			err := con.refreshElf(op, bineries, "")
 		}
 	}
-	err := ErrNew(ErrNExist, fmt.Sprintf("Container ID: %s doesn't exist, please create it firstly", id))
-	return nil, &err
+	return err
 }
 
-func (mem *MemContainers) DestroyContainer(id string) *Error {
-	if _, ok := mem.ContainersMap[id]; ok {
-		delete(mem.ContainersMap, id)
-		return nil
-	} else {
-		err := ErrNew(ErrNExist, fmt.Sprintf("Container ID: %s doesn't exist, please create it firstly", id))
-		return &err
-	}
-}
-
-func WalkContainerRoot(con *Container) ([]string, []string, *Error) {
+/**
+private functions
+**/
+func walkContainerRoot(con *Container) ([]string, []string, *Error) {
 	var libs []string
 	var bineries []string
 	files, err := walkfs(con.RootPath)
@@ -322,6 +289,48 @@ func WalkContainerRoot(con *Container) ([]string, []string, *Error) {
 	return bineries, libs, nil
 }
 
-func WalkSpecificDir(dir string) ([]string, *Error) {
+func walkSpecificDir(dir string) ([]string, *Error) {
 	return walkfs(dir)
+}
+
+func walkfs(dir string) ([]string, *Error) {
+	fileList := []string{}
+
+	err := filepath.Walk(dir, func(path string, f os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		ftype, ferr := FileType(path)
+		if ferr != nil {
+			return ferr
+		}
+		if ftype == TYPE_REGULAR {
+			ok, err := FilePermission(path, PERM_EXE)
+			if err != nil {
+				return err
+			}
+			if ok {
+				fileList = append(fileList, path)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		cerr := ErrNew(err, "walkfs encountered error")
+		return nil, &cerr
+	}
+	return fileList, nil
+}
+
+func findAvailableId() (int, *Error) {
+	for i := 0; i < MAX_CONTAINER_COUNT; i++ {
+		if AvailableContainerIds[i] == 0 {
+			AvailableContainerIds[i] = 1
+			return i, nil
+		} else {
+			continue
+		}
+	}
+	cerr := ErrNew(ErrFull, "No available container id could be generated")
+	return -1, &cerr
 }

@@ -1,49 +1,35 @@
 package container
 
 import (
-	//	. "github.com/jasonyangshadow/lpmx/error"
-	//. "github.com/jasonyangshadow/lpmx/yaml"
+	. "github.com/jasonyangshadow/lpmx/msgpack"
 	"testing"
 )
 
-var mem struct {
-	p_mem *MemContainers
-	p_con *Container
-}
-
-/**
-func TestContainerInit(t *testing.T) {
-	confs := []string{".", "/tmp/lpmx_root"}
-	val, _ := GetMap("setting", confs)
-	var err *Error
-	mem.p_mem, err = Init(confs)
-	mem.p_mem.SettingConf = val
-	if err == nil {
-		t.Log(mem.p_mem)
-	} else {
+func TestContainerMarshal(t *testing.T) {
+	var con Container
+	con.ConfigPath = "/tmp/lpmx_test"
+	t.Log(con)
+	data, err := StructMarshal(con)
+	if err != nil {
 		t.Error(err)
+	} else {
+		t.Log(data)
+	}
+
+	var con_new Container
+	err = StructUnmarshal(data, &con_new)
+	if err != nil {
+		t.Error(err)
+	} else {
+		t.Log(con_new)
 	}
 }
-**/
 
 func TestContainer(t *testing.T) {
 	dir := "/tmp/lpmx_test"
-	name := "test"
-	confs := []string{"/tmp/lpmx_root"}
-	mem, ierr := Init(confs)
-	if ierr == nil {
-		con, cerr := mem.CreateContainer(dir, name)
-		t.Log(con)
-		if cerr == nil {
-			t.Log(mem)
-			_, rerr := mem.RunContainer(con.Id)
-			if rerr != nil {
-				t.Error(rerr)
-			}
-		} else {
-			t.Error(cerr)
-		}
-	} else {
-		t.Error(ierr)
+	config := "./setting.yml"
+	err := Run(dir, config)
+	if err != nil {
+		t.Error(err)
 	}
 }

@@ -178,6 +178,12 @@ func CopyFile(src string, dst string) (bool, *Error) {
 		cerr := ErrNew(yerr, fmt.Sprintf("copy file encounters error src: %s, dst: %s", src, dst))
 		return false, &cerr
 	}
+	si, _ := os.Stat(src)
+	merr := os.Chmod(dst, si.Mode())
+	if merr != nil {
+		cerr := ErrNew(merr, fmt.Sprintf("can't change the permission of file %s", dst))
+		return false, &cerr
+	}
 
 	serr := out.Sync()
 	if err != nil {

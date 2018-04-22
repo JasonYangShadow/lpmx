@@ -4,6 +4,8 @@ import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/error"
 	"github.com/spf13/viper"
+	"path/filepath"
+	"strings"
 )
 
 func SetLocalValue(file string, key string, value interface{}) *Error {
@@ -113,4 +115,20 @@ func MultiGetMap(file string, config []string) (*viper.Viper, map[string]interfa
 		return v, nil, &cerr
 	}
 	return v, v.AllSettings(), nil
+}
+
+func LoadConfig(config string) (*viper.Viper, map[string]interface{}, *Error) {
+	v := viper.New()
+	v.SetConfigType("yaml")
+	dir, file := filepath.Split(config)
+	file = strings.TrimSuffix(file, ".yml")
+	v.SetConfigName(file)
+	v.AddConfigPath(dir)
+	err := v.ReadInConfig()
+	if err != nil {
+		cerr := ErrNew(ErrNil, fmt.Sprintf("can't open file %s in dirs", file))
+		return v, nil, &cerr
+	}
+	return v, v.AllSettings(), nil
+
 }
