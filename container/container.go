@@ -227,33 +227,31 @@ func (con *Container) patchBineries() *Error {
 			if data, ok := con.SettingConf[op]; ok {
 				switch op {
 				case ELFOP[0], ELFOP[1]:
-					d1, o1 := data.([]interface{})
-					if o1 == nil {
-						for d11 := range d1 {
-							d111, o111 := d11.(map[string]interface{})
-							if o111 == nil {
-								for k, v := range d111 {
-									vs, _ := v.([]interface{})
-									var libs []string
-									for v1 := range vs {
-										libs = append(libs, v1.(string))
-									}
-									err := con.refreshElf(op, libs, k)
-									if err != nil {
-										return err
+					if d1, o1 := data.([]interface{}); o1 {
+						for _, d1_1 := range d1 {
+							if d1_11, o1_11 := d1_1.(interface{}); o1_11 {
+								for k, v := range d1_11.(map[string]interface{}) {
+									if v1, vo1 := v.([]interface{}); vo1 {
+										var libs []string
+										for _, vv1 := range v1 {
+											libs = append(libs, vv1.(string))
+										}
+										err := con.refreshElf(op, libs, k)
+										if err != nil {
+											return err
+										}
 									}
 								}
 							}
 						}
 					}
 				case ELFOP[2], ELFOP[3]:
-					d1, o1 := data.([]interface{})
-					if o1 == nil {
+					if d1, o1 := data.([]interface{}); o1 {
 						var rpaths []string
-						for d11 := range d1 {
-							rpaths = append(rpaths, d11.(string))
+						for _, d1_1 := range d1 {
+							rpaths = append(rpaths, d1_1.(string))
 						}
-						for binery := range bineries {
+						for _, binery := range bineries {
 							err := con.refreshElf(op, rpaths, binery)
 							if err != nil {
 								return err
@@ -262,8 +260,6 @@ func (con *Container) patchBineries() *Error {
 					}
 				}
 			}
-
-			err := con.refreshElf(op, bineries, "")
 		}
 	}
 	return err
@@ -299,6 +295,9 @@ func walkfs(dir string) ([]string, *Error) {
 	err := filepath.Walk(dir, func(path string, f os.FileInfo, err error) error {
 		if err != nil {
 			return err
+		}
+		if f.IsDir() && f.Name() == ".lpmx" {
+			return filepath.SkipDir
 		}
 		ftype, ferr := FileType(path)
 		if ferr != nil {
