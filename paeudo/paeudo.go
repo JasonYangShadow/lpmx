@@ -24,20 +24,22 @@ func CommandEnv(cmdStr string, env map[string]string, dir string, arg ...string)
 	path, err := exec.LookPath(cmdStr)
 	var cmd *exec.Cmd
 	if err != nil {
-		var args []string
-		args = append(args, "-c")
-		args = append(args, cmdStr)
+		bashstr := ""
+		bashstr += cmdStr
 		for _, a := range arg {
-			args = append(args, a)
+			bashstr += " "
+			bashstr += a
 		}
-		cmd = exec.Command("bash", args...)
+		cmd = exec.Command("sh", "-c", bashstr)
 	} else {
 		cmd = exec.Command(path, arg...)
 	}
 	cmd.Dir = dir
+	envstr := ""
 	for key, value := range env {
-		cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%s", key, value))
+		envstr += fmt.Sprintf("%s=%s,", key, value)
 	}
+	cmd.Env = append(os.Environ(), envstr)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		cerr := ErrNew(err, string(out))
@@ -45,4 +47,27 @@ func CommandEnv(cmdStr string, env map[string]string, dir string, arg ...string)
 	} else {
 		return string(out), nil
 	}
+}
+
+func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Error {
+	shpath, err := exec.LookPath(sh)
+	if err != nil {
+		cerr := ErrNew(ErrNil, fmt.Sprintf("shell: %s doesn't exist", sh))
+		return &cerr
+	} else {
+		cmd := exec.Command(shpath, arg...)
+		for key, value := range env {
+			envstr := fmt.Sprintf("%s=%s", key, value)
+			cmd.Env = append(os.Environ(), envstr)
+		}
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		err := cmd.Run()
+		if err != nil {
+			cerr := ErrNew(err, "cmd running error")
+			return &cerr
+		}
+	}
+	return nil
 }

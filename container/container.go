@@ -1,7 +1,6 @@
 package container
 
 import (
-	"bufio"
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/elf"
 	. "github.com/jasonyangshadow/lpmx/error"
@@ -40,9 +39,12 @@ type Container struct {
 	StartTime           string
 	ContainerName       string
 	CreateUser          string
+	CurrentUser         string
 	MemcachedServerList string
 	ShmFiles            string
 	IpcFiles            string
+	CurrentDir          string
+	UserShell           string
 	V                   *viper.Viper
 }
 
@@ -50,6 +52,7 @@ func Run(dir string, config string) *Error {
 	rootdir := fmt.Sprintf("%s/.lpmx", dir)
 	var con Container
 	con.RootPath = dir
+	con.CurrentDir = dir
 	con.ConfigPath = rootdir
 
 	defer func() {
@@ -87,7 +90,7 @@ func Run(dir string, config string) *Error {
 			return err
 		}
 	}
-	err := con.paeudoShell()
+	err := con.bashShell()
 	if err != nil {
 		return err
 	}
@@ -143,59 +146,20 @@ func (con *Container) refreshElf(key string, value []string, prog string) *Error
 	return nil
 }
 
-func (con *Container) paeudoShell() *Error {
+func (con *Container) bashShell() *Error {
 	if FolderExist(con.RootPath) {
-		fmt.Print(fmt.Sprintf("%s@%s>> ", con.CreateUser, con.Id))
-		scanner := bufio.NewScanner(os.Stdin)
-		for scanner.Scan() {
-			text := scanner.Text()
-			cmds := strings.Fields(text)
-			if len(cmds) > 0 {
-				cmdStr := strings.ToLower(cmds[0])
-				if cmdStr == "exit" {
-					break
-				} else if cmdStr == "switch" {
-					if con.CreateUser != "root" {
-						con.CreateUser = "root"
-					} else {
-						user, _ := Command("whoami")
-						con.CreateUser = strings.TrimSuffix(user, "\n")
-					}
-					fmt.Print(fmt.Sprintf("%s@%s>> ", con.CreateUser, con.Id))
-				} else if cmdStr == ELFOP[0] || cmdStr == ELFOP[1] || cmdStr == ELFOP[2] || cmdStr == ELFOP[3] {
-					var value []string
-					for _, val := range cmds[2:] {
-						value = append(value, val)
-					}
-					err := con.refreshElf(cmdStr, value, cmds[1])
-					if err != nil {
-						fmt.Println(err)
-					} else {
-						fmt.Println("Done")
-					}
-					fmt.Print(fmt.Sprintf("%s@%s>> ", con.CreateUser, con.Id))
-				} else {
-					env := make(map[string]string)
-					env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
-					var err *Error
-					var val string
-					if con.CreateUser == "root" {
-						val, err = CommandEnv("fakeroot", env, con.RootPath, cmds[0:]...)
-					} else {
-						val, err = CommandEnv(cmds[0], env, con.RootPath, cmds[1:]...)
-					}
-					if err == nil {
-						fmt.Println(val)
-					} else {
-						fmt.Println(err)
-					}
-					fmt.Print(fmt.Sprintf("%s@%s>> ", con.CreateUser, con.Id))
-				}
-
-			} else {
-				fmt.Println("Unrecognized Command")
-				fmt.Print(fmt.Sprintf("%s@%s>> ", con.CreateUser, con.Id))
-			}
+		env := make(map[string]string)
+		env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
+		env["ContainerId"] = con.Id
+		env["ContainerRoot"] = con.RootPath
+		var err *Error
+		if con.CurrentUser == "root" {
+			err = ShellEnv("fakeroot", env, con.RootPath, con.UserShell)
+		} else {
+			err = ShellEnv(con.UserShell, env, con.RootPath)
+		}
+		if err != nil {
+			return err
 		}
 		return nil
 	}
@@ -224,9 +188,16 @@ func (con *Container) createSysFolders(config string) *Error {
 		return err
 	}
 	con.CreateUser = strings.TrimSuffix(user, "\n")
+	con.CurrentUser = "root"
 	con.V, con.SettingConf, err = LoadConfig(config)
 	if err != nil {
 		return err
+	}
+	if sh, ok := con.SettingConf["user_shell"]; ok {
+		strsh, _ := sh.(string)
+		con.UserShell = strsh
+	} else {
+		con.UserShell = "/usr/bin/bash"
 	}
 	_, err = MakeDir(con.LogPath)
 	if err != nil {
