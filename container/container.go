@@ -13,18 +13,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
 	RUNNING = iota
-	PAUSE
 	STOPPED
 
 	IDLENGTH = 10
 )
 
 var (
-	ELFOP = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath"}
+	ELFOP  = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath"}
+	STATUS = []string{"RUNNING", "STOPPED"}
 )
 
 type Sys struct {
@@ -37,7 +38,7 @@ type Container struct {
 	Id                  string
 	RootPath            string
 	ConfigPath          string
-	Status              int8
+	Status              int
 	LogPath             string
 	ElfPatcherPath      string
 	FakechrootPath      string
@@ -77,12 +78,13 @@ func Init() *Error {
 		if err != nil {
 			return err
 		}
-		_, err := Makdir(sys.LogPath)
+		_, err = MakeDir(sys.LogPath)
 		if err != nil {
 			return err
 		}
 		sys.Containers = make(map[string]interface{})
 	}
+	return nil
 }
 
 func List() *Error {
@@ -91,10 +93,13 @@ func List() *Error {
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
 	if err == nil {
-		fmt.Println("ContainerID-----------RootDir----------Status")
+		fmt.Println(fmt.Sprintf("%s%40s%40s", "ContainerID", "RootPath", "Status"))
 		for k, v := range sys.Containers {
-			if cmap, ok := v.(map[string]string); ok {
-				fmt.Println(fmt.Sprintf("%s          %s          %s", k, cmap["RootDir"], cmap["Status"]))
+			if cmap, ok := v.(map[string]interface{}); ok {
+				fmt.Println(fmt.Sprintf("%s%40s%40s", k, cmap["RootPath"].(string), cmap["Status"].(string)))
+			} else {
+				cerr := ErrNew(ErrType, "sys.Containers type error")
+				return &cerr
 			}
 		}
 		return nil
@@ -108,11 +113,16 @@ func Resume(id string) *Error {
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
 	if err == nil {
-		if val, ok := sys.Containers[id]; ok {
-			if val, vok := v.(map[string]string); vok {
-				err := Run(val["RootPath"], val["SettingPath"])
-				if err != nil {
-					return err
+		if v, ok := sys.Containers[id]; ok {
+			if val, vok := v.(map[string]interface{}); vok {
+				if val["Status"].(string) == STATUS[1] {
+					err := Run(val["RootPath"].(string), val["SettingPath"].(string))
+					if err != nil {
+						return err
+					}
+				} else {
+					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner with id: %s is running, can't resume", id))
+					return &cerr
 				}
 			}
 		} else {
@@ -130,20 +140,25 @@ func Destroy(id string) *Error {
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
+
+	defer func() {
+		data, _ := StructMarshal(&sys)
+		WriteToFile(data, fmt.Sprintf("%s/.info", sys.RootDir))
+	}()
+
 	if err == nil {
-		if val, ok := sys.Containers[id]; ok {
-			if val, vok := v.(map[string]string); vok {
-				cdir := fmt.Sprintf("%s/.lpmx", val["RootPath"])
-				if FolderExist(cdir) {
-					os.RemoveAll(cdir)
+		if v, ok := sys.Containers[id]; ok {
+			if val, vok := v.(map[string]interface{}); vok {
+				if val["Status"].(string) == STATUS[1] {
+					cdir := fmt.Sprintf("%s/.lpmx", val["RootPath"])
+					if FolderExist(cdir) {
+						os.RemoveAll(cdir)
+					}
+					delete(sys.Containers, id)
+				} else {
+					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner with id: %s is running, can't destroy", id))
+					return &cerr
 				}
-				delete(sys.Containers, id)
-
-				defer func() {
-					data, _ := StructMarshal(&sys)
-					WriteToFile(data, fmt.Sprintf("%s/.info", sys.RootDir))
-				}()
-
 				return nil
 			}
 		} else {
@@ -166,6 +181,8 @@ func Run(dir string, config string) *Error {
 	defer func() {
 		data, _ := StructMarshal(&con)
 		WriteToFile(data, fmt.Sprintf("%s/.info", rootdir))
+		con.Status = STOPPED
+		con.appendToSys()
 	}()
 
 	if FolderExist(rootdir) {
@@ -197,8 +214,17 @@ func Run(dir string, config string) *Error {
 		if err != nil {
 			return err
 		}
+		err = con.appendToSys()
+		if err != nil {
+			return err
+		}
 	}
-	err := con.bashShell()
+	con.Status = RUNNING
+	err := con.appendToSys()
+	if err != nil {
+		return err
+	}
+	err = con.bashShell()
 	if err != nil {
 		return err
 	}
@@ -207,7 +233,7 @@ func Run(dir string, config string) *Error {
 }
 
 func Set(id string, tp string, name string, value string) *Error {
-
+	return nil
 }
 
 /**
@@ -300,12 +326,12 @@ func (con *Container) createSysFolders(config string) *Error {
 		return err
 	}
 	con.CreateUser = strings.TrimSuffix(user, "\n")
-	con.CurrentUser = "root"
+	con.CurrentUser = con.CreateUser
 	con.V, con.SettingConf, err = LoadConfig(config)
 	if err != nil {
 		return err
 	}
-	con.SettingPath = config
+	con.SettingPath, _ = filepath.Abs(config)
 	if sh, ok := con.SettingConf["user_shell"]; ok {
 		strsh, _ := sh.(string)
 		con.UserShell = strsh
@@ -390,6 +416,40 @@ func (con *Container) patchBineries() *Error {
 	return err
 }
 
+func (con *Container) appendToSys() *Error {
+	currdir, _ := filepath.Abs(filepath.Dir("."))
+	var sys Sys
+	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	err := readSys(rootdir, &sys)
+
+	if err == nil {
+		if val, ok := sys.Containers[con.Id]; ok {
+			if cmap, cok := val.(map[string]interface{}); cok {
+				cmap["Status"] = STATUS[con.Status]
+				cmap["RootPath"] = con.RootPath
+				cmap["SettingPath"] = con.SettingPath
+			} else {
+				cerr := ErrNew(ErrType, "interface{} type assertation error")
+				return &cerr
+			}
+		} else {
+			cmap := make(map[string]string)
+			cmap["Status"] = STATUS[con.Status]
+			cmap["RootPath"] = con.RootPath
+			cmap["SettingPath"] = con.SettingPath
+			sys.Containers[con.Id] = cmap
+		}
+		data, _ := StructMarshal(&sys)
+		err := WriteToFile(data, fmt.Sprintf("%s/.info", sys.RootDir))
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	return err
+
+}
+
 /**
 private functions
 **/
@@ -447,6 +507,7 @@ func walkfs(dir string) ([]string, *Error) {
 }
 
 func randomString(n int) string {
+	rand.Seed(time.Now().UnixNano())
 	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 	b := make([]rune, n)
 	for i := range b {
@@ -462,12 +523,13 @@ func readSys(rootdir string, sys *Sys) *Error {
 		if err != nil {
 			return err
 		}
-		err := StructUnmarshal(data, sys)
+		err = StructUnmarshal(data, sys)
 		if err != nil {
 			return err
 		}
 	} else {
-		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist", rootdir))
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist, please use command 'lpmx init' firstly", rootdir))
 		return &cerr
 	}
+	return nil
 }

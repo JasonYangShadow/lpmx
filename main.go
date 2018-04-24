@@ -28,12 +28,10 @@ func main() {
 		Long:  "list command is the basic command of lpmx, which is used for listing all the containers registered",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			vals, err := List()
+			err := List()
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(1)
-			} else {
-				fmt.Println(vals)
 			}
 		},
 	}
@@ -58,41 +56,35 @@ func main() {
 	runCmd.Flags().StringVarP(&RunConfig, "config", "c", "", "required")
 	runCmd.MarkFlagRequired("config")
 
-	var ResumeId string
 	var resumeCmd = &cobra.Command{
 		Use:   "resume",
 		Short: "resume the registered container",
 		Long:  "resume command is the basic command of lpmx, which is used for resuming the registered container via id",
-		Args:  cobra.ExactArgs(0),
+		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Resume(ResumeId)
+			err := Resume(args[0])
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(1)
 			}
 		},
 	}
-	resumeCmd.Flags().StringVarP(&ResumeId, "id", "i", "", "required")
-	resumeCmd.MarkFlagRequired("id")
 
-	var DestroyId string
 	var destroyCmd = &cobra.Command{
 		Use:   "destroy",
 		Short: "destroy the registered container",
 		Long:  "destroy command is the basic command of lpmx, which is used for destroying the registered container via id",
-		Args:  cobra.ExactArgs(0),
+		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Destroy(DestroyId)
+			err := Destroy(args[0])
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(1)
 			} else {
-				fmt.Println(fmt.Sprintf("container: %s is destroyed", DestroyId))
+				fmt.Println(fmt.Sprintf("container: %s is destroyed", args[0]))
 			}
 		},
 	}
-	destroyCmd.Flags().StringVarP(&DestroyId, "id", "i", "", "required")
-	destroyCmd.MarkFlagRequired("id")
 
 	var SetId string
 	var SetType string
@@ -126,6 +118,6 @@ func main() {
 		Use:   "lpmx",
 		Short: "lpmx rootless container",
 	}
-	rootCmd.AddCommand(runCmd)
+	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, runCmd, setCmd, resumeCmd)
 	rootCmd.Execute()
 }
