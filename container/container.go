@@ -27,6 +27,12 @@ var (
 	ELFOP = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath"}
 )
 
+type Sys struct {
+	RootDir    string
+	Containers map[string]interface{}
+	LogPath    string
+}
+
 type Container struct {
 	Id                  string
 	RootPath            string
@@ -36,6 +42,7 @@ type Container struct {
 	ElfPatcherPath      string
 	FakechrootPath      string
 	SettingConf         map[string]interface{}
+	SettingPath         string
 	StartTime           string
 	ContainerName       string
 	CreateUser          string
@@ -46,6 +53,107 @@ type Container struct {
 	CurrentDir          string
 	UserShell           string
 	V                   *viper.Viper
+}
+
+func Init() *Error {
+	currdir, _ := filepath.Abs(filepath.Dir("."))
+	var sys Sys
+	config := fmt.Sprintf("%s/.lpmxsys", currdir)
+	sys.RootDir = config
+	sys.LogPath = fmt.Sprintf("%s/log", sys.RootDir)
+
+	defer func() {
+		data, _ := StructMarshal(&sys)
+		WriteToFile(data, fmt.Sprintf("%s/.info", sys.RootDir))
+	}()
+
+	if FolderExist(config) {
+		err := readSys(sys.RootDir, &sys)
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err := MakeDir(sys.RootDir)
+		if err != nil {
+			return err
+		}
+		_, err := Makdir(sys.LogPath)
+		if err != nil {
+			return err
+		}
+		sys.Containers = make(map[string]interface{})
+	}
+}
+
+func List() *Error {
+	currdir, _ := filepath.Abs(filepath.Dir("."))
+	var sys Sys
+	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	err := readSys(rootdir, &sys)
+	if err == nil {
+		fmt.Println("ContainerID-----------RootDir----------Status")
+		for k, v := range sys.Containers {
+			if cmap, ok := v.(map[string]string); ok {
+				fmt.Println(fmt.Sprintf("%s          %s          %s", k, cmap["RootDir"], cmap["Status"]))
+			}
+		}
+		return nil
+	}
+	return err
+}
+
+func Resume(id string) *Error {
+	currdir, _ := filepath.Abs(filepath.Dir("."))
+	var sys Sys
+	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	err := readSys(rootdir, &sys)
+	if err == nil {
+		if val, ok := sys.Containers[id]; ok {
+			if val, vok := v.(map[string]string); vok {
+				err := Run(val["RootPath"], val["SettingPath"])
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
+			return &cerr
+		}
+		return nil
+	}
+	return err
+
+}
+
+func Destroy(id string) *Error {
+	currdir, _ := filepath.Abs(filepath.Dir("."))
+	var sys Sys
+	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	err := readSys(rootdir, &sys)
+	if err == nil {
+		if val, ok := sys.Containers[id]; ok {
+			if val, vok := v.(map[string]string); vok {
+				cdir := fmt.Sprintf("%s/.lpmx", val["RootPath"])
+				if FolderExist(cdir) {
+					os.RemoveAll(cdir)
+				}
+				delete(sys.Containers, id)
+
+				defer func() {
+					data, _ := StructMarshal(&sys)
+					WriteToFile(data, fmt.Sprintf("%s/.info", sys.RootDir))
+				}()
+
+				return nil
+			}
+		} else {
+			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
+			return &cerr
+		}
+		return nil
+	}
+	return err
+
 }
 
 func Run(dir string, config string) *Error {
@@ -96,6 +204,10 @@ func Run(dir string, config string) *Error {
 	}
 
 	return nil
+}
+
+func Set(id string, tp string, name string, value string) *Error {
+
 }
 
 /**
@@ -193,6 +305,7 @@ func (con *Container) createSysFolders(config string) *Error {
 	if err != nil {
 		return err
 	}
+	con.SettingPath = config
 	if sh, ok := con.SettingConf["user_shell"]; ok {
 		strsh, _ := sh.(string)
 		con.UserShell = strsh
@@ -340,4 +453,21 @@ func randomString(n int) string {
 		b[i] = letter[rand.Intn(len(letter))]
 	}
 	return string(b)
+}
+
+func readSys(rootdir string, sys *Sys) *Error {
+	info := fmt.Sprintf("%s/.info", rootdir)
+	if FileExist(info) {
+		data, err := ReadFromFile(info)
+		if err != nil {
+			return err
+		}
+		err := StructUnmarshal(data, sys)
+		if err != nil {
+			return err
+		}
+	} else {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist", rootdir))
+		return &cerr
+	}
 }
