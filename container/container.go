@@ -4,6 +4,7 @@ import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/elf"
 	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/log"
 	. "github.com/jasonyangshadow/lpmx/memcache"
 	. "github.com/jasonyangshadow/lpmx/msgpack"
 	. "github.com/jasonyangshadow/lpmx/paeudo"
@@ -25,7 +26,7 @@ const (
 )
 
 var (
-	ELFOP  = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath"}
+	ELFOP  = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath", "change_user"}
 	STATUS = []string{"RUNNING", "STOPPED"}
 )
 
@@ -229,6 +230,7 @@ func Run(dir string, config string) *Error {
 	if err != nil {
 		return err
 	}
+	fmt.Println(con)
 	err = con.bashShell()
 	if err != nil {
 		return err
@@ -238,11 +240,71 @@ func Run(dir string, config string) *Error {
 }
 
 func Set(id string, tp string, name string, value string) *Error {
-	mem, err := MInitServer()
+	currdir, _ := filepath.Abs(filepath.Dir("."))
+	var sys Sys
+	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	err := readSys(rootdir, &sys)
+
 	if err == nil {
-		err = mem.MSetStrValue(fmt.Sprintf("%s:%s:%s", id, tp, name), value)
-		if err != nil {
-			return err
+		if v, ok := sys.Containers[id]; ok {
+			if val, vok := v.(map[string]interface{}); vok {
+				if val["Status"].(string) == STATUS[0] {
+					lerr := LogInit(fmt.Sprintf("%s/.lpmx/log", val["RootPath"].(string)))
+					if lerr != nil {
+						return lerr
+					}
+					LogWarning.Println(fmt.Sprintf("container %s currently is running, any operations on it will potentially crash it!", id))
+				}
+				var con Container
+				info := fmt.Sprintf("%s/.lpmx/.info", val["RootPath"].(string))
+				if FileExist(info) {
+					data, err := ReadFromFile(info)
+					if err == nil {
+						err := StructUnmarshal(data, &con)
+						if err != nil {
+							return err
+						}
+					} else {
+						return err
+					}
+				} else {
+					cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist", val["RootPath"].(string)))
+					return &cerr
+				}
+				switch tp {
+				case ELFOP[0], ELFOP[1], ELFOP[2], ELFOP[3]:
+					values := strings.Split(value, ",")
+					rerr := con.refreshElf(tp, values, name)
+					if rerr != nil {
+						return rerr
+					}
+				case ELFOP[4]:
+					if strings.TrimSpace(name) != "user" {
+						err_new := ErrNew(ErrType, "name should be 'user'")
+						return &err_new
+					}
+					switch value {
+					case "root":
+						con.CurrentUser = "root"
+					case "default":
+						con.CurrentUser = con.CreateUser
+					default:
+						err_new := ErrNew(ErrType, "value should be either 'root' or 'default'")
+						return &err_new
+					}
+				default:
+					err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user'}")
+					return &err_new
+				}
+				//write back
+				data, _ := StructMarshal(&con)
+				WriteToFile(data, fmt.Sprintf("%s/.info", con.ConfigPath))
+
+				return nil
+			}
+		} else {
+			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
+			return &cerr
 		}
 		return nil
 	}

@@ -3,10 +3,12 @@ package log
 import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/utils"
 	"io"
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 var (
@@ -17,13 +19,21 @@ var (
 	LogFatal   *log.Logger
 )
 
-func LogInit(file string) *Error {
+func LogInit(dir string) *Error {
 	multiouts := false
-	if strings.TrimSpace(file) != "" {
+	if strings.TrimSpace(dir) != "" {
 		multiouts = true
 	}
 
 	if multiouts {
+		current_date := time.Now().Local()
+		file := fmt.Sprintf("%s/log-%s", dir, current_date.Format("2006-01-02"))
+		if !FolderExist(dir) {
+			_, err := MakeDir(dir)
+			if err != nil {
+				return err
+			}
+		}
 		fp, err := os.OpenFile(file, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 		if err != nil {
 			cerr := ErrNew(err, fmt.Sprintf("can't open log file: %s", file))
