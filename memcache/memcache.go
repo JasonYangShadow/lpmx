@@ -16,12 +16,12 @@ type MemcacheInst struct {
 //InitServer is used for initializing memcache server using default configuration
 func MInitServer() (*MemcacheInst, *Error) {
 	var mem MemcacheInst
-	mem.MemcacheServerList = "locaohost"
+	mem.MemcacheServerList = "127.0.0.1"
 	mem.MemcacheServerPort = "11211"
-	server := fmt.Sprintf("%s:%s", mem.MemcacheServerList[0], mem.MemcacheServerPort)
+	server := fmt.Sprintf("%s:%s", mem.MemcacheServerList, mem.MemcacheServerPort)
 	client := New(server)
 	if client == nil {
-		err := ErrNew(ErrServerError, fmt.Sprintf("can't create server through the config %s:%d", mem.MemcacheServerList, mem.MemcacheServerPort))
+		err := ErrNew(ErrServerError, fmt.Sprintf("can't create server through the config %s:%s", mem.MemcacheServerList, mem.MemcacheServerPort))
 		return nil, &err
 	}
 	mem.ClientInst = client

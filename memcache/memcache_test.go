@@ -6,12 +6,15 @@ import (
 
 func TestMem1(t *testing.T) {
 	mem, err := MInitServer()
+	t.Log(mem.ClientInst)
 	if err == nil {
-		mem.MSetStrValue(client, "key", "value")
-		value, _ := mem.MGetStrValue(client, "key")
-		t.Log(value)
-		if value != "value" {
-			t.Fatalf("real: %s => expect : %s", value, "value")
+		err = mem.MSetStrValue("8exMB69sW9:bash:allow", "all")
+		if err != nil {
+			t.Error(err)
 		}
+		value, _ := mem.MGetStrValue("8exMB69sW9:bash:allow")
+		t.Log(value)
+	} else {
+		t.Error(err)
 	}
 }

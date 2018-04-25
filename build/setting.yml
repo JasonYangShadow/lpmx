@@ -5,8 +5,6 @@ add_needed:
 add_rpath:
   - /tmp/lpmx_test/lib
 
-user_shell: /usr/bin/zsh
-
 allow_list:
   - bash: all
   - touch:
