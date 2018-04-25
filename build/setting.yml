@@ -4,3 +4,11 @@ add_needed:
 
 add_rpath:
   - /tmp/lpmx_test/lib
+
+user_shell: /usr/bin/zsh
+
+allow:
+  - bash: all
+  - touch:
+    - /tmp/test
+    - /tmp/test2

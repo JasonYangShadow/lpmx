@@ -56,10 +56,13 @@ func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Erro
 		return &cerr
 	} else {
 		cmd := exec.Command(shpath, arg...)
+		var envstrs []string
 		for key, value := range env {
 			envstr := fmt.Sprintf("%s=%s", key, value)
-			cmd.Env = append(os.Environ(), envstr)
+			envstrs = append(envstrs, envstr)
 		}
+		cmd.Env = envstrs
+		cmd.Dir = dir
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
