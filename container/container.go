@@ -4,6 +4,7 @@ import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/elf"
 	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/memcache"
 	. "github.com/jasonyangshadow/lpmx/msgpack"
 	. "github.com/jasonyangshadow/lpmx/paeudo"
 	. "github.com/jasonyangshadow/lpmx/utils"
@@ -48,7 +49,7 @@ type Container struct {
 	ContainerName       string
 	CreateUser          string
 	CurrentUser         string
-	MemcachedServerList string
+	MemcachedServerList []string
 	ShmFiles            string
 	IpcFiles            string
 	CurrentDir          string
@@ -218,6 +219,10 @@ func Run(dir string, config string) *Error {
 		if err != nil {
 			return err
 		}
+		err = con.setProgPrivileges()
+		if err != nil {
+			return err
+		}
 	}
 	con.Status = RUNNING
 	err := con.appendToSys()
@@ -233,7 +238,15 @@ func Run(dir string, config string) *Error {
 }
 
 func Set(id string, tp string, name string, value string) *Error {
-	return nil
+	mem, err := MInitServer()
+	if err == nil {
+		err = mem.MSetStrValue(fmt.Sprintf("%s:%s:%s", id, tp, name), value)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	return err
 }
 
 /**
@@ -337,6 +350,13 @@ func (con *Container) createSysFolders(config string) *Error {
 		con.UserShell = strsh
 	} else {
 		con.UserShell = "/usr/bin/bash"
+	}
+	if mem, mok := con.SettingConf["memcache_list"]; mok {
+		if mems, mems_ok := mem.([]interface{}); mems_ok {
+			for _, memc := range mems {
+				con.MemcachedServerList = append(con.MemcachedServerList, memc.(string))
+			}
+		}
 	}
 	_, err = MakeDir(con.LogPath)
 	if err != nil {
@@ -448,6 +468,44 @@ func (con *Container) appendToSys() *Error {
 	}
 	return err
 
+}
+
+func (con *Container) setProgPrivileges() *Error {
+	var mem *MemcacheInst
+	var err *Error
+	if len(con.MemcachedServerList) > 0 {
+		mem, err = MInitServers(con.MemcachedServerList[0:]...)
+	} else {
+		mem, err = MInitServer()
+	}
+	if err == nil {
+		if ac, ac_ok := con.SettingConf["allow_list"]; ac_ok {
+			if aca, aca_ok := ac.([]interface{}); aca_ok {
+				for _, ace := range aca {
+					if acm, acm_ok := ace.(map[string]interface{}); acm_ok {
+						for k, v := range acm {
+							switch v.(type) {
+							case string:
+								mem.MSetStrValue(fmt.Sprintf("%s:%s:allow", con.Id, k), v.(string))
+							case interface{}:
+								value := ""
+								for _, ve := range v.([]interface{}) {
+									value = fmt.Sprintf("%s;%s", value, ve.(string))
+								}
+								mem.MSetStrValue(fmt.Sprintf("%s:%s:allow", con.Id, k), value)
+							default:
+								cerr := ErrNew(ErrType, "interface{} type assertation error")
+								return &cerr
+							}
+						}
+					}
+				}
+			}
+		}
+		return nil
+	}
+	fmt.Println(mem, err)
+	return err
 }
 
 /**

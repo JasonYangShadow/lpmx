@@ -7,35 +7,42 @@ import (
 	"strings"
 )
 
-const (
-	MEM_SERVER        = "localhost"
-	MEM_PORT          = 11211
-	MEMCACHED_MAX_KEY = 256
-)
+type MemcacheInst struct {
+	MemcacheServerList string
+	MemcacheServerPort string
+	ClientInst         *Client
+}
 
 //InitServer is used for initializing memcache server using default configuration
-func InitServer() (*Client, *Error) {
-	server := fmt.Sprintf("%s:%d", MEM_SERVER, MEM_PORT)
+func MInitServer() (*MemcacheInst, *Error) {
+	var mem MemcacheInst
+	mem.MemcacheServerList = "locaohost"
+	mem.MemcacheServerPort = "11211"
+	server := fmt.Sprintf("%s:%s", mem.MemcacheServerList[0], mem.MemcacheServerPort)
 	client := New(server)
 	if client == nil {
-		err := ErrNew(ErrServerError, fmt.Sprintf("can't create server through the config %s:%d", MEM_SERVER, MEM_PORT))
+		err := ErrNew(ErrServerError, fmt.Sprintf("can't create server through the config %s:%d", mem.MemcacheServerList, mem.MemcacheServerPort))
 		return nil, &err
 	}
-	return client, nil
+	mem.ClientInst = client
+	return &mem, nil
 }
 
 //InitServers is used for initializing memcache servers using parameters
-func InitServers(server ...string) (*Client, *Error) {
+func MInitServers(server ...string) (*MemcacheInst, *Error) {
+	var mem MemcacheInst
+	mem.MemcacheServerList = strings.Join(server, ",")
 	client := New(strings.Join(server, ","))
 	if client == nil {
 		err := ErrNew(ErrServerError, fmt.Sprintf("can't create server through the config %s", server))
 		return nil, &err
 	}
-	return client, nil
+	mem.ClientInst = client
+	return &mem, nil
 }
 
-func GetStrValue(c *Client, key string) (string, *Error) {
-	item, err := c.Get(key)
+func (mem *MemcacheInst) MGetStrValue(key string) (string, *Error) {
+	item, err := mem.ClientInst.Get(key)
 	if err != nil {
 		cerr := ErrNew(err, fmt.Sprintf("getStrValue returns error: %s", err.Error()))
 		return "", &cerr
@@ -43,9 +50,9 @@ func GetStrValue(c *Client, key string) (string, *Error) {
 	return string(item.Value[:]), nil
 }
 
-func SetStrValue(c *Client, key string, value string) *Error {
+func (mem *MemcacheInst) MSetStrValue(key string, value string) *Error {
 	item := &Item{Key: key, Value: []byte(value)}
-	err := c.Set(item)
+	err := mem.ClientInst.Set(item)
 	if err != nil {
 		cerr := ErrNew(err, fmt.Sprintf("setStrValue returns error: %s", err.Error()))
 		return &cerr
@@ -53,8 +60,8 @@ func SetStrValue(c *Client, key string, value string) *Error {
 	return nil
 }
 
-func DeleteByKey(c *Client, key string) *Error {
-	err := c.Delete(key)
+func (mem *MemcacheInst) MDeleteByKey(key string) *Error {
+	err := mem.ClientInst.Delete(key)
 	if err != nil {
 		cerr := ErrNew(err, fmt.Sprintf("deleteByKey returns error: %s", err.Error()))
 		return &cerr

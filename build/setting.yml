@@ -7,7 +7,7 @@ add_rpath:
 
 user_shell: /usr/bin/zsh
 
-allow:
+allow_list:
   - bash: all
   - touch:
     - /tmp/test
