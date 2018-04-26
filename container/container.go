@@ -4,7 +4,6 @@ import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/elf"
 	. "github.com/jasonyangshadow/lpmx/error"
-	. "github.com/jasonyangshadow/lpmx/log"
 	. "github.com/jasonyangshadow/lpmx/memcache"
 	. "github.com/jasonyangshadow/lpmx/msgpack"
 	. "github.com/jasonyangshadow/lpmx/paeudo"
@@ -230,7 +229,6 @@ func Run(dir string, config string) *Error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(con)
 	err = con.bashShell()
 	if err != nil {
 		return err
@@ -249,11 +247,8 @@ func Set(id string, tp string, name string, value string) *Error {
 		if v, ok := sys.Containers[id]; ok {
 			if val, vok := v.(map[string]interface{}); vok {
 				if val["Status"].(string) == STATUS[0] {
-					lerr := LogInit(fmt.Sprintf("%s/.lpmx/log", val["RootPath"].(string)))
-					if lerr != nil {
-						return lerr
-					}
-					LogWarning.Println(fmt.Sprintf("container %s currently is running, any operations on it will potentially crash it!", id))
+					err_new := ErrNew(ErrStatus, "container is running now, can't change the info, please stop it firstly")
+					return &err_new
 				}
 				var con Container
 				info := fmt.Sprintf("%s/.lpmx/.info", val["RootPath"].(string))
@@ -552,7 +547,7 @@ func (con *Container) setProgPrivileges() *Error {
 							case interface{}:
 								value := ""
 								for _, ve := range v.([]interface{}) {
-									value = fmt.Sprintf("%s;%s", value, ve.(string))
+									value = fmt.Sprintf("%s;%s", ve.(string), value)
 								}
 								mem.MSetStrValue(fmt.Sprintf("%s:%s:allow", con.Id, k), value)
 							default:

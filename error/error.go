@@ -18,6 +18,7 @@ var (
 	ErrMarshal  = errors.New("Error while marshaling or unmarshaling data")
 	ErrFileIO   = errors.New("Error while reading or writing files")
 	ErrCmd      = errors.New("Error while running cmd")
+	ErrStatus   = errors.New("Status not satisfied")
 )
 
 type Error struct {
