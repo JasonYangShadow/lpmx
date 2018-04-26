@@ -8,11 +8,7 @@ func TestMem1(t *testing.T) {
 	mem, err := MInitServer()
 	t.Log(mem.ClientInst)
 	if err == nil {
-		err = mem.MSetStrValue("8exMB69sW9:bash:allow", "all")
-		if err != nil {
-			t.Error(err)
-		}
-		value, _ := mem.MGetStrValue("8exMB69sW9:bash:allow")
+		value, _ := mem.MGetStrValue("aJ2Q0pV6bL:bash")
 		t.Log(value)
 	} else {
 		t.Error(err)

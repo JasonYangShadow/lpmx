@@ -25,7 +25,7 @@ const (
 )
 
 var (
-	ELFOP  = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath", "change_user"}
+	ELFOP  = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath", "change_user", "add_privilege", "remove_privilege"}
 	STATUS = []string{"RUNNING", "STOPPED"}
 )
 
@@ -246,56 +246,77 @@ func Set(id string, tp string, name string, value string) *Error {
 	if err == nil {
 		if v, ok := sys.Containers[id]; ok {
 			if val, vok := v.(map[string]interface{}); vok {
-				if val["Status"].(string) == STATUS[0] {
-					err_new := ErrNew(ErrStatus, "container is running now, can't change the info, please stop it firstly")
-					return &err_new
-				}
-				var con Container
-				info := fmt.Sprintf("%s/.lpmx/.info", val["RootPath"].(string))
-				if FileExist(info) {
-					data, err := ReadFromFile(info)
-					if err == nil {
-						err := StructUnmarshal(data, &con)
+				tp = strings.ToLower(strings.TrimSpace(tp))
+				switch tp {
+				case ELFOP[5], ELFOP[6]:
+					{
+						err := setPrivilege(id, tp, name, value)
 						if err != nil {
 							return err
 						}
-					} else {
-						return err
 					}
-				} else {
-					cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist", val["RootPath"].(string)))
-					return &cerr
-				}
-				switch tp {
-				case ELFOP[0], ELFOP[1], ELFOP[2], ELFOP[3]:
-					values := strings.Split(value, ",")
-					rerr := con.refreshElf(tp, values, name)
-					if rerr != nil {
-						return rerr
+				case ELFOP[0], ELFOP[1], ELFOP[2], ELFOP[3], ELFOP[4]:
+					{
+						var con Container
+						info := fmt.Sprintf("%s/.lpmx/.info", val["RootPath"].(string))
+						if FileExist(info) {
+							data, err := ReadFromFile(info)
+							if err == nil {
+								err := StructUnmarshal(data, &con)
+								if err != nil {
+									return err
+								}
+							} else {
+								return err
+							}
+						} else {
+							cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist", val["RootPath"].(string)))
+							return &cerr
+						}
+						//read info ends,  get container from file
+
+						switch tp {
+						case ELFOP[0], ELFOP[1], ELFOP[2], ELFOP[3]:
+							values := strings.Split(value, ",")
+							rerr := con.refreshElf(tp, values, name)
+							if rerr != nil {
+								return rerr
+							}
+						case ELFOP[4]:
+							if val["Status"].(string) == STATUS[0] {
+								err_new := ErrNew(ErrStatus, "container is running now, can't change the user, please stop it firstly")
+								return &err_new
+							}
+							if strings.TrimSpace(name) != "user" {
+								err_new := ErrNew(ErrType, "name should be 'user'")
+								return &err_new
+							}
+							switch value {
+							case "root":
+								con.CurrentUser = "root"
+							case "default":
+								con.CurrentUser = con.CreateUser
+							default:
+								err_new := ErrNew(ErrType, "value should be either 'root' or 'default'")
+								return &err_new
+							}
+						default:
+							err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user'}")
+							return &err_new
+						}
+
+						//write back
+						data, _ := StructMarshal(&con)
+						WriteToFile(data, fmt.Sprintf("%s/.info", con.ConfigPath))
+
 					}
-				case ELFOP[4]:
-					if strings.TrimSpace(name) != "user" {
-						err_new := ErrNew(ErrType, "name should be 'user'")
-						return &err_new
-					}
-					switch value {
-					case "root":
-						con.CurrentUser = "root"
-					case "default":
-						con.CurrentUser = con.CreateUser
-					default:
-						err_new := ErrNew(ErrType, "value should be either 'root' or 'default'")
-						return &err_new
-					}
+
+					return nil
 				default:
-					err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user'}")
+					err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user', 'add_privilege','remove_privilege'}")
 					return &err_new
 				}
-				//write back
-				data, _ := StructMarshal(&con)
-				WriteToFile(data, fmt.Sprintf("%s/.info", con.ConfigPath))
 
-				return nil
 			}
 		} else {
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
@@ -532,36 +553,53 @@ func (con *Container) setProgPrivileges() *Error {
 	var err *Error
 	if len(con.MemcachedServerList) > 0 {
 		mem, err = MInitServers(con.MemcachedServerList[0:]...)
+		if err != nil {
+			return err
+		}
 	} else {
 		mem, err = MInitServer()
+		if err != nil {
+			return err
+		}
 	}
 	if err == nil {
 		if ac, ac_ok := con.SettingConf["allow_list"]; ac_ok {
 			if aca, aca_ok := ac.([]interface{}); aca_ok {
 				for _, ace := range aca {
-					if acm, acm_ok := ace.(map[string]interface{}); acm_ok {
+					if acm, acm_ok := ace.(map[interface{}]interface{}); acm_ok {
 						for k, v := range acm {
 							switch v.(type) {
 							case string:
-								mem.MSetStrValue(fmt.Sprintf("%s:%s:allow", con.Id, k), v.(string))
+								mem_err := mem.MSetStrValue(fmt.Sprintf("%s:%s", con.Id, k), v.(string))
+								if mem_err != nil {
+									return mem_err
+								}
 							case interface{}:
 								value := ""
 								for _, ve := range v.([]interface{}) {
 									value = fmt.Sprintf("%s;%s", ve.(string), value)
 								}
-								mem.MSetStrValue(fmt.Sprintf("%s:%s:allow", con.Id, k), value)
+								mem_err := mem.MSetStrValue(fmt.Sprintf("%s:%s", con.Id, k), value)
+								if mem_err != nil {
+									return mem_err
+								}
 							default:
 								cerr := ErrNew(ErrType, "interface{} type assertation error")
 								return &cerr
 							}
 						}
+					} else {
+						acm_err := ErrNew(ErrType, fmt.Sprintf("type is not right, assume: map[string]interface{}, real: %v", ace))
+						return &acm_err
 					}
 				}
+			} else {
+				aca_err := ErrNew(ErrType, fmt.Sprintf("type is not right, assume: []interface{}, real: %v", ac))
+				return &aca_err
 			}
 		}
 		return nil
 	}
-	fmt.Println(mem, err)
 	return err
 }
 
@@ -645,6 +683,26 @@ func readSys(rootdir string, sys *Sys) *Error {
 	} else {
 		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist, please use command 'lpmx init' firstly", rootdir))
 		return &cerr
+	}
+	return nil
+}
+
+func setPrivilege(id string, tp string, name string, value string) *Error {
+	mem, err := MInitServer()
+	if err != nil {
+		return err
+	}
+
+	if tp == ELFOP[5] {
+		err := mem.MSetStrValue(fmt.Sprintf("%s:%s", id, name), value)
+		if err != nil {
+			return err
+		}
+	} else {
+		err := mem.MDeleteByKey(fmt.Sprintf("%s:%s", id, name))
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
