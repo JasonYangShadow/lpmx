@@ -10,11 +10,9 @@ import (
 	. "github.com/jasonyangshadow/lpmx/utils"
 	. "github.com/jasonyangshadow/lpmx/yaml"
 	"github.com/spf13/viper"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 const (
@@ -408,7 +406,7 @@ func (con *Container) createContainer(config string) *Error {
 }
 
 func (con *Container) createSysFolders(config string) *Error {
-	con.Id = randomString(IDLENGTH)
+	con.Id = RandomString(IDLENGTH)
 	con.LogPath = fmt.Sprintf("%s/log", con.ConfigPath)
 	con.ElfPatcherPath = fmt.Sprintf("%s/elf", con.ConfigPath)
 	con.FakechrootPath = fmt.Sprintf("%s/fakechroot", con.ConfigPath)
@@ -657,16 +655,6 @@ func walkfs(dir string) ([]string, *Error) {
 		return nil, &cerr
 	}
 	return fileList, nil
-}
-
-func randomString(n int) string {
-	rand.Seed(time.Now().UnixNano())
-	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return string(b)
 }
 
 func readSys(rootdir string, sys *Sys) *Error {

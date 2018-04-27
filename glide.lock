@@ -1,5 +1,5 @@
-hash: a2551b7d0a53bd87a52e55857897800d93b41d285215d3891eadb0ef988bd7ac
-updated: 2018-04-24T01:44:44.820359282+09:00
+hash: a6c70956dada379462b90b1e0c31a0ff91ba2fae1aecb989e4968c985ee90b5e
+updated: 2018-04-27T01:28:17.88166781+09:00
 imports:
 - name: github.com/bradfitz/gomemcache
   version: 1952afaa557dc08e8e0d89eafab110fb501c1a2b
@@ -60,7 +60,7 @@ imports:
   subpackages:
   - context
 - name: golang.org/x/sys
-  version: 79b0c6888797020a994db17c8510466c72fe75d9
+  version: bb9c189858d91f42db229b04d45a4c3d23a7662a
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -79,6 +79,8 @@ imports:
   - internal/log
   - internal/modules
   - internal/remote_api
+- name: google.golang.org/grpc
+  version: d11072e7ca9811b1100b80ca0269ac831f06d024
 - name: gopkg.in/yaml.v2
   version: 5420a8b6744d3b0345ab293f6fcba19c978f1183
 testImports: []

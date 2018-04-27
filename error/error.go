@@ -22,8 +22,8 @@ var (
 )
 
 type Error struct {
-	err error
-	msg string
+	Err error
+	Msg string
 }
 
 func ErrNew(err error, msg string) Error {
@@ -32,5 +32,5 @@ func ErrNew(err error, msg string) Error {
 }
 
 func (e *Error) Error() string {
-	return fmt.Sprintf("{\"ErrType\":\"%s\", \"ErrMsg\":\"%s\"}", e.err.Error(), e.msg)
+	return fmt.Sprintf("{\"ErrType\":\"%s\", \"ErrMsg\":\"%s\"}", e.Err.Error(), e.Msg)
 }
