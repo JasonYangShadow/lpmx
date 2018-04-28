@@ -38,23 +38,48 @@ func main() {
 
 	var RunSource string
 	var RunConfig string
+	var RunPassive bool
 	var runCmd = &cobra.Command{
 		Use:   "run",
 		Short: "run container based on specific directory",
 		Long:  "run command is the basic command of lpmx, which is used for initializing, creating and running container based on specific directory",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Run(RunSource, RunConfig)
+			err := Run(RunSource, RunConfig, RunPassive)
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(1)
 			}
+
 		},
 	}
 	runCmd.Flags().StringVarP(&RunSource, "source", "s", "", "required")
 	runCmd.MarkFlagRequired("source")
 	runCmd.Flags().StringVarP(&RunConfig, "config", "c", "", "required")
 	runCmd.MarkFlagRequired("config")
+	runCmd.Flags().BoolVarP(&RunPassive, "passive", "p", false, "optional")
+
+	var RPCIp string
+	var RPCPort string
+	var RPCTimeout string
+	var rpcCmd = &cobra.Command{
+		Use:   "rpc",
+		Short: "exec command remotely",
+		Long:  "rpc command is the advanced comand of lpmx, which is used for executing command remotely through rpc",
+		Args:  cobra.MinimumArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			err := Rpc(RPCIp, RPCPort, RPCTimeout, args[0], args[1:]...)
+			if err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+		},
+	}
+	rpcCmd.Flags().StringVarP(&RPCIp, "ip", "i", "", "required")
+	rpcCmd.MarkFlagRequired("ip")
+	rpcCmd.Flags().StringVarP(&RPCPort, "port", "p", "", "required")
+	rpcCmd.MarkFlagRequired("port")
+	rpcCmd.Flags().StringVarP(&RPCTimeout, "timeout", "t", "", "optional")
 
 	var resumeCmd = &cobra.Command{
 		Use:   "resume",

@@ -1,26 +1,20 @@
 package rpc
 
 import (
-	"fmt"
 	. "github.com/jasonyangshadow/lpmx/paeudo"
 	. "github.com/jasonyangshadow/lpmx/utils"
-	"net"
-	"net/http"
-	"net/rpc"
 	"time"
 )
 
 const (
 	MIN       = 10000
-	MAX       = 15000
+	MAX       = 20000
 	UIDLENGTH = 16
 )
 
 type Request struct {
 	Timeout time.Duration
 	Cmd     string
-	Env     map[string]string
-	Dir     string
 	Args    []string
 }
 
@@ -29,36 +23,17 @@ type Response struct {
 	Pid int
 }
 
-type RPC struct{}
+type RPC struct {
+	Env map[string]string
+	Dir string
+}
 
 func (server *RPC) Exec(req Request, res *Response) error {
-	cmd, err := ProcessContextEnv(req.Cmd, req.Env, req.Dir, req.Timeout, req.Args[0:]...)
+	cmd, err := ProcessContextEnv(req.Cmd, server.Env, server.Dir, req.Timeout, req.Args[0:]...)
 	if err != nil {
 		return err.Err
 	}
 	res.UId = RandomString(UIDLENGTH)
 	res.Pid = cmd.Process.Pid
 	return nil
-}
-
-func StartServer() (int, error) {
-	r := new(RPC)
-	rpc.Register(r)
-	rpc.HandleHTTP()
-	port := RandomPort(MIN, MAX)
-	con, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		return -1, err
-	}
-	go http.Serve(con, nil)
-	return port, nil
-}
-
-func StartClient(req Request, res *Response, port int) (*rpc.Call, error) {
-	client, err := rpc.DialHTTP("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		return nil, err
-	}
-	call := client.Go("LPMX.Exec", req, res, nil)
-	return call, nil
 }

@@ -7,12 +7,16 @@ import (
 	. "github.com/jasonyangshadow/lpmx/memcache"
 	. "github.com/jasonyangshadow/lpmx/msgpack"
 	. "github.com/jasonyangshadow/lpmx/paeudo"
+	. "github.com/jasonyangshadow/lpmx/rpc"
 	. "github.com/jasonyangshadow/lpmx/utils"
 	. "github.com/jasonyangshadow/lpmx/yaml"
 	"github.com/spf13/viper"
+	"net"
+	"net/rpc"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -53,6 +57,7 @@ type Container struct {
 	CurrentDir          string
 	UserShell           string
 	V                   *viper.Viper
+	RPCPort             int
 }
 
 func Init() *Error {
@@ -92,10 +97,10 @@ func List() *Error {
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
 	if err == nil {
-		fmt.Println(fmt.Sprintf("%s%40s%40s", "ContainerID", "RootPath", "Status"))
+		fmt.Println(fmt.Sprintf("%s%25s%25s%25s", "ContainerID", "RootPath", "Status", "RPC"))
 		for k, v := range sys.Containers {
 			if cmap, ok := v.(map[string]interface{}); ok {
-				fmt.Println(fmt.Sprintf("%s%40s%40s", k, cmap["RootPath"].(string), cmap["Status"].(string)))
+				fmt.Println(fmt.Sprintf("%s%25s%25s%25s", k, cmap["RootPath"].(string), cmap["Status"].(string), cmap["RPCPort"].(string)))
 			} else {
 				cerr := ErrNew(ErrType, "sys.Containers type error")
 				return &cerr
@@ -104,6 +109,25 @@ func List() *Error {
 		return nil
 	}
 	return err
+}
+
+func Rpc(ip string, port string, timeout string, cmd string, args ...string) *Error {
+	client, err := rpc.Dial("tcp", fmt.Sprintf("%s:%s", ip, port))
+	if err != nil {
+		cerr := ErrNew(err, "tcp dial error")
+		return &cerr
+	}
+	var req Request
+	var res Response
+	req.Cmd = cmd
+	m, _ := time.ParseDuration(timeout)
+	req.Timeout = m.Minutes()
+	var arg []string
+	for _, a := range args {
+		arg = append(arg, a)
+	}
+	call := client.Go("RPC.Exec", req, &res, nil)
+	return nil
 }
 
 func Resume(id string) *Error {
@@ -115,7 +139,7 @@ func Resume(id string) *Error {
 		if v, ok := sys.Containers[id]; ok {
 			if val, vok := v.(map[string]interface{}); vok {
 				if val["Status"].(string) == STATUS[1] {
-					err := Run(val["RootPath"].(string), val["SettingPath"].(string))
+					err := Run(val["RootPath"].(string), val["SettingPath"].(string), false)
 					if err != nil {
 						return err
 					}
@@ -170,7 +194,7 @@ func Destroy(id string) *Error {
 
 }
 
-func Run(dir string, config string) *Error {
+func Run(dir string, config string, passive bool) *Error {
 	rootdir := fmt.Sprintf("%s/.lpmx", dir)
 	var con Container
 	con.RootPath = dir
@@ -227,9 +251,17 @@ func Run(dir string, config string) *Error {
 	if err != nil {
 		return err
 	}
-	err = con.bashShell()
-	if err != nil {
-		return err
+	if passive {
+		con.RPCPort = RandomPort(MIN, MAX)
+		err := con.startRPCService(con.RPCPort)
+		if err != nil {
+			return err
+		}
+	} else {
+		err = con.bashShell()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -524,6 +556,7 @@ func (con *Container) appendToSys() *Error {
 				cmap["Status"] = STATUS[con.Status]
 				cmap["RootPath"] = con.RootPath
 				cmap["SettingPath"] = con.SettingPath
+				cmap["RPCPort"] = fmt.Sprintf("%d", con.RPCPort)
 			} else {
 				cerr := ErrNew(ErrType, "interface{} type assertation error")
 				return &cerr
@@ -533,6 +566,7 @@ func (con *Container) appendToSys() *Error {
 			cmap["Status"] = STATUS[con.Status]
 			cmap["RootPath"] = con.RootPath
 			cmap["SettingPath"] = con.SettingPath
+			cmap["RPCPort"] = fmt.Sprintf("%d", con.RPCPort)
 			sys.Containers[con.Id] = cmap
 		}
 		data, _ := StructMarshal(&sys)
@@ -599,6 +633,22 @@ func (con *Container) setProgPrivileges() *Error {
 		return nil
 	}
 	return err
+}
+
+func (con *Container) startRPCService(port int) *Error {
+	con, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
+	if err != nil {
+		cerr := ErrNew(err, "start rpc service encounters error")
+		return &cerr
+	}
+	env := make(map[string]string)
+	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
+	env["ContainerId"] = con.Id
+	env["ContainerRoot"] = con.RootPath
+	r := RPC{Env: env, Dir: con.RootPath}
+	rpc.Register(r)
+	rpc.Accept(con)
+	return nil
 }
 
 /**
