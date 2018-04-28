@@ -77,7 +77,7 @@ func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Erro
 	return nil
 }
 
-func ProcessEnv(sh string, env map[string]string, dir string, arg ...string) (*Cmd, *Error) {
+func ProcessEnv(sh string, env map[string]string, dir string, arg ...string) (*exec.Cmd, *Error) {
 	shpath, err := exec.LookPath(sh)
 	if err != nil {
 		cerr := ErrNew(ErrNil, fmt.Sprintf("shell: %s doesn't exist", sh))
@@ -94,7 +94,7 @@ func ProcessEnv(sh string, env map[string]string, dir string, arg ...string) (*C
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
-	err := cmd.Start()
+	err = cmd.Start()
 	if err != nil {
 		cerr := ErrNew(err, "cmd running error")
 		return nil, &cerr
@@ -102,7 +102,7 @@ func ProcessEnv(sh string, env map[string]string, dir string, arg ...string) (*C
 	return cmd, nil
 }
 
-func ProcessContextEnv(sh string, env map[string]string, dir string, timeout time.Duration, arg ...string) (*Cmd, *Error) {
+func ProcessContextEnv(sh string, env map[string]string, dir string, timeout time.Duration, arg ...string) (*exec.Cmd, *Error) {
 	shpath, err := exec.LookPath(sh)
 	if err != nil {
 		cerr := ErrNew(ErrNil, fmt.Sprintf("shell: %s doesn't exist", sh))
@@ -121,7 +121,7 @@ func ProcessContextEnv(sh string, env map[string]string, dir string, timeout tim
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
-	err := cmd.Start()
+	err = cmd.Start()
 	if err != nil {
 		cerr := ErrNew(err, "cmd running error")
 		return nil, &cerr

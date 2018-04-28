@@ -16,7 +16,6 @@ func TestRPCServer(t *testing.T) {
 func TestRPCClient(t *testing.T) {
 	var req Request
 	var res Response
-	req.UId = "11223"
 	req.Timeout = time.Second * time.Duration(10)
 	req.Cmd = "ls"
 	req.Args = []string{"-al"}
@@ -25,6 +24,5 @@ func TestRPCClient(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	reply := <-ch.Done
-	t.Log(reply)
+	t.Log(ch)
 }
