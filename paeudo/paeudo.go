@@ -103,18 +103,18 @@ func ProcessEnv(sh string, env map[string]string, dir string, arg ...string) (*e
 	return cmd, nil
 }
 
-func ProcessContextEnv(sh string, env map[string]string, dir string, timeout string, arg ...string) (*exec.Cmd, *Error) {
+func ProcessContextEnv(sh string, env map[string]string, dir string, timeout string, arg ...string) (int, *Error) {
 	var cmd *exec.Cmd
 	shpath, err := exec.LookPath(sh)
 	if err != nil {
 		cerr := ErrNew(ErrNil, fmt.Sprintf("shell: %s doesn't exist", sh))
-		return nil, &cerr
+		return -1, &cerr
 	}
 	if strings.TrimSpace(timeout) != "" {
 		t, terr := time.ParseDuration(timeout)
 		if terr != nil {
 			cerr := ErrNew(terr, "time parse error")
-			return nil, &cerr
+			return -1, &cerr
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), t)
 		defer cancel()
@@ -135,7 +135,7 @@ func ProcessContextEnv(sh string, env map[string]string, dir string, timeout str
 	err = cmd.Start()
 	if err != nil {
 		cerr := ErrNew(err, "cmd running error")
-		return nil, &cerr
+		return -1, &cerr
 	}
-	return cmd, nil
+	return cmd.Process.Pid, nil
 }

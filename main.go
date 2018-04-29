@@ -5,6 +5,7 @@ import (
 	. "github.com/jasonyangshadow/lpmx/container"
 	"github.com/spf13/cobra"
 	"os"
+	"strconv"
 )
 
 func main() {
@@ -59,29 +60,85 @@ func main() {
 	runCmd.MarkFlagRequired("config")
 	runCmd.Flags().BoolVarP(&RunPassive, "passive", "p", false, "optional")
 
-	var RPCIp string
-	var RPCPort string
-	var RPCTimeout string
+	var RExecIp string
+	var RExecPort string
+	var RExecTimeout string
+	var rpcExecCmd = &cobra.Command{
+		Use:   "exec",
+		Short: "exec command remotely",
+		Long:  "rpc exec sub-command is the advanced comand of lpmx, which is used for executing command remotely through rpc",
+		Args:  cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			res, err := RPCExec(RExecIp, RExecPort, RExecTimeout, args[0], args[1:]...)
+			if err != nil {
+				fmt.Println(err)
+			} else {
+				fmt.Println(*res)
+			}
+		},
+	}
+	rpcExecCmd.Flags().StringVarP(&RExecIp, "ip", "i", "", "required")
+	rpcExecCmd.MarkFlagRequired("ip")
+	rpcExecCmd.Flags().StringVarP(&RExecPort, "port", "p", "", "required")
+	rpcExecCmd.MarkFlagRequired("port")
+	rpcExecCmd.Flags().StringVarP(&RExecTimeout, "timeout", "t", "", "optional")
+
+	var RQueryIp string
+	var RQueryPort string
+	var rpcQueryCmd = &cobra.Command{
+		Use:   "query",
+		Short: "query the information of commands executed remotely",
+		Long:  "rpc query sub-command is the advanced comand of lpmx, which is used for querying the information of commands executed remotely through rpc",
+		Args:  cobra.ExactArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			res, err := RPCQuery(RQueryIp, RQueryPort)
+			if err != nil {
+				fmt.Println(err)
+			} else {
+				fmt.Println(*res)
+			}
+		},
+	}
+	rpcQueryCmd.Flags().StringVarP(&RQueryIp, "ip", "i", "", "required")
+	rpcQueryCmd.MarkFlagRequired("ip")
+	rpcQueryCmd.Flags().StringVarP(&RQueryPort, "port", "p", "", "required")
+	rpcQueryCmd.MarkFlagRequired("port")
+
+	var RDeleteIp string
+	var RDeletePort string
+	var RDeletePid string
+	var rpcDeleteCmd = &cobra.Command{
+		Use:   "delete",
+		Short: "kill the commands executed remotely via pid",
+		Long:  "rpc delete sub-command is the advanced comand of lpmx, which is used for killing the commands executed remotely through rpc via pid",
+		Args:  cobra.ExactArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			i, aerr := strconv.Atoi(RDeletePid)
+			if aerr != nil {
+				fmt.Println(aerr)
+				os.Exit(1)
+			}
+			res, err := RPCDelete(RDeleteIp, RDeletePort, i)
+			if err != nil {
+				fmt.Println(err)
+			} else {
+				fmt.Println(*res)
+			}
+		},
+	}
+	rpcDeleteCmd.Flags().StringVarP(&RDeleteIp, "ip", "i", "", "required")
+	rpcDeleteCmd.MarkFlagRequired("ip")
+	rpcDeleteCmd.Flags().StringVarP(&RDeletePort, "port", "p", "", "required")
+	rpcDeleteCmd.MarkFlagRequired("port")
+	rpcDeleteCmd.Flags().StringVarP(&RDeletePid, "pid", "d", "", "required")
+	rpcDeleteCmd.MarkFlagRequired("pid")
+
 	var rpcCmd = &cobra.Command{
 		Use:   "rpc",
 		Short: "exec command remotely",
 		Long:  "rpc command is the advanced comand of lpmx, which is used for executing command remotely through rpc",
-		Args:  cobra.MinimumNArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
-			res, err := Rpc(RPCIp, RPCPort, RPCTimeout, args[0], args[1:]...)
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			} else {
-				fmt.Println(res)
-			}
-		},
 	}
-	rpcCmd.Flags().StringVarP(&RPCIp, "ip", "i", "", "required")
-	rpcCmd.MarkFlagRequired("ip")
-	rpcCmd.Flags().StringVarP(&RPCPort, "port", "p", "", "required")
-	rpcCmd.MarkFlagRequired("port")
-	rpcCmd.Flags().StringVarP(&RPCTimeout, "timeout", "t", "", "optional")
+	rpcCmd.AddCommand(rpcExecCmd, rpcQueryCmd, rpcDeleteCmd)
 
 	var resumeCmd = &cobra.Command{
 		Use:   "resume",

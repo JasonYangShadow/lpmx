@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -55,8 +56,38 @@ type Container struct {
 	IpcFiles            string
 	CurrentDir          string
 	UserShell           string
-	V                   *viper.Viper
 	RPCPort             int
+	RPCMap              map[int]string
+	V                   *viper.Viper
+}
+
+type RPC struct {
+	Env map[string]string
+	Dir string
+	Con *Container
+}
+
+func (server *RPC) RPCExec(req Request, res *Response) error {
+	pid, err := ProcessContextEnv(req.Cmd, server.Env, server.Dir, req.Timeout, req.Args...)
+	if err != nil {
+		return err.Err
+	}
+	res.UId = RandomString(UIDLENGTH)
+	res.Pid = pid
+	server.Con.RPCMap[pid] = req.Cmd
+	return nil
+}
+
+func (server *RPC) RPCQuery(req Request, res *Response) error {
+	res.RPCMap = server.Con.RPCMap
+	return nil
+}
+
+func (server *RPC) RPCDelete(req Request, res *Response) error {
+	if _, ok := server.Con.RPCMap[req.Pid]; ok {
+		delete(server.Con.RPCMap, req.Pid)
+	}
+	return nil
 }
 
 func Init() *Error {
@@ -99,7 +130,16 @@ func List() *Error {
 		fmt.Println(fmt.Sprintf("%s%25s%25s%25s", "ContainerID", "RootPath", "Status", "RPC"))
 		for k, v := range sys.Containers {
 			if cmap, ok := v.(map[string]interface{}); ok {
-				fmt.Println(fmt.Sprintf("%s%25s%25s%25s", k, cmap["RootPath"].(string), cmap["Status"].(string), cmap["RPCPort"].(string)))
+				port := strings.TrimSpace(cmap["RPCPort"].(string))
+				if port != "" {
+					conn, err := net.DialTimeout("tcp", net.JoinHostPort("", port), time.Millisecond*200)
+					if err == nil && conn != nil {
+						conn.Close()
+						fmt.Println(fmt.Sprintf("%s%25s%25s%25s", k, cmap["RootPath"].(string), cmap["Status"].(string), cmap["RPCPort"].(string)))
+					} else {
+						delete(sys.Containers, k)
+					}
+				}
 			} else {
 				cerr := ErrNew(ErrType, "sys.Containers type error")
 				return &cerr
@@ -110,7 +150,7 @@ func List() *Error {
 	return err
 }
 
-func Rpc(ip string, port string, timeout string, cmd string, args ...string) (*Response, *Error) {
+func RPCExec(ip string, port string, timeout string, cmd string, args ...string) (*Response, *Error) {
 	client, err := rpc.Dial("tcp", fmt.Sprintf("%s:%s", ip, port))
 	if err != nil {
 		cerr := ErrNew(err, "tcp dial error")
@@ -125,7 +165,40 @@ func Rpc(ip string, port string, timeout string, cmd string, args ...string) (*R
 		arg = append(arg, a)
 	}
 	req.Args = arg
-	err = client.Call("RPC.Exec", req, &res)
+	err = client.Call("RPC.RPCExec", req, &res)
+	if err != nil {
+		cerr := ErrNew(err, "rpc call encounters error")
+		return nil, &cerr
+	}
+	return &res, nil
+}
+
+func RPCQuery(ip string, port string) (*Response, *Error) {
+	client, err := rpc.Dial("tcp", fmt.Sprintf("%s:%s", ip, port))
+	if err != nil {
+		cerr := ErrNew(err, "tcp dial error")
+		return nil, &cerr
+	}
+	var req Request
+	var res Response
+	err = client.Call("RPC.RPCQuery", req, &res)
+	if err != nil {
+		cerr := ErrNew(err, "rpc call encounters error")
+		return nil, &cerr
+	}
+	return &res, nil
+}
+
+func RPCDelete(ip string, port string, pid int) (*Response, *Error) {
+	client, err := rpc.Dial("tcp", fmt.Sprintf("%s:%s", ip, port))
+	if err != nil {
+		cerr := ErrNew(err, "tcp dial error")
+		return nil, &cerr
+	}
+	var req Request
+	var res Response
+	req.Pid = pid
+	err = client.Call("RPC.RPCDelete", req, &res)
 	if err != nil {
 		cerr := ErrNew(err, "rpc call encounters error")
 		return nil, &cerr
@@ -645,6 +718,7 @@ func (con *Container) setProgPrivileges() *Error {
 }
 
 func (con *Container) startRPCService(port int) *Error {
+	con.RPCMap = make(map[int]string)
 	conn, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
 	if err != nil {
 		cerr := ErrNew(err, "start rpc service encounters error")
@@ -657,6 +731,7 @@ func (con *Container) startRPCService(port int) *Error {
 	r := new(RPC)
 	r.Env = env
 	r.Dir = con.RootPath
+	r.Con = con
 	rpc.Register(r)
 	rpc.Accept(conn)
 	return nil
