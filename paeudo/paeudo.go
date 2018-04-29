@@ -7,6 +7,7 @@ import (
 	. "github.com/jasonyangshadow/lpmx/error"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -102,15 +103,25 @@ func ProcessEnv(sh string, env map[string]string, dir string, arg ...string) (*e
 	return cmd, nil
 }
 
-func ProcessContextEnv(sh string, env map[string]string, dir string, timeout time.Duration, arg ...string) (*exec.Cmd, *Error) {
+func ProcessContextEnv(sh string, env map[string]string, dir string, timeout string, arg ...string) (*exec.Cmd, *Error) {
+	var cmd *exec.Cmd
 	shpath, err := exec.LookPath(sh)
 	if err != nil {
 		cerr := ErrNew(ErrNil, fmt.Sprintf("shell: %s doesn't exist", sh))
 		return nil, &cerr
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, shpath, arg...)
+	if strings.TrimSpace(timeout) != "" {
+		t, terr := time.ParseDuration(timeout)
+		if terr != nil {
+			cerr := ErrNew(terr, "time parse error")
+			return nil, &cerr
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), t)
+		defer cancel()
+		cmd = exec.CommandContext(ctx, shpath, arg...)
+	} else {
+		cmd = exec.Command(shpath, arg...)
+	}
 	var envstrs []string
 	for key, value := range env {
 		envstr := fmt.Sprintf("%s=%s", key, value)

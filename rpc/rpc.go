@@ -3,7 +3,6 @@ package rpc
 import (
 	. "github.com/jasonyangshadow/lpmx/paeudo"
 	. "github.com/jasonyangshadow/lpmx/utils"
-	"time"
 )
 
 const (
@@ -13,7 +12,7 @@ const (
 )
 
 type Request struct {
-	Timeout time.Duration
+	Timeout string
 	Cmd     string
 	Args    []string
 }

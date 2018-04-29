@@ -16,7 +16,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 const (
@@ -111,23 +110,27 @@ func List() *Error {
 	return err
 }
 
-func Rpc(ip string, port string, timeout string, cmd string, args ...string) *Error {
+func Rpc(ip string, port string, timeout string, cmd string, args ...string) (*Response, *Error) {
 	client, err := rpc.Dial("tcp", fmt.Sprintf("%s:%s", ip, port))
 	if err != nil {
 		cerr := ErrNew(err, "tcp dial error")
-		return &cerr
+		return nil, &cerr
 	}
 	var req Request
 	var res Response
 	req.Cmd = cmd
-	m, _ := time.ParseDuration(timeout)
-	req.Timeout = m.Minutes()
+	req.Timeout = timeout
 	var arg []string
 	for _, a := range args {
 		arg = append(arg, a)
 	}
-	call := client.Go("RPC.Exec", req, &res, nil)
-	return nil
+	req.Args = arg
+	err = client.Call("RPC.Exec", req, &res)
+	if err != nil {
+		cerr := ErrNew(err, "rpc call encounters error")
+		return nil, &cerr
+	}
+	return &res, nil
 }
 
 func Resume(id string) *Error {
@@ -246,18 +249,24 @@ func Run(dir string, config string, passive bool) *Error {
 			return err
 		}
 	}
-	con.Status = RUNNING
-	err := con.appendToSys()
-	if err != nil {
-		return err
-	}
+
 	if passive {
 		con.RPCPort = RandomPort(MIN, MAX)
-		err := con.startRPCService(con.RPCPort)
+		con.Status = RUNNING
+		err := con.appendToSys()
+		if err != nil {
+			return err
+		}
+		err = con.startRPCService(con.RPCPort)
 		if err != nil {
 			return err
 		}
 	} else {
+		con.Status = RUNNING
+		err := con.appendToSys()
+		if err != nil {
+			return err
+		}
 		err = con.bashShell()
 		if err != nil {
 			return err
@@ -636,7 +645,7 @@ func (con *Container) setProgPrivileges() *Error {
 }
 
 func (con *Container) startRPCService(port int) *Error {
-	con, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
+	conn, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
 	if err != nil {
 		cerr := ErrNew(err, "start rpc service encounters error")
 		return &cerr
@@ -645,9 +654,11 @@ func (con *Container) startRPCService(port int) *Error {
 	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
 	env["ContainerId"] = con.Id
 	env["ContainerRoot"] = con.RootPath
-	r := RPC{Env: env, Dir: con.RootPath}
+	r := new(RPC)
+	r.Env = env
+	r.Dir = con.RootPath
 	rpc.Register(r)
-	rpc.Accept(con)
+	rpc.Accept(conn)
 	return nil
 }
 

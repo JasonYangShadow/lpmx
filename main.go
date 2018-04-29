@@ -66,12 +66,14 @@ func main() {
 		Use:   "rpc",
 		Short: "exec command remotely",
 		Long:  "rpc command is the advanced comand of lpmx, which is used for executing command remotely through rpc",
-		Args:  cobra.MinimumArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Rpc(RPCIp, RPCPort, RPCTimeout, args[0], args[1:]...)
+			res, err := Rpc(RPCIp, RPCPort, RPCTimeout, args[0], args[1:]...)
 			if err != nil {
 				fmt.Println(err)
 				os.Exit(1)
+			} else {
+				fmt.Println(res)
 			}
 		},
 	}
@@ -142,6 +144,6 @@ func main() {
 		Use:   "lpmx",
 		Short: "lpmx rootless container",
 	}
-	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, runCmd, setCmd, resumeCmd)
+	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, runCmd, setCmd, resumeCmd, rpcCmd)
 	rootCmd.Execute()
 }
