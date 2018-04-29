@@ -79,13 +79,29 @@ func (server *RPC) RPCExec(req Request, res *Response) error {
 }
 
 func (server *RPC) RPCQuery(req Request, res *Response) error {
+	for k, _ := range server.Con.RPCMap {
+		_, err := os.FindProcess(k)
+		if err != nil {
+			delete(server.Con.RPCMap, k)
+		}
+	}
 	res.RPCMap = server.Con.RPCMap
 	return nil
 }
 
 func (server *RPC) RPCDelete(req Request, res *Response) error {
 	if _, ok := server.Con.RPCMap[req.Pid]; ok {
-		delete(server.Con.RPCMap, req.Pid)
+		process, err := os.FindProcess(req.Pid)
+		if err == nil {
+			perr := process.Signal(os.Interrupt)
+			if perr == nil {
+				delete(server.Con.RPCMap, req.Pid)
+			} else {
+				return perr
+			}
+		} else {
+			delete(server.Con.RPCMap, req.Pid)
+		}
 	}
 	return nil
 }
