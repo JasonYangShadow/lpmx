@@ -7,6 +7,4 @@ add_rpath:
 
 allow_list:
   - bash: all
-  - touch:
-    - /tmp/test
-    - /tmp/test2
+  - sh: all
