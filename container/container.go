@@ -183,8 +183,8 @@ func RPCExec(ip string, port string, timeout string, cmd string, args ...string)
 		arg = append(arg, a)
 	}
 	req.Args = arg
+	divCall := client.Go("RPC.RPCExec", req, &res, nil)
 	go func() {
-		divCall := client.Go("RPC.RPCExec", req, &res, nil)
 		<-divCall.Done
 	}()
 	return &res, nil
