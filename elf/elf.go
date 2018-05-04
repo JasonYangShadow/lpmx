@@ -46,7 +46,7 @@ func ElfSetSoname(elfpath string, lib string, prog string) (bool, *Error) {
 func ElfRPath(elfpath string, lib string, prog string) (bool, *Error) {
 	_, err := elfPatch(elfpath, PARAMS[SET_RPATH], lib, prog)
 	if err == nil {
-		return true, nil
+et	return true, nil
 	}
 	return false, err
 }

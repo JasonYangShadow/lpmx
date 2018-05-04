@@ -4,6 +4,7 @@ import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/elf"
 	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/log"
 	. "github.com/jasonyangshadow/lpmx/memcache"
 	. "github.com/jasonyangshadow/lpmx/msgpack"
 	. "github.com/jasonyangshadow/lpmx/paeudo"
@@ -14,6 +15,7 @@ import (
 	"net"
 	"net/rpc"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"time"
@@ -181,12 +183,17 @@ func RPCExec(ip string, port string, timeout string, cmd string, args ...string)
 		arg = append(arg, a)
 	}
 	req.Args = arg
-	err = client.Call("RPC.RPCExec", req, &res)
+	go func() {
+		divCall := client.Go("RPC.RPCExec", req, &res, nil)
+		<-divCall.Done
+	}()
+	return &res, nil
+	/**err = client.Call("RPC.RPCExec", req, &res)
 	if err != nil {
 		cerr := ErrNew(err, "rpc call encounters error")
 		return nil, &cerr
 	}
-	return &res, nil
+	return &res, nil **/
 }
 
 func RPCQuery(ip string, port string) (*Response, *Error) {
@@ -292,6 +299,8 @@ func Run(dir string, config string, passive bool) *Error {
 	con.RootPath = dir
 	con.CurrentDir = dir
 	con.ConfigPath = rootdir
+	llog := new(Log)
+	llog.LogInit(fmt.Sprintf("%s/log", con.RootPath))
 
 	defer func() {
 		data, _ := StructMarshal(&con)
@@ -307,9 +316,11 @@ func Run(dir string, config string, passive bool) *Error {
 			if err == nil {
 				err := StructUnmarshal(data, &con)
 				if err != nil {
+					llog.LogFatal.Println("struct unmarshal error")
 					return err
 				}
 			} else {
+				llog.LogFatal.Println(fmt.Sprintf("read from file: %s error", info))
 				return err
 			}
 		} else {
@@ -319,22 +330,27 @@ func Run(dir string, config string, passive bool) *Error {
 	} else {
 		_, err := MakeDir(rootdir)
 		if err != nil {
+			llog.LogFatal.Println(fmt.Sprintf("mkdir error: %s", rootdir))
 			return err
 		}
 		err = con.createContainer(config)
 		if err != nil {
+			llog.LogFatal.Println(fmt.Sprintf("create container error: %s", config))
 			return err
 		}
 		err = con.patchBineries()
 		if err != nil {
+			llog.LogFatal.Println("patch bineries error")
 			return err
 		}
 		err = con.appendToSys()
 		if err != nil {
+			llog.LogFatal.Println("append to sys encounters error")
 			return err
 		}
 		err = con.setProgPrivileges()
 		if err != nil {
+			llog.LogFatal.Println("set program privilegies encoutners error")
 			return err
 		}
 	}
@@ -344,24 +360,38 @@ func Run(dir string, config string, passive bool) *Error {
 		con.Status = RUNNING
 		err := con.appendToSys()
 		if err != nil {
+			llog.LogFatal.Println("append to sys encounters error")
 			return err
 		}
 		err = con.startRPCService(con.RPCPort)
 		if err != nil {
+			llog.LogFatal.Println("starting rpc service encounters error")
 			return err
 		}
 	} else {
 		con.Status = RUNNING
 		err := con.appendToSys()
 		if err != nil {
+			llog.LogFatal.Println("append to sys encounters error")
 			return err
 		}
 		err = con.bashShell()
 		if err != nil {
+			llog.LogFatal.Println("starting bash shell encounters error")
 			return err
 		}
 	}
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		con.Status = STOPPED
+		data, _ := StructMarshal(&con)
+		WriteToFile(data, fmt.Sprintf("%s/.info", rootdir))
+		con.Status = STOPPED
+		con.appendToSys()
+	}()
 	return nil
 }
 
@@ -592,27 +622,24 @@ func (con *Container) createSysFolders(config string) *Error {
 }
 
 func (con *Container) patchBineries() *Error {
-	bineries, _, err := walkContainerRoot(con)
-	if err == nil {
-		for _, op := range ELFOP {
-			if data, ok := con.SettingConf[op]; ok {
-				switch op {
-				case ELFOP[0], ELFOP[1]:
-					if d1, o1 := data.([]interface{}); o1 {
-						for _, d1_1 := range d1 {
-							if d1_11, o1_11 := d1_1.(interface{}); o1_11 {
-								for k, v := range d1_11.(map[interface{}]interface{}) {
-									if v1, vo1 := v.([]interface{}); vo1 {
-										var libs []string
-										for _, vv1 := range v1 {
-											libs = append(libs, vv1.(string))
-										}
-										if k1, ok1 := k.(string); ok1 {
-											if FileExist(k1) {
-												err := con.refreshElf(op, libs, k1)
-												if err != nil {
-													return err
-												}
+	for _, op := range ELFOP {
+		if data, ok := con.SettingConf[op]; ok {
+			switch op {
+			case ELFOP[0], ELFOP[1]:
+				if d1, o1 := data.([]interface{}); o1 {
+					for _, d1_1 := range d1 {
+						if d1_11, o1_11 := d1_1.(interface{}); o1_11 {
+							for k, v := range d1_11.(map[interface{}]interface{}) {
+								if v1, vo1 := v.([]interface{}); vo1 {
+									var libs []string
+									for _, vv1 := range v1 {
+										libs = append(libs, vv1.(string))
+									}
+									if k1, ok1 := k.(string); ok1 {
+										if FileExist(k1) {
+											err := con.refreshElf(op, libs, k1)
+											if err != nil {
+												return err
 											}
 										}
 									}
@@ -620,17 +647,25 @@ func (con *Container) patchBineries() *Error {
 							}
 						}
 					}
-				case ELFOP[2], ELFOP[3]:
-					if d1, o1 := data.([]interface{}); o1 {
-						var rpaths []string
-						for _, d1_1 := range d1 {
-							rpaths = append(rpaths, d1_1.(string))
-						}
-						for _, binery := range bineries {
-							if FileExist(binery) {
-								err := con.refreshElf(op, rpaths, binery)
+				}
+			case ELFOP[2], ELFOP[3]:
+				if d1, o1 := data.([]interface{}); o1 {
+					for _, d1_1 := range d1 {
+						if d1_11, o1_11 := d1_1.(interface{}); o1_11 {
+							for k, v := range d1_11.(map[interface{}]interface{}) {
+								bineries, err := walkSpecificDir(k.(string))
 								if err != nil {
 									return err
+								}
+								for _, binery := range bineries {
+									if FileExist(binery) {
+										var paths []string
+										paths = append(paths, v.(string))
+										err := con.refreshElf(op, paths, binery)
+										if err != nil {
+											return err
+										}
+									}
 								}
 							}
 						}
@@ -639,7 +674,7 @@ func (con *Container) patchBineries() *Error {
 			}
 		}
 	}
-	return err
+	return nil
 }
 
 func (con *Container) appendToSys() *Error {
@@ -729,6 +764,9 @@ func (con *Container) setProgPrivileges() *Error {
 			}
 		}
 		return nil
+	} else {
+		mem_err := ErrNew(err, "memcache server init error")
+		return &mem_err
 	}
 	return err
 }

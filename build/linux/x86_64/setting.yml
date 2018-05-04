@@ -1,10 +1,2 @@
-add_needed:
-  - /tmp/lpmx_test/bin/main:
-    - /tmp/lpmx_test/lib/getpid.so
-
-add_rpath:
-  - /tmp/lpmx_test/lib
-
 allow_list:
-  - bash: all
-  - sh: all
+  - bash: all 
