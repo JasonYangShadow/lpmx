@@ -70,7 +70,14 @@ type RPC struct {
 }
 
 func (server *RPC) RPCExec(req Request, res *Response) error {
-	pid, err := ProcessContextEnv(req.Cmd, server.Env, server.Dir, req.Timeout, req.Args...)
+	var pid int
+	var err *Error
+	if filepath.IsAbs(req.Cmd) {
+		pid, err = ProcessContextEnv(req.Cmd, server.Env, server.Dir, req.Timeout, req.Args...)
+	} else {
+		req.Cmd = filepath.Join(server.Dir, "/", req.Cmd)
+		pid, err = ProcessContextEnv(req.Cmd, server.Env, server.Dir, req.Timeout, req.Args...)
+	}
 	if err != nil {
 		return err.Err
 	}
@@ -149,7 +156,8 @@ func List() *Error {
 		for k, v := range sys.Containers {
 			if cmap, ok := v.(map[string]interface{}); ok {
 				port := strings.TrimSpace(cmap["RPCPort"].(string))
-				if port != "" {
+				fmt.Println(port)
+				if port != "0" {
 					conn, err := net.DialTimeout("tcp", net.JoinHostPort("", port), time.Millisecond*200)
 					if err == nil && conn != nil {
 						conn.Close()
@@ -157,6 +165,8 @@ func List() *Error {
 					} else {
 						delete(sys.Containers, k)
 					}
+				} else {
+					fmt.Println(fmt.Sprintf("%s%25s%25s%25s", k, cmap["RootPath"].(string), cmap["Status"].(string), "NA"))
 				}
 			} else {
 				cerr := ErrNew(ErrType, "sys.Containers type error")
@@ -188,12 +198,7 @@ func RPCExec(ip string, port string, timeout string, cmd string, args ...string)
 		<-divCall.Done
 	}()
 	return &res, nil
-	/**err = client.Call("RPC.RPCExec", req, &res)
-	if err != nil {
-		cerr := ErrNew(err, "rpc call encounters error")
-		return nil, &cerr
-	}
-	return &res, nil **/
+	/**err = client.Call("RPC.RPCExec", req, &res)**/
 }
 
 func RPCQuery(ip string, port string) (*Response, *Error) {
@@ -356,8 +361,8 @@ func Run(dir string, config string, passive bool) *Error {
 	}
 
 	if passive {
-		con.RPCPort = RandomPort(MIN, MAX)
 		con.Status = RUNNING
+		con.RPCPort = RandomPort(MIN, MAX)
 		err := con.appendToSys()
 		if err != nil {
 			llog.LogFatal.Println("append to sys encounters error")

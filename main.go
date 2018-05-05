@@ -76,11 +76,11 @@ func main() {
 		Long:  "rpc exec sub-command is the advanced comand of lpmx, which is used for executing command remotely through rpc",
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			res, err := RPCExec(RExecIp, RExecPort, RExecTimeout, args[0], args[1:]...)
+			_, err := RPCExec(RExecIp, RExecPort, RExecTimeout, args[0], args[1:]...)
 			if err != nil {
 				llog.LogFatal.Println(err)
 			} else {
-				llog.LogInfo.Println(*res)
+				llog.LogInfo.Println("Done")
 			}
 		},
 	}
@@ -102,7 +102,10 @@ func main() {
 			if err != nil {
 				llog.LogFatal.Println(err)
 			} else {
-				llog.LogInfo.Println(*res)
+				fmt.Println("PID", "CMD")
+				for k, v := range res.RPCMap {
+					fmt.Println(k, v)
+				}
 			}
 		},
 	}
@@ -115,7 +118,7 @@ func main() {
 	var RDeletePort string
 	var RDeletePid string
 	var rpcDeleteCmd = &cobra.Command{
-		Use:   "delete",
+		Use:   "kill",
 		Short: "kill the commands executed remotely via pid",
 		Long:  "rpc delete sub-command is the advanced comand of lpmx, which is used for killing the commands executed remotely through rpc via pid",
 		Args:  cobra.ExactArgs(0),
@@ -124,11 +127,11 @@ func main() {
 			if aerr != nil {
 				llog.LogFatal.Println(err)
 			}
-			res, err := RPCDelete(RDeleteIp, RDeletePort, i)
+			_, err := RPCDelete(RDeleteIp, RDeletePort, i)
 			if err != nil {
 				llog.LogFatal.Println(err)
 			} else {
-				llog.LogInfo.Println(*res)
+				llog.LogInfo.Println("Done")
 			}
 		},
 	}
