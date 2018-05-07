@@ -156,7 +156,6 @@ func List() *Error {
 		for k, v := range sys.Containers {
 			if cmap, ok := v.(map[string]interface{}); ok {
 				port := strings.TrimSpace(cmap["RPCPort"].(string))
-				fmt.Println(port)
 				if port != "0" {
 					conn, err := net.DialTimeout("tcp", net.JoinHostPort("", port), time.Millisecond*200)
 					if err == nil && conn != nil {
@@ -580,7 +579,8 @@ func (con *Container) createSysFolders(config string) *Error {
 		return err
 	}
 	con.CreateUser = strings.TrimSuffix(user, "\n")
-	con.CurrentUser = "root"
+	//con.CurrentUser = "root"
+	con.CurrentUser = con.CreateUser
 	con.V, con.SettingConf, err = LoadConfig(config)
 	if err != nil {
 		return err
