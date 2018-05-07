@@ -161,8 +161,6 @@ func List() *Error {
 					if err == nil && conn != nil {
 						conn.Close()
 						fmt.Println(fmt.Sprintf("%s%25s%25s%25s", k, cmap["RootPath"].(string), cmap["Status"].(string), cmap["RPCPort"].(string)))
-					} else {
-						delete(sys.Containers, k)
 					}
 				} else {
 					fmt.Println(fmt.Sprintf("%s%25s%25s%25s", k, cmap["RootPath"].(string), cmap["Status"].(string), "NA"))
@@ -579,7 +577,6 @@ func (con *Container) createSysFolders(config string) *Error {
 		return err
 	}
 	con.CreateUser = strings.TrimSuffix(user, "\n")
-	//con.CurrentUser = "root"
 	con.CurrentUser = con.CreateUser
 	con.V, con.SettingConf, err = LoadConfig(config)
 	if err != nil {
