@@ -1,0 +1,5 @@
+allow_list:
+  - bash: all 
+  - fakeroot: all
+  - touch:
+    - /tmp/test

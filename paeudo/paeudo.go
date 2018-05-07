@@ -2,10 +2,13 @@ package paeudo
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/error"
 	"os"
 	"os/exec"
+	"strings"
+	"time"
 )
 
 func Command(cmdStr string, arg ...string) (string, *Error) {
@@ -73,4 +76,66 @@ func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Erro
 		}
 	}
 	return nil
+}
+
+func ProcessEnv(sh string, env map[string]string, dir string, arg ...string) (*exec.Cmd, *Error) {
+	shpath, err := exec.LookPath(sh)
+	if err != nil {
+		cerr := ErrNew(ErrNil, fmt.Sprintf("shell: %s doesn't exist", sh))
+		return nil, &cerr
+	}
+	cmd := exec.Command(shpath, arg...)
+	var envstrs []string
+	for key, value := range env {
+		envstr := fmt.Sprintf("%s=%s", key, value)
+		envstrs = append(envstrs, envstr)
+	}
+	cmd.Env = envstrs
+	cmd.Dir = dir
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	err = cmd.Start()
+	if err != nil {
+		cerr := ErrNew(err, "cmd running error")
+		return nil, &cerr
+	}
+	return cmd, nil
+}
+
+func ProcessContextEnv(sh string, env map[string]string, dir string, timeout string, arg ...string) (int, *Error) {
+	var cmd *exec.Cmd
+	shpath, err := exec.LookPath(sh)
+	if err != nil {
+		cerr := ErrNew(ErrNil, fmt.Sprintf("shell: %s doesn't exist", sh))
+		return -1, &cerr
+	}
+	if strings.TrimSpace(timeout) != "" {
+		t, terr := time.ParseDuration(timeout)
+		if terr != nil {
+			cerr := ErrNew(terr, "time parse error")
+			return -1, &cerr
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), t)
+		defer cancel()
+		cmd = exec.CommandContext(ctx, shpath, arg...)
+	} else {
+		cmd = exec.Command(shpath, arg...)
+	}
+	var envstrs []string
+	for key, value := range env {
+		envstr := fmt.Sprintf("%s=%s", key, value)
+		envstrs = append(envstrs, envstr)
+	}
+	cmd.Env = envstrs
+	cmd.Dir = dir
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	err = cmd.Start()
+	if err != nil {
+		cerr := ErrNew(err, "cmd running error")
+		return -1, &cerr
+	}
+	return cmd.Process.Pid, nil
 }

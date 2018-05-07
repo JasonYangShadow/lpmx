@@ -4,14 +4,18 @@ import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/elf"
 	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/log"
 	. "github.com/jasonyangshadow/lpmx/memcache"
 	. "github.com/jasonyangshadow/lpmx/msgpack"
 	. "github.com/jasonyangshadow/lpmx/paeudo"
+	. "github.com/jasonyangshadow/lpmx/rpc"
 	. "github.com/jasonyangshadow/lpmx/utils"
 	. "github.com/jasonyangshadow/lpmx/yaml"
 	"github.com/spf13/viper"
-	"math/rand"
+	"net"
+	"net/rpc"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"time"
@@ -54,7 +58,61 @@ type Container struct {
 	IpcFiles            string
 	CurrentDir          string
 	UserShell           string
+	RPCPort             int
+	RPCMap              map[int]string
 	V                   *viper.Viper
+}
+
+type RPC struct {
+	Env map[string]string
+	Dir string
+	Con *Container
+}
+
+func (server *RPC) RPCExec(req Request, res *Response) error {
+	var pid int
+	var err *Error
+	if filepath.IsAbs(req.Cmd) {
+		pid, err = ProcessContextEnv(req.Cmd, server.Env, server.Dir, req.Timeout, req.Args...)
+	} else {
+		req.Cmd = filepath.Join(server.Dir, "/", req.Cmd)
+		pid, err = ProcessContextEnv(req.Cmd, server.Env, server.Dir, req.Timeout, req.Args...)
+	}
+	if err != nil {
+		return err.Err
+	}
+	res.UId = RandomString(UIDLENGTH)
+	res.Pid = pid
+	server.Con.RPCMap[pid] = req.Cmd
+	return nil
+}
+
+func (server *RPC) RPCQuery(req Request, res *Response) error {
+	for k, _ := range server.Con.RPCMap {
+		_, err := os.FindProcess(k)
+		if err != nil {
+			delete(server.Con.RPCMap, k)
+		}
+	}
+	res.RPCMap = server.Con.RPCMap
+	return nil
+}
+
+func (server *RPC) RPCDelete(req Request, res *Response) error {
+	if _, ok := server.Con.RPCMap[req.Pid]; ok {
+		process, err := os.FindProcess(req.Pid)
+		if err == nil {
+			perr := process.Signal(os.Interrupt)
+			if perr == nil {
+				delete(server.Con.RPCMap, req.Pid)
+			} else {
+				return perr
+			}
+		} else {
+			delete(server.Con.RPCMap, req.Pid)
+		}
+	}
+	return nil
 }
 
 func Init() *Error {
@@ -94,10 +152,22 @@ func List() *Error {
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
 	if err == nil {
-		fmt.Println(fmt.Sprintf("%s%40s%40s", "ContainerID", "RootPath", "Status"))
+		fmt.Println(fmt.Sprintf("%s%25s%25s%25s", "ContainerID", "RootPath", "Status", "RPC"))
 		for k, v := range sys.Containers {
 			if cmap, ok := v.(map[string]interface{}); ok {
-				fmt.Println(fmt.Sprintf("%s%40s%40s", k, cmap["RootPath"].(string), cmap["Status"].(string)))
+				port := strings.TrimSpace(cmap["RPCPort"].(string))
+				fmt.Println(port)
+				if port != "0" {
+					conn, err := net.DialTimeout("tcp", net.JoinHostPort("", port), time.Millisecond*200)
+					if err == nil && conn != nil {
+						conn.Close()
+						fmt.Println(fmt.Sprintf("%s%25s%25s%25s", k, cmap["RootPath"].(string), cmap["Status"].(string), cmap["RPCPort"].(string)))
+					} else {
+						delete(sys.Containers, k)
+					}
+				} else {
+					fmt.Println(fmt.Sprintf("%s%25s%25s%25s", k, cmap["RootPath"].(string), cmap["Status"].(string), "NA"))
+				}
 			} else {
 				cerr := ErrNew(ErrType, "sys.Containers type error")
 				return &cerr
@@ -106,6 +176,62 @@ func List() *Error {
 		return nil
 	}
 	return err
+}
+
+func RPCExec(ip string, port string, timeout string, cmd string, args ...string) (*Response, *Error) {
+	client, err := rpc.Dial("tcp", fmt.Sprintf("%s:%s", ip, port))
+	if err != nil {
+		cerr := ErrNew(err, "tcp dial error")
+		return nil, &cerr
+	}
+	var req Request
+	var res Response
+	req.Cmd = cmd
+	req.Timeout = timeout
+	var arg []string
+	for _, a := range args {
+		arg = append(arg, a)
+	}
+	req.Args = arg
+	divCall := client.Go("RPC.RPCExec", req, &res, nil)
+	go func() {
+		<-divCall.Done
+	}()
+	return &res, nil
+	/**err = client.Call("RPC.RPCExec", req, &res)**/
+}
+
+func RPCQuery(ip string, port string) (*Response, *Error) {
+	client, err := rpc.Dial("tcp", fmt.Sprintf("%s:%s", ip, port))
+	if err != nil {
+		cerr := ErrNew(err, "tcp dial error")
+		return nil, &cerr
+	}
+	var req Request
+	var res Response
+	err = client.Call("RPC.RPCQuery", req, &res)
+	if err != nil {
+		cerr := ErrNew(err, "rpc call encounters error")
+		return nil, &cerr
+	}
+	return &res, nil
+}
+
+func RPCDelete(ip string, port string, pid int) (*Response, *Error) {
+	client, err := rpc.Dial("tcp", fmt.Sprintf("%s:%s", ip, port))
+	if err != nil {
+		cerr := ErrNew(err, "tcp dial error")
+		return nil, &cerr
+	}
+	var req Request
+	var res Response
+	req.Pid = pid
+	err = client.Call("RPC.RPCDelete", req, &res)
+	if err != nil {
+		cerr := ErrNew(err, "rpc call encounters error")
+		return nil, &cerr
+	}
+	return &res, nil
 }
 
 func Resume(id string) *Error {
@@ -117,7 +243,7 @@ func Resume(id string) *Error {
 		if v, ok := sys.Containers[id]; ok {
 			if val, vok := v.(map[string]interface{}); vok {
 				if val["Status"].(string) == STATUS[1] {
-					err := Run(val["RootPath"].(string), val["SettingPath"].(string))
+					err := Run(val["RootPath"].(string), val["SettingPath"].(string), false)
 					if err != nil {
 						return err
 					}
@@ -172,12 +298,14 @@ func Destroy(id string) *Error {
 
 }
 
-func Run(dir string, config string) *Error {
+func Run(dir string, config string, passive bool) *Error {
 	rootdir := fmt.Sprintf("%s/.lpmx", dir)
 	var con Container
 	con.RootPath = dir
 	con.CurrentDir = dir
 	con.ConfigPath = rootdir
+	llog := new(Log)
+	llog.LogInit(fmt.Sprintf("%s/log", con.RootPath))
 
 	defer func() {
 		data, _ := StructMarshal(&con)
@@ -193,9 +321,11 @@ func Run(dir string, config string) *Error {
 			if err == nil {
 				err := StructUnmarshal(data, &con)
 				if err != nil {
+					llog.LogFatal.Println("struct unmarshal error")
 					return err
 				}
 			} else {
+				llog.LogFatal.Println(fmt.Sprintf("read from file: %s error", info))
 				return err
 			}
 		} else {
@@ -205,35 +335,68 @@ func Run(dir string, config string) *Error {
 	} else {
 		_, err := MakeDir(rootdir)
 		if err != nil {
+			llog.LogFatal.Println(fmt.Sprintf("mkdir error: %s", rootdir))
 			return err
 		}
 		err = con.createContainer(config)
 		if err != nil {
+			llog.LogFatal.Println(fmt.Sprintf("create container error: %s", config))
 			return err
 		}
 		err = con.patchBineries()
 		if err != nil {
+			llog.LogFatal.Println("patch bineries error")
 			return err
 		}
 		err = con.appendToSys()
 		if err != nil {
+			llog.LogFatal.Println("append to sys encounters error")
 			return err
 		}
 		err = con.setProgPrivileges()
 		if err != nil {
+			llog.LogFatal.Println("set program privilegies encoutners error")
 			return err
 		}
 	}
-	con.Status = RUNNING
-	err := con.appendToSys()
-	if err != nil {
-		return err
-	}
-	err = con.bashShell()
-	if err != nil {
-		return err
+
+	if passive {
+		con.Status = RUNNING
+		con.RPCPort = RandomPort(MIN, MAX)
+		err := con.appendToSys()
+		if err != nil {
+			llog.LogFatal.Println("append to sys encounters error")
+			return err
+		}
+		err = con.startRPCService(con.RPCPort)
+		if err != nil {
+			llog.LogFatal.Println("starting rpc service encounters error")
+			return err
+		}
+	} else {
+		con.Status = RUNNING
+		err := con.appendToSys()
+		if err != nil {
+			llog.LogFatal.Println("append to sys encounters error")
+			return err
+		}
+		err = con.bashShell()
+		if err != nil {
+			llog.LogFatal.Println("starting bash shell encounters error")
+			return err
+		}
 	}
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		con.Status = STOPPED
+		data, _ := StructMarshal(&con)
+		WriteToFile(data, fmt.Sprintf("%s/.info", rootdir))
+		con.Status = STOPPED
+		con.appendToSys()
+	}()
 	return nil
 }
 
@@ -378,9 +541,9 @@ func (con *Container) refreshElf(key string, value []string, prog string) *Error
 func (con *Container) bashShell() *Error {
 	if FolderExist(con.RootPath) {
 		env := make(map[string]string)
-		env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
 		env["ContainerId"] = con.Id
 		env["ContainerRoot"] = con.RootPath
+		env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
 		var err *Error
 		if con.CurrentUser == "root" {
 			err = ShellEnv("fakeroot", env, con.RootPath, con.UserShell)
@@ -408,7 +571,7 @@ func (con *Container) createContainer(config string) *Error {
 }
 
 func (con *Container) createSysFolders(config string) *Error {
-	con.Id = randomString(IDLENGTH)
+	con.Id = RandomString(IDLENGTH)
 	con.LogPath = fmt.Sprintf("%s/log", con.ConfigPath)
 	con.ElfPatcherPath = fmt.Sprintf("%s/elf", con.ConfigPath)
 	con.FakechrootPath = fmt.Sprintf("%s/fakechroot", con.ConfigPath)
@@ -417,7 +580,7 @@ func (con *Container) createSysFolders(config string) *Error {
 		return err
 	}
 	con.CreateUser = strings.TrimSuffix(user, "\n")
-	con.CurrentUser = con.CreateUser
+	con.CurrentUser = "root"
 	con.V, con.SettingConf, err = LoadConfig(config)
 	if err != nil {
 		return err
@@ -464,27 +627,24 @@ func (con *Container) createSysFolders(config string) *Error {
 }
 
 func (con *Container) patchBineries() *Error {
-	bineries, _, err := walkContainerRoot(con)
-	if err == nil {
-		for _, op := range ELFOP {
-			if data, ok := con.SettingConf[op]; ok {
-				switch op {
-				case ELFOP[0], ELFOP[1]:
-					if d1, o1 := data.([]interface{}); o1 {
-						for _, d1_1 := range d1 {
-							if d1_11, o1_11 := d1_1.(interface{}); o1_11 {
-								for k, v := range d1_11.(map[interface{}]interface{}) {
-									if v1, vo1 := v.([]interface{}); vo1 {
-										var libs []string
-										for _, vv1 := range v1 {
-											libs = append(libs, vv1.(string))
-										}
-										if k1, ok1 := k.(string); ok1 {
-											if FileExist(k1) {
-												err := con.refreshElf(op, libs, k1)
-												if err != nil {
-													return err
-												}
+	for _, op := range ELFOP {
+		if data, ok := con.SettingConf[op]; ok {
+			switch op {
+			case ELFOP[0], ELFOP[1]:
+				if d1, o1 := data.([]interface{}); o1 {
+					for _, d1_1 := range d1 {
+						if d1_11, o1_11 := d1_1.(interface{}); o1_11 {
+							for k, v := range d1_11.(map[interface{}]interface{}) {
+								if v1, vo1 := v.([]interface{}); vo1 {
+									var libs []string
+									for _, vv1 := range v1 {
+										libs = append(libs, vv1.(string))
+									}
+									if k1, ok1 := k.(string); ok1 {
+										if FileExist(k1) {
+											err := con.refreshElf(op, libs, k1)
+											if err != nil {
+												return err
 											}
 										}
 									}
@@ -492,17 +652,25 @@ func (con *Container) patchBineries() *Error {
 							}
 						}
 					}
-				case ELFOP[2], ELFOP[3]:
-					if d1, o1 := data.([]interface{}); o1 {
-						var rpaths []string
-						for _, d1_1 := range d1 {
-							rpaths = append(rpaths, d1_1.(string))
-						}
-						for _, binery := range bineries {
-							if FileExist(binery) {
-								err := con.refreshElf(op, rpaths, binery)
+				}
+			case ELFOP[2], ELFOP[3]:
+				if d1, o1 := data.([]interface{}); o1 {
+					for _, d1_1 := range d1 {
+						if d1_11, o1_11 := d1_1.(interface{}); o1_11 {
+							for k, v := range d1_11.(map[interface{}]interface{}) {
+								bineries, err := walkSpecificDir(k.(string))
 								if err != nil {
 									return err
+								}
+								for _, binery := range bineries {
+									if FileExist(binery) {
+										var paths []string
+										paths = append(paths, v.(string))
+										err := con.refreshElf(op, paths, binery)
+										if err != nil {
+											return err
+										}
+									}
 								}
 							}
 						}
@@ -511,7 +679,7 @@ func (con *Container) patchBineries() *Error {
 			}
 		}
 	}
-	return err
+	return nil
 }
 
 func (con *Container) appendToSys() *Error {
@@ -526,6 +694,7 @@ func (con *Container) appendToSys() *Error {
 				cmap["Status"] = STATUS[con.Status]
 				cmap["RootPath"] = con.RootPath
 				cmap["SettingPath"] = con.SettingPath
+				cmap["RPCPort"] = fmt.Sprintf("%d", con.RPCPort)
 			} else {
 				cerr := ErrNew(ErrType, "interface{} type assertation error")
 				return &cerr
@@ -535,6 +704,7 @@ func (con *Container) appendToSys() *Error {
 			cmap["Status"] = STATUS[con.Status]
 			cmap["RootPath"] = con.RootPath
 			cmap["SettingPath"] = con.SettingPath
+			cmap["RPCPort"] = fmt.Sprintf("%d", con.RPCPort)
 			sys.Containers[con.Id] = cmap
 		}
 		data, _ := StructMarshal(&sys)
@@ -575,22 +745,21 @@ func (con *Container) setProgPrivileges() *Error {
 									return mem_err
 								}
 							case interface{}:
-								value := ""
-								for _, ve := range v.([]interface{}) {
-									value = fmt.Sprintf("%s;%s", ve.(string), value)
-								}
-								mem_err := mem.MSetStrValue(fmt.Sprintf("%s:%s", con.Id, k), value)
-								if mem_err != nil {
-									return mem_err
+								if acs, acs_ok := v.([]interface{}); acs_ok {
+									value := ""
+									for _, acl := range acs {
+										value = fmt.Sprintf("%s;%s", acl.(string), value)
+									}
+									mem_err := mem.MSetStrValue(fmt.Sprintf("%s:%s", con.Id, k), value)
+									if mem_err != nil {
+										return mem_err
+									}
 								}
 							default:
-								cerr := ErrNew(ErrType, "interface{} type assertation error")
-								return &cerr
+								acm_err := ErrNew(ErrType, fmt.Sprintf("type is not right, assume: map[interfacer{}]interface{}, real: %v", ace))
+								return &acm_err
 							}
 						}
-					} else {
-						acm_err := ErrNew(ErrType, fmt.Sprintf("type is not right, assume: map[string]interface{}, real: %v", ace))
-						return &acm_err
 					}
 				}
 			} else {
@@ -599,8 +768,31 @@ func (con *Container) setProgPrivileges() *Error {
 			}
 		}
 		return nil
+	} else {
+		mem_err := ErrNew(err, "memcache server init error")
+		return &mem_err
 	}
 	return err
+}
+
+func (con *Container) startRPCService(port int) *Error {
+	con.RPCMap = make(map[int]string)
+	conn, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
+	if err != nil {
+		cerr := ErrNew(err, "start rpc service encounters error")
+		return &cerr
+	}
+	env := make(map[string]string)
+	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
+	env["ContainerId"] = con.Id
+	env["ContainerRoot"] = con.RootPath
+	r := new(RPC)
+	r.Env = env
+	r.Dir = con.RootPath
+	r.Con = con
+	rpc.Register(r)
+	rpc.Accept(conn)
+	return nil
 }
 
 /**
@@ -657,16 +849,6 @@ func walkfs(dir string) ([]string, *Error) {
 		return nil, &cerr
 	}
 	return fileList, nil
-}
-
-func randomString(n int) string {
-	rand.Seed(time.Now().UnixNano())
-	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letter[rand.Intn(len(letter))]
-	}
-	return string(b)
 }
 
 func readSys(rootdir string, sys *Sys) *Error {

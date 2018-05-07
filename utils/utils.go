@@ -6,7 +6,9 @@ import (
 	"github.com/phayes/permbits"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
+	"time"
 )
 
 const (
@@ -192,4 +194,19 @@ func CopyFile(src string, dst string) (bool, *Error) {
 	}
 
 	return true, nil
+}
+
+func RandomString(n int) string {
+	rand.Seed(time.Now().UnixNano())
+	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letter[rand.Intn(len(letter))]
+	}
+	return string(b)
+}
+
+func RandomPort(min, max int) int {
+	rand.Seed(time.Now().Unix())
+	return rand.Intn(max-min) + min
 }

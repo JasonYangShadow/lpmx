@@ -6,12 +6,9 @@ import (
 
 func TestPaeudo1(t *testing.T) {
 	env := make(map[string]string)
-	env["LD_PRELOAD"] = "test"
-	dir := "/tmp/lpmx_test"
-	out, err := CommandEnv("cd", env, dir, "..")
+	dir := "/tmp"
+	err := ShellEnv("/usr/bin/fakeroot", env, dir, "/usr/bin/bash")
 	if err != nil {
 		t.Error(err)
-	} else {
-		t.Log(out)
 	}
 }

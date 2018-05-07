@@ -2,6 +2,7 @@ package container
 
 import (
 	. "github.com/jasonyangshadow/lpmx/msgpack"
+	. "github.com/jasonyangshadow/lpmx/utils"
 	"testing"
 )
 
@@ -25,11 +26,15 @@ func TestContainerMarshal(t *testing.T) {
 	}
 }
 
-func TestContainer(t *testing.T) {
-	dir := "/tmp/lpmx_test"
-	config := "./setting.yml"
-	err := Run(dir, config)
+func TestUnmarshal(t *testing.T) {
+	var con Container
+	data, err := ReadFromFile("/tmp/lpmx_test/.lpmx/.info")
 	if err != nil {
 		t.Error(err)
 	}
+	err = StructUnmarshal(data, &con)
+	if err != nil {
+		t.Error(err)
+	}
+	t.Log(con)
 }
