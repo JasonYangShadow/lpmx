@@ -541,9 +541,9 @@ func (con *Container) refreshElf(key string, value []string, prog string) *Error
 func (con *Container) bashShell() *Error {
 	if FolderExist(con.RootPath) {
 		env := make(map[string]string)
-		env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
 		env["ContainerId"] = con.Id
 		env["ContainerRoot"] = con.RootPath
+		env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
 		var err *Error
 		if con.CurrentUser == "root" {
 			err = ShellEnv("fakeroot", env, con.RootPath, con.UserShell)
@@ -580,7 +580,7 @@ func (con *Container) createSysFolders(config string) *Error {
 		return err
 	}
 	con.CreateUser = strings.TrimSuffix(user, "\n")
-	con.CurrentUser = con.CreateUser
+	con.CurrentUser = "root"
 	con.V, con.SettingConf, err = LoadConfig(config)
 	if err != nil {
 		return err
@@ -745,22 +745,21 @@ func (con *Container) setProgPrivileges() *Error {
 									return mem_err
 								}
 							case interface{}:
-								value := ""
-								for _, ve := range v.([]interface{}) {
-									value = fmt.Sprintf("%s;%s", ve.(string), value)
-								}
-								mem_err := mem.MSetStrValue(fmt.Sprintf("%s:%s", con.Id, k), value)
-								if mem_err != nil {
-									return mem_err
+								if acs, acs_ok := v.([]interface{}); acs_ok {
+									value := ""
+									for _, acl := range acs {
+										value = fmt.Sprintf("%s;%s", acl.(string), value)
+									}
+									mem_err := mem.MSetStrValue(fmt.Sprintf("%s:%s", con.Id, k), value)
+									if mem_err != nil {
+										return mem_err
+									}
 								}
 							default:
-								cerr := ErrNew(ErrType, "interface{} type assertation error")
-								return &cerr
+								acm_err := ErrNew(ErrType, fmt.Sprintf("type is not right, assume: map[interfacer{}]interface{}, real: %v", ace))
+								return &acm_err
 							}
 						}
-					} else {
-						acm_err := ErrNew(ErrType, fmt.Sprintf("type is not right, assume: map[string]interface{}, real: %v", ace))
-						return &acm_err
 					}
 				}
 			} else {
