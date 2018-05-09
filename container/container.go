@@ -347,7 +347,7 @@ func Run(dir string, config string, passive bool) *Error {
 		}
 		err = con.appendToSys()
 		if err != nil {
-			llog.LogFatal.Println("append to sys encounters error")
+			llog.LogFatal.Println("append to sys info error")
 			return err
 		}
 		err = con.setProgPrivileges()
@@ -362,7 +362,7 @@ func Run(dir string, config string, passive bool) *Error {
 		con.RPCPort = RandomPort(MIN, MAX)
 		err := con.appendToSys()
 		if err != nil {
-			llog.LogFatal.Println("append to sys encounters error")
+			llog.LogFatal.Println("append to sys info error")
 			return err
 		}
 		err = con.startRPCService(con.RPCPort)
@@ -374,7 +374,7 @@ func Run(dir string, config string, passive bool) *Error {
 		con.Status = RUNNING
 		err := con.appendToSys()
 		if err != nil {
-			llog.LogFatal.Println("append to sys encounters error")
+			llog.LogFatal.Println("append to sys info error")
 			return err
 		}
 		err = con.bashShell()
@@ -543,7 +543,7 @@ func (con *Container) bashShell() *Error {
 		env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
 		var err *Error
 		if con.CurrentUser == "root" {
-			err = ShellEnv("fakeroot", env, con.RootPath, con.UserShell)
+			err = ShellEnv("chroot", env, con.RootPath, con.RootPath, con.UserShell)
 		} else {
 			err = ShellEnv(con.UserShell, env, con.RootPath)
 		}
@@ -635,11 +635,13 @@ func (con *Container) patchBineries() *Error {
 								if v1, vo1 := v.([]interface{}); vo1 {
 									var libs []string
 									for _, vv1 := range v1 {
-										libs = append(libs, vv1.(string))
+										vv1_abs, _ := filepath.Abs(vv1.(string))
+										libs = append(libs, vv1_abs)
 									}
 									if k1, ok1 := k.(string); ok1 {
-										if FileExist(k1) {
-											err := con.refreshElf(op, libs, k1)
+										k1_abs, _ := filepath.Abs(k1)
+										if FileExist(k1_abs) {
+											err := con.refreshElf(op, libs, k1_abs)
 											if err != nil {
 												return err
 											}
@@ -655,17 +657,35 @@ func (con *Container) patchBineries() *Error {
 					for _, d1_1 := range d1 {
 						if d1_11, o1_11 := d1_1.(interface{}); o1_11 {
 							for k, v := range d1_11.(map[interface{}]interface{}) {
-								bineries, err := walkSpecificDir(k.(string))
-								if err != nil {
-									return err
+
+								var libs []string
+								if v1, vo1 := v.([]interface{}); vo1 {
+									for _, vv1 := range v1 {
+										vv1_abs, _ := filepath.Abs(vv1.(string))
+										libs = append(libs, vv1_abs)
+									}
 								}
-								for _, binery := range bineries {
-									if FileExist(binery) {
-										var paths []string
-										paths = append(paths, v.(string))
-										err := con.refreshElf(op, paths, binery)
-										if err != nil {
-											return err
+
+								k_abs, _ := filepath.Abs(k.(string))
+								if FileExist(k_abs) {
+									err := con.refreshElf(op, libs, k_abs)
+									if err != nil {
+										return err
+									}
+								}
+								if FolderExist(k_abs) {
+									bineries, err := walkSpecificDir(k_abs)
+									if err != nil {
+										return err
+									}
+									for _, binery := range bineries {
+										if FileExist(binery) {
+											var paths []string
+											paths = append(paths, v.(string))
+											err := con.refreshElf(op, paths, binery)
+											if err != nil {
+												return err
+											}
 										}
 									}
 								}

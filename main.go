@@ -54,6 +54,8 @@ func main() {
 		Long:  "run command is the basic command of lpmx, which is used for initializing, creating and running container based on specific directory",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
+			RunSource, _ = filepath.Abs(RunSource)
+			RunConfig, _ = filepath.Abs(RunConfig)
 			err := Run(RunSource, RunConfig, RunPassive)
 			if err != nil {
 				llog.LogFatal.Println(err)
