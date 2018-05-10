@@ -2,7 +2,7 @@
 lpmx is rootless container other than local package manager. 
 It employs the LD_PRELOAD mechanism and ELF header patch to implement both elf modification and system calls interception.
 
-Therefore, this project contains customized [fakechroot branch](https://github.com/JasonYangShadow/fakechroot) and [elfpatcher](https://github.com/JasonYangShadow/patchelf). 
+Therefore, this project contains customized [fakechroot](https://github.com/JasonYangShadow/fakechroot) and [elfpatcher](https://github.com/JasonYangShadow/patchelf). 
 
 # Compile from source code 
 1. Make sure golang is installed on your os
@@ -10,6 +10,8 @@ Therefore, this project contains customized [fakechroot branch](https://github.c
 3. cd $GOPATH/src/github.com/jasonyangshadow/lpmx
 4. ./build.sh
 5. You will locate the 32bit/64bit binary under build/linux/x86_64/lpmx or build/linux/i386/lpmx 
+6. For 64bit binary, a precompiled libfakechroot.so and patchelf are already included. If there are any errors, and you could try building fakechroot and patchelf from source. Please move to these repositories [fakechroot](https://github.com/JasonYangShadow/fakechroot) and [elfpatcher](https://github.com/JasonYangShadow/patchelf). 
+
 
 # How to use it
 1. Make sure you have memcached installed on your os and start it with "memcached -d". As lpmx currently depends on the memcached to exchange privilges information.
