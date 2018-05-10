@@ -22,6 +22,7 @@ Therefore, this project contains customized [fakechroot branch](https://github.c
 
 # Other commands
 ------
+```
 lpmx rootless container
 
 Usage:
@@ -41,4 +42,4 @@ Flags:
   -h, --help   help for lpmx
 
 Use "lpmx [command] --help" for more information about a command.
-
+```
