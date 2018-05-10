@@ -577,7 +577,6 @@ func (con *Container) createSysFolders(config string) *Error {
 		return err
 	}
 	con.CreateUser = strings.TrimSuffix(user, "\n")
-	con.CurrentUser = con.CreateUser
 	con.V, con.SettingConf, err = LoadConfig(config)
 	if err != nil {
 		return err
@@ -588,6 +587,11 @@ func (con *Container) createSysFolders(config string) *Error {
 		con.UserShell = strsh
 	} else {
 		con.UserShell = "/usr/bin/bash"
+	}
+	if c_user, c_ok := con.SettingConf["default_user"]; c_ok {
+		con.CurrentUser = c_user.(string)
+	} else {
+		con.CurrentUser = con.CreateUser
 	}
 	if mem, mok := con.SettingConf["memcache_list"]; mok {
 		if mems, mems_ok := mem.([]interface{}); mems_ok {
