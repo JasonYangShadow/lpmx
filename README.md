@@ -43,3 +43,110 @@ Flags:
 
 Use "lpmx [command] --help" for more information about a command.
 ```
+
+## lpmx init command is used for initializing the basic system folder of lpmx, it stores information of containers and other maintaince information
+```
+init command is the basic command of lpmx, which is used for initializing lpmx system
+
+Usage:
+  lpmx init [flags]
+
+Flags:
+  -h, --help   help for init
+```
+
+## lpmx list command is used for listing the information of all the registered containers, including containerid, container root path, container rpc port(NA for no rpc port)
+```
+list command is the basic command of lpmx, which is used for listing all the containers registered
+
+Usage:
+  lpmx list [flags]
+
+Flags:
+  -h, --help   help for list
+```
+
+## lpmx resume command is used for resuming stopped container, you need to use this command with containerid argument
+```
+Usage:
+  lpmx resume [flags]
+
+Flags:
+  -h, --help   help for resume
+
+Example:
+  ./lpmx resume containerid
+```
+
+## lpmx run command is used for creating and running conatiner, you need to define the configuration file and target source folder 
+```
+run command is the basic command of lpmx, which is used for initializing, creating and running container based on specific directory                                                                                            
+
+Usage:
+  lpmx run [flags]
+
+Flags:
+  -c, --config string   required
+  -h, --help            help for run
+  -p, --passive         optional
+  -s, --source string   required
+
+Example:
+  ./lpmx run -c xxx.yml -s /path -> running container in interaction mode(via terminal)
+  ./lpmx run -c xxx.yml -s /path -p -> running container in paasive mode (via rpc)
+```
+
+## lpmx rpc command is used for executing commands remotely. Attention that this command should be executed under passive mode.
+```
+rpc command is the advanced comand of lpmx, which is used for executing command remotely through rpc
+
+Usage:
+  lpmx rpc [command]
+
+Available Commands:
+  exec        exec command remotely
+  kill        kill the commands executed remotely via pid
+  query       query the information of commands executed remotely
+
+Flags:
+  -h, --help   help for rpc
+
+Use "lpmx rpc [command] --help" for more information about a command.
+
+Example:
+  Firstly make sure that your container should be ran under passive mode, i.e, container is started with -p flag.
+
+
+  rpc exec sub-command is the advanced comand of lpmx, which is used for executing command remotely through rpc
+  Usage:
+    lpmx rpc exec [flags]
+
+  Flags:
+    -h, --help             help for exec
+    -i, --ip string        required
+    -p, --port string      required
+    -t, --timeout string   optional
+
+  ./lpmx rpc exec -i ipaddress(localhost) -p rpc port(you can get it througth './lpmx list' command) -t timeout for command 
+
+
+  rpc query sub-command is the advanced comand of lpmx, which is used for querying the information of commands executed remotely through rpc                                                   Usage:
+    lpmx rpc query [flags]
+
+  Flags:
+   -h, --help          help for query
+   -i, --ip string     required
+   -p, --port string   required
+
+ ./lpmx rpc query -i ipadress -p rpc port
+
+  rpc delete sub-command is the advanced comand of lpmx, which is used for killing the commands executed remotely through rpc via pid                                                          Usage:
+    lpmx rpc kill [flags]
+
+  Flags:
+    -h, --help          help for kill
+    -i, --ip string     required
+    -d, --pid string    required
+    -p, --port string   required
+  ./lpmx rpc kill -i ipadress -p rpc port -d pid(you can get it through '.lpmx rpc query -i ipaddress -p rpc port')
+```

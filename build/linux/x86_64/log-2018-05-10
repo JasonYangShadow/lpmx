@@ -1,0 +1,2 @@
+FATAL: 2018/05/10 15:04:10 main.go:43: {"ErrType":"Not exist error", "ErrMsg":"/home/jason/go/src/github.com/jasonyangshadow/lpmx/build/linux/x86_64/.lpmxsys/.info doesn't exist, please use command 'lpmx init' firstly"}
+FATAL: 2018/05/10 15:09:45 main.go:162: {"ErrType":"Not exist error", "ErrMsg":"/home/jason/go/src/github.com/jasonyangshadow/lpmx/build/linux/x86_64/.lpmxsys/.info doesn't exist, please use command 'lpmx init' firstly"}
