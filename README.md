@@ -184,3 +184,49 @@ Flags:
 Example:
   ./lpmx destroy containerid
 ```
+
+### About YAML configuration file
+```
+lpmx receive yml configuration file while creating containers
+
+some configurations can be put in as your requirements:
+
+1. add_needed -> used for patching binaries elf header with needed libraries
+
+Format:
+xxx.yml
+
+add_needed:
+  - program A
+    - needed A
+    - needed B
+    - ...
+
+2. add_rpath -> used for patching binaries elf header with rpaths 
+
+Format:
+xxx.yml
+
+add_rpath:
+  - prgram A 
+    - rpath A
+    - rpath B
+    - ...
+  - Folder A
+    - rpath A
+    - rpath B
+    - ...
+
+3. default_user -> used for changing default user inside container
+
+Format:
+xxx.yml
+
+default_user: root
+
+4. allow_list -> used for setting privilges during intializing stage
+
+Format: xxx.yml allow_list:
+  - program A : privilege_allow_folder
+  - program B : privilege_allow_folder
+```
