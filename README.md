@@ -14,7 +14,7 @@ Therefore, this project contains customized [fakechroot](https://github.com/Jaso
 
 
 # How to use it
-1. Make sure you have memcached installed on your os and start it with "memcached -d". As lpmx currently depends on the memcached to exchange privilges information.
+1. Make sure you have **memcached** installed on your os and start it with "memcached -d". As lpmx currently depends on the memcached to exchange privilges information.
 2. ./lpmx init  -> initialize the basic system folder for lpmx ( otherwize, any commands executed following will report error and notify you should execute initialize command firstly)
 3. ./lpmx run -c config_file_path -s target_container_root_folder -> creates and starts running container based on configuration file and target folder via terminal. 
 4. ./lpmx run -c config_file_path -s target_container_root_folder -p -> creates and starts running container in passive mode, which will result in opening rpc port to receive commands and no interaction terminal is triggered. 
