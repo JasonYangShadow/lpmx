@@ -543,7 +543,7 @@ func (con *Container) bashShell() *Error {
 		env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
 		var err *Error
 		if con.CurrentUser == "root" {
-			err = ShellEnv("chroot", env, con.RootPath, con.RootPath, con.UserShell)
+			err = ShellEnv("fakeroot", env, con.RootPath, "chroot", con.RootPath, con.UserShell)
 		} else {
 			err = ShellEnv(con.UserShell, env, con.RootPath)
 		}
