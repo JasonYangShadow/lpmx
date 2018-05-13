@@ -1,5 +1,5 @@
 hash: a6c70956dada379462b90b1e0c31a0ff91ba2fae1aecb989e4968c985ee90b5e
-updated: 2018-05-10T14:48:25.499774658+09:00
+updated: 2018-05-13T14:23:13.288853673+09:00
 imports:
 - name: github.com/bradfitz/gomemcache
   version: 1952afaa557dc08e8e0d89eafab110fb501c1a2b
@@ -8,7 +8,7 @@ imports:
 - name: github.com/fsnotify/fsnotify
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: github.com/golang/protobuf
-  version: b4deda0973fb4c70b50d226b1af49f3da59f5265
+  version: e09c5db296004fbe3f74490e84dcd62c3c5ddb1b
   subpackages:
   - proto
 - name: github.com/hashicorp/hcl
@@ -50,17 +50,17 @@ imports:
 - name: github.com/spf13/pflag
   version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: github.com/spf13/viper
-  version: 15738813a09db5c8e5b60a19d67d3f9bd38da3a4
+  version: 8dc2790b029dc41e2b8ff772c63c26adbb1db70d
 - name: github.com/vmihailenco/msgpack
   version: a053f3dac71df214bfe8b367f34220f0029c9c02
   subpackages:
   - codes
 - name: golang.org/x/net
-  version: f73e4c9ed3b7ebdd5f699a16a880c2b1994e50dd
+  version: 5f9ae10d9af5b1c89ae6904293b14b064d4ada23
   subpackages:
   - context
 - name: golang.org/x/sys
-  version: 7dfd1290c7917b7ba22824b9d24954ab3002fe24
+  version: bb9c189858d91f42db229b04d45a4c3d23a7662a
   subpackages:
   - unix
 - name: golang.org/x/text
@@ -69,7 +69,7 @@ imports:
   - transform
   - unicode/norm
 - name: google.golang.org/appengine
-  version: 962cbd1200af94a5a35ba8d512e9f91271b4d01a
+  version: 0a24098c0ec68416ec050f567f75df563d6b231e
   subpackages:
   - datastore
   - internal
