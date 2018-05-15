@@ -1,3 +1,8 @@
 allow_list:
   - bash: all 
-  - fakeroot: all
+
+add_rpath:
+  - /tmp/test/bin/vim:
+    - /tmp/test/usr/lib
+    - /tmp/test/lib
+

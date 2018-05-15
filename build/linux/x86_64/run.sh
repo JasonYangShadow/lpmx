@@ -1,3 +1,3 @@
 #!/bin/bash
 
-./lpmx run -s /tmp/test -c ./setting.yml
+./lpmx run -s /tmp/test -c ./setting.yml 

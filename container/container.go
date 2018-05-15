@@ -454,10 +454,12 @@ func Set(id string, tp string, name string, value string) *Error {
 							switch value {
 							case "root":
 								con.CurrentUser = "root"
+							case "chroot":
+								con.CurrentUser = "chroot"
 							case "default":
 								con.CurrentUser = con.CreateUser
 							default:
-								err_new := ErrNew(ErrType, "value should be either 'root' or 'default'")
+								err_new := ErrNew(ErrType, "value should be either 'root','default' or 'chroot'")
 								return &err_new
 							}
 						default:
@@ -543,6 +545,20 @@ func (con *Container) bashShell() *Error {
 		env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
 		var err *Error
 		if con.CurrentUser == "root" {
+			err = ShellEnv("fakeroot", env, con.RootPath, con.UserShell)
+		} else if con.CurrentUser == "chroot" {
+			env["ContainerMode"] = "chroot"
+			shell := fmt.Sprintf("%s/%s", con.RootPath, con.UserShell)
+			if !FileExist(shell) {
+				_, err = MakeDir(filepath.Dir(shell))
+				if err != nil {
+					return err
+				}
+				_, err = CopyFile(con.UserShell, shell)
+				if err != nil {
+					return err
+				}
+			}
 			err = ShellEnv("fakeroot", env, con.RootPath, "chroot", con.RootPath, con.UserShell)
 		} else {
 			err = ShellEnv(con.UserShell, env, con.RootPath)
