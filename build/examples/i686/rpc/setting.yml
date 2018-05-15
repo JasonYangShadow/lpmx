@@ -1,0 +1,8 @@
+allow_list:
+  - bash: all 
+
+add_rpath:
+  - /tmp/test/bin/vim:
+    - /tmp/test/usr/lib
+    - /tmp/test/lib
+
