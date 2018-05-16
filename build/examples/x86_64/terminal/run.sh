@@ -9,6 +9,11 @@ echo "cleanup"
 rm -rf $ROOT/.lpmx
 rm -rf $BINARY/.lpmxsys
 
+USER=`echo $EUID`
+if [ $USER -eq 0 ];then
+  echo "please run this script in normal user, not root"
+  exit 1
+fi
 echo "Automatically create exmaple folder under /tmp with $ROOT"
 mkdir -p $ROOT
 mkdir -p $ROOT/bin
