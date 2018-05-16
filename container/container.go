@@ -31,6 +31,7 @@ const (
 var (
 	ELFOP  = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath", "change_user", "add_privilege", "remove_privilege"}
 	STATUS = []string{"RUNNING", "STOPPED"}
+	llog   = MakeLog("")
 )
 
 type Sys struct {
@@ -297,12 +298,11 @@ func Destroy(id string) *Error {
 
 func Run(dir string, config string, passive bool) *Error {
 	rootdir := fmt.Sprintf("%s/.lpmx", dir)
+	llog.LogDebug.Println(fmt.Sprintf("dir:%s,config:%s,passive:%v", dir, config, passive))
 	var con Container
 	con.RootPath = dir
 	con.CurrentDir = dir
 	con.ConfigPath = rootdir
-	llog := new(Log)
-	llog.LogInit(fmt.Sprintf("%s/log", con.RootPath))
 
 	defer func() {
 		data, _ := StructMarshal(&con)
@@ -561,6 +561,7 @@ func (con *Container) bashShell() *Error {
 			}
 			err = ShellEnv("fakeroot", env, con.RootPath, "chroot", con.RootPath, con.UserShell)
 		} else {
+			llog.LogDebug.Println(con.UserShell, env, con.RootPath)
 			err = ShellEnv(con.UserShell, env, con.RootPath)
 		}
 		if err != nil {

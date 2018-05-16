@@ -1,0 +1,13 @@
+In this exmaple, there will be a binary under bin folder named pid, which
+prints out the pid of current running process. However, through employing elf
+patcher technology, we have developed a fake getpid function and modified elf
+header section of the binary named pid, resulting in loading fake getpid function we
+developed. 
+
+Additionaly, you will find that you could do any thing inside the bash
+interaction terminal environment, such as create file, delete file and etc.
+However, you can't do anything outside the root folder of current container,
+that is /tmp/x86_64/terminal, any operations executed outside the container
+will be intercepted and blocked. But you could change the privilges
+dynanmically without restart container. For details please check the tutorial
+on github: https://github.com/JasonYangShadow/lpmx

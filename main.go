@@ -11,13 +11,12 @@ import (
 )
 
 func main() {
-	llog := new(Log)
 	dir, err := filepath.Abs(filepath.Dir(os.Args[0]))
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	llog.LogInit(dir)
+	llog := MakeLog(dir)
 
 	var initCmd = &cobra.Command{
 		Use:   "init",

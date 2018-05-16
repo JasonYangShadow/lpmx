@@ -19,7 +19,16 @@ type Log struct {
 	LogFatal *log.Logger
 }
 
-func (l *Log) LogInit(dir string) *Error {
+func MakeLog(dir string) *Log {
+	l := new(Log)
+	err := l.init(dir)
+	if err != nil {
+		return nil
+	}
+	return l
+}
+
+func (l *Log) init(dir string) *Error {
 	multiouts := false
 	if strings.TrimSpace(dir) != "" {
 		multiouts = true

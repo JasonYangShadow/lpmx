@@ -1,8 +1,7 @@
 allow_list:
   - bash: all 
 
-add_rpath:
-  - /tmp/test/bin/vim:
-    - /tmp/test/usr/lib
-    - /tmp/test/lib
+add_needed:
+  - /tmp/x86_64/terminal/bin/pid:
+    - /tmp/x86_64/terminal/lib/getpid.so
 
