@@ -30,8 +30,8 @@ else
   echo "restarting memcached instace encountered error"
   exit 1
 fi
-if [ -f ./readme ];then
-  cat ./readme
+if [ -f readme ];then
+  cat readme
 fi
 ./lpmx init
 ./lpmx run -c $CURRENT/setting.yml -s $ROOT -p > $LOG &
