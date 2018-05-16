@@ -77,6 +77,7 @@ if [ -f "/usr/bin/tar" ] || [ -f "/bin/tar" ];then
   mkdir -p lpmx
   mv linux/$ARCH_PLAT/* lpmx/
   mv examples lpmx/
+  rm -rf linux
 else
   install
   download_example
