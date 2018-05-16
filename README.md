@@ -1,4 +1,4 @@
-# lpmx
+# LPMX 
 lpmx is rootless container other than local package manager. 
 It employs the LD_PRELOAD mechanism and ELF header patch to implement both elf modification and system calls interception.
 
@@ -13,7 +13,7 @@ Therefore, this project contains customized [fakechroot](https://github.com/Jaso
 
 If there are any dependencies issues, try to install gilde and execute 'glide update' inside project folder
 
-# quick run
+# Quick run
 1. make sure that you have wget installed on your os
 2. wget https://raw.githubusercontent.com/JasonYangShadow/lpmx/master/install.sh; chmod +x install.sh; ./install.sh
 3. you will find a folder named lpmx in your current directory containing
