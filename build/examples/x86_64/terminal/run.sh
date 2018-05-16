@@ -40,5 +40,6 @@ fi
 if [ -f ./readme ];then
   cat ./readme
 fi
+echo "LD_PRELOAD_PATH: $BINARY" >> $CURRENT/setting.yml
 ./lpmx init
 ./lpmx run -c $CURRENT/setting.yml -s $ROOT

@@ -72,7 +72,7 @@ if [ ! -f "/usr/bin/wget" ];then
 fi
 if [ -f "/usr/bin/tar" ] || [ -f "/bin/tar" ];then
   FILE="lpmx_$ARCH_PLAT.tar.gz"
-  wget $SRC/$FILE
+  wget $SRC/$FILE -P /tmp
   tar -xzvf $FILE
   mkdir -p lpmx
   mv linux/$ARCH_PLAT/* lpmx/
