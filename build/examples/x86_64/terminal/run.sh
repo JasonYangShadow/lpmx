@@ -27,7 +27,7 @@ if [ -n "$MEM_PID" ];then
   kill -9 $MEM_PID
 fi
 echo "restarting memcached server"
-export LD_LIBRARY_PATH=$BINARY
+export LD_PRELOAD=$BINARY/libevent.so
 cd $BINARY
 ./memcached -d
 NEW_MEM_PID=`ps -aux|grep memcached|grep -v "grep"|awk '{print $2}'`
