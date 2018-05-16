@@ -37,8 +37,10 @@ else
   echo "restarting memcached instace encountered error"
   exit 1
 fi
-if [ -f readme ];then
-  cat readme
+if [ -e "$CURRENT/readme" ];then
+  echo "****************************************************************"
+  cat "$CURRENT/readme"
+  echo "****************************************************************"
 fi
 echo "LD_PRELOAD_PATH: $BINARY" >> $CURRENT/setting.yml
 ./lpmx init

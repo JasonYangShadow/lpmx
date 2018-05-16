@@ -9,6 +9,11 @@ echo "cleanup"
 rm -rf $ROOT/.lpmx
 rm -rf $BINARY/.lpmxsys
 
+USER=`echo $EUID`
+if [ $USER -eq 0 ];then
+  echo "please run this script in normal user, not root"
+  exit 1
+fi
 echo "Automatically create exmaple folder under /tmp with $ROOT"
 mkdir -p $ROOT
 mkdir -p $ROOT/bin
@@ -32,8 +37,11 @@ else
   echo "restarting memcached instace encountered error"
   exit 1
 fi
-if [ -f "readme" ];then
-  cat readme
+if [ -e "$CURRENT/readme" ];then
+  echo "****************************************************************"
+  cat "$CURRENT/readme"
+  echo "****************************************************************"
 fi
+echo "LD_PRELOAD_PATH: $BINARY" >> $CURRENT/setting.yml
 ./lpmx init
 ./lpmx run -c $CURRENT/setting.yml -s $ROOT

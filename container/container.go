@@ -298,7 +298,6 @@ func Destroy(id string) *Error {
 
 func Run(dir string, config string, passive bool) *Error {
 	rootdir := fmt.Sprintf("%s/.lpmx", dir)
-	llog.LogDebug.Println(fmt.Sprintf("dir:%s,config:%s,passive:%v", dir, config, passive))
 	var con Container
 	con.RootPath = dir
 	con.CurrentDir = dir
@@ -543,7 +542,7 @@ func (con *Container) bashShell() *Error {
 		env["ContainerId"] = con.Id
 		env["ContainerRoot"] = con.RootPath
 		env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
-		if ld, ok := con.SettingConf["LD_LIBRARY_PATH"]; ok {
+		if ld, ok := con.SettingConf["ld_preload_path"]; ok {
 			env["LD_LIBRARY_PATH"] = ld.(string)
 		}
 		var err *Error
@@ -564,7 +563,6 @@ func (con *Container) bashShell() *Error {
 			}
 			err = ShellEnv("fakeroot", env, con.RootPath, "chroot", con.RootPath, con.UserShell)
 		} else {
-			llog.LogDebug.Println(con.UserShell, env, con.RootPath)
 			err = ShellEnv(con.UserShell, env, con.RootPath)
 		}
 		if err != nil {
