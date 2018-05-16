@@ -1,98 +1,75 @@
 #!/bin/bash
 
-get(){
+SRC="https://raw.githubusercontent.com/JasonYangShadow/lpmx/master/build"
+if [ -f "/usr/bin/uname" ] || [ -f "/bin/uname" ]; then
+    ARCH_OS=`uname -o`
+    ARCH_PLAT=`uname -m`
+else
+    echo "your os doesn't have uname, it may not be compatible with this
+    installment script"
+    exit 1
+fi
+if [ ! -f "/usr/bin/wget" ];then
+    echo "wget dees not exist in your os, please install wget"
+    exit 1
+fi
+
+get_binary(){
   if [ $1 = "GNU/Linux" ];then
     echo "installment script will create folder named lpmx in current directory"
-    mkdir -p lpmx
-    cd lpmx
-    wget --recursive --no-parent "$3/$2"
-    echo "Done! Your system is $1 and its arch is $2"
+    ROOT=lpmx
+    mkdir -p $ROOT
+    wget $3/$2/libevent.so -P $ROOT 
+    wget $3/$2/libfakechroot.so -P $ROOT 
+    wget $3/$2/lpmx -P $ROOT 
+    wget $3/$2/memcached -P $ROOT 
+    wget $3/$2/patchelf -P $ROOT 
+    chmod 755 $ROOT/lpmx $ROOT/memcached $ROOT/patchelf
   fi
 }
 
 install(){
-  SRC="https://raw.githubusercontent.com/JasonYangShadow/lpmx/master/build/linux"
-  if [ -f "/usr/bin/uname" ] || [ -f "/bin/uname" ]; then
-    ARCH_OS=`uname -o`
-    ARCH_PLAT=`uname -m`
-  else
-    echo "your os doesn't have uname, it may not be compatible with this
-    installment script"
-    exit 1
-  fi
-
-  if [ ! -f "/usr/bin/wget" ];then
-    echo "wget dees not exist in your os, please install wget"
-    exit 1
-  fi
-
-  get $ARCH_OS $ARCH_PLAT $SRC
+  get_binary $ARCH_OS $ARCH_PLAT $SRC/linux
 }
 
-uninstall(){
+get_terminal(){
   if [ -d "lpmx" ];then
-    rm -rf lpmx
-    echo "Done! You may need to delete the test folder inside /tmp manually"
-    exit 0
-  fi
-}
-
-test_terminal(){
-  if [ -f "/usr/bin/uname" ] || [ -f "/bin/uname" ];then
-    ARCH_PLAT=`uname -m`
-    ./build/examples/$ARCH_PLAT/terminal/run.sh
+    ROOT=lpmx/examples/$1/terminal
+    mkdir -p $ROOT
+    wget $2/exmaples/$1/terminal/getpid.so -P $ROOT
+    wget $2/exmaples/$1/terminal/pid -P $ROOT
+    wget $2/exmaples/$1/terminal/readme.md -P $ROOT
+    wget $2/exmaples/$1/terminal/setting.yml -P $ROOT
+    wget $2/exmaples/$1/terminal/run.sh -P $ROOT
+    chmod 755 $ROOT/pid $ROOT/run.sh
   else
-    echo "your os doesn't have uname, it may not be comaptible iwth this
-    installment script"
-    exit 1
+   echo "sorry, i can't find lpmx directory, seems the installment encountered
+   errors!"
+  exit 1 
   fi
 }
 
-test_rpc(){
-  if [ -f "/usr/bin/uname" ] || [ -f "/bin/uname" ];then
-    ARCH_PLAT=`uname -m`
-    ./build/examples/$ARCH_PLAT/rpc/run.sh
+get_rpc(){
+  if [ -d "lpmx" ];then
+    ROOT=lpmx/examples/$1/rpc
+    mkdir -p $ROOT
+    wget $2/examples/$1/rpc/readme.md -P $ROOT
+    wget $2/examples/$1/rpc/run.sh -P $ROOT
+    wget $2/examples/$1/rpc/loop1 -P $ROOT
+    wget $2/examples/$1/rpc/loop2 -P $ROOT
+    wget $2/examples/$1/rpc/setting.yml -P $ROOT
+    chmod 755 $ROOT/loop1 $ROOT/loop2 $ROOT/run.sh
   else
-    echo "your os doesn't have uname, it may not be comaptible iwth this
-    installment script"
-    exit 1
+   echo "sorry, i can't find lpmx directory, seems the installment encountered
+   errors!"
+  exit 1 
   fi
 }
 
-main(){
-  while [ "$1" != "" ];do
-    case $1 in
-      -t | --type )
-        shift
-        type=$1
-        ;;
-      * )
-        echo "wrong input type, please use -t or --type"
-        exit 1
-        ;;
-      esac
-      shift
-  done
-
-
-  case $type in
-    install )
-      install
-      ;;
-    uninstall )
-      uninstall
-      ;;
-    term )
-      test_terminal
-      ;;
-    rpc )
-      test_rpc
-      ;;
-    * )
-      echo "please input either 'install', 'uninstall', 'term','rpc'"
-      exit 1
-      ;;
-    esac
+download_example(){
+  get_terminal $ARCH_PLAT $SRC
+  get_rpc $ARCH_PLAT $SRC
 }
 
-main $@
+install
+dowload_exmaple
