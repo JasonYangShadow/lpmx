@@ -70,16 +70,16 @@ if [ ! -f "/usr/bin/wget" ];then
     echo "wget dees not exist in your os, please install wget"
     exit 1
 fi
-if [ ! -f "/usr/bin/tar" ];then
-  install
-  download_example
-else
+if [ -f "/usr/bin/tar" ] || [ -f "/bin/tar" ];then
   FILE="lpmx_$ARCH_PLAT.tar.gz"
   wget $SRC/$FILE
   tar -xzvf $FILE
   mkdir -p lpmx
   mv linux/$ARCH_PLAT/* lpmx/
   mv examples lpmx/
+else
+  install
+  download_example
 fi
 
 
