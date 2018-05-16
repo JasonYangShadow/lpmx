@@ -9,10 +9,17 @@ Therefore, this project contains customized [fakechroot](https://github.com/Jaso
 2. go get -v github.com/jasonyangshadow/lpmx
 3. cd $GOPATH/src/github.com/jasonyangshadow/lpmx
 4. ./build.sh
-5. You will locate the 32bit/64bit binary under build/linux/x86_64/lpmx or build/linux/i386/lpmx 
-6. For 64bit binary, a precompiled libfakechroot.so and patchelf are already included. If there are any errors, and you could try building fakechroot and patchelf from source. Please move to these repositories [fakechroot](https://github.com/JasonYangShadow/fakechroot) and [elfpatcher](https://github.com/JasonYangShadow/patchelf). 
+5. you will find everything under folder build
 
 If there are any dependencies issues, try to install gilde and execute 'glide update' inside project folder
+
+# quick run
+1. make sure that you have wget installed on your os
+2. wget https://raw.githubusercontent.com/JasonYangShadow/lpmx/master/install.sh; chmod +x install.sh; ./install.sh
+3. you will find a folder named lpmx in your current directory containing
+   necessary files and dependencies, also examples are included
+4. if you run examples, target folder will be created under tmp folder
+
 
 # How to use it
 1. Make sure you have **memcached** installed on your os and start it with "memcached -d". As lpmx currently depends on the memcached to exchange privilges information.
