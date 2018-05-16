@@ -19,11 +19,11 @@ get_binary(){
     echo "installment script will create folder named lpmx in current directory"
     ROOT=lpmx
     mkdir -p $ROOT
-    wget $3/$2/libevent.so -P $ROOT 
-    wget $3/$2/libfakechroot.so -P $ROOT 
-    wget $3/$2/lpmx -P $ROOT 
-    wget $3/$2/memcached -P $ROOT 
-    wget $3/$2/patchelf -P $ROOT 
+    wget -N $3/$2/libevent.so -P $ROOT 
+    wget -N $3/$2/libfakechroot.so -P $ROOT 
+    wget -N $3/$2/lpmx -P $ROOT 
+    wget -N $3/$2/memcached -P $ROOT 
+    wget -N $3/$2/patchelf -P $ROOT 
     chmod 755 $ROOT/lpmx $ROOT/memcached $ROOT/patchelf
   fi
 }
@@ -36,11 +36,11 @@ get_terminal(){
   if [ -d "lpmx" ];then
     ROOT=lpmx/examples/$1/terminal
     mkdir -p $ROOT
-    wget $2/exmaples/$1/terminal/getpid.so -P $ROOT
-    wget $2/exmaples/$1/terminal/pid -P $ROOT
-    wget $2/exmaples/$1/terminal/readme.md -P $ROOT
-    wget $2/exmaples/$1/terminal/setting.yml -P $ROOT
-    wget $2/exmaples/$1/terminal/run.sh -P $ROOT
+    wget -N $2/examples/$1/terminal/getpid.so -P $ROOT
+    wget -N $2/examples/$1/terminal/pid -P $ROOT
+    wget -N $2/examples/$1/terminal/readme.md -P $ROOT
+    wget -N $2/examples/$1/terminal/setting.yml -P $ROOT
+    wget -N $2/examples/$1/terminal/run.sh -P $ROOT
     chmod 755 $ROOT/pid $ROOT/run.sh
   else
    echo "sorry, i can't find lpmx directory, seems the installment encountered
@@ -53,11 +53,11 @@ get_rpc(){
   if [ -d "lpmx" ];then
     ROOT=lpmx/examples/$1/rpc
     mkdir -p $ROOT
-    wget $2/examples/$1/rpc/readme.md -P $ROOT
-    wget $2/examples/$1/rpc/run.sh -P $ROOT
-    wget $2/examples/$1/rpc/loop1 -P $ROOT
-    wget $2/examples/$1/rpc/loop2 -P $ROOT
-    wget $2/examples/$1/rpc/setting.yml -P $ROOT
+    wget -N $2/examples/$1/rpc/readme.md -P $ROOT
+    wget -N $2/examples/$1/rpc/run.sh -P $ROOT
+    wget -N $2/examples/$1/rpc/loop1 -P $ROOT
+    wget -N $2/examples/$1/rpc/loop2 -P $ROOT
+    wget -N $2/examples/$1/rpc/setting.yml -P $ROOT
     chmod 755 $ROOT/loop1 $ROOT/loop2 $ROOT/run.sh
   else
    echo "sorry, i can't find lpmx directory, seems the installment encountered
@@ -72,4 +72,4 @@ download_example(){
 }
 
 install
-dowload_exmaple
+download_example
