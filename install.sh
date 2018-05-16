@@ -1,30 +1,5 @@
 #!/bin/bash
 
-SRC="https://raw.githubusercontent.com/JasonYangShadow/lpmx/master/build"
-if [ -f "/usr/bin/uname" ] || [ -f "/bin/uname" ]; then
-    ARCH_OS=`uname -o`
-    ARCH_PLAT=`uname -m`
-else
-    echo "your os doesn't have uname, it may not be compatible with this
-    installment script"
-    exit 1
-fi
-if [ ! -f "/usr/bin/wget" ];then
-    echo "wget dees not exist in your os, please install wget"
-    exit 1
-fi
-if [ ! -f "/usr/bin/tar" ];then
-  install
-  download_example
-else
-  FILE="lpmx_$ARCH_PLAT.tar.gz"
-  wget $SRC/$FILE
-  tar -xzvf $FILE
-  mkdir -p lpmx
-  mv linux/$ARCH_PLAT/* lpmx/
-  mv examples lpmx/
-fi
-
 get_binary(){
   if [ $1 = "GNU/Linux" ];then
     echo "installment script will create folder named lpmx in current directory"
@@ -81,4 +56,30 @@ download_example(){
   get_terminal $ARCH_PLAT $SRC
   get_rpc $ARCH_PLAT $SRC
 }
+
+SRC="https://raw.githubusercontent.com/JasonYangShadow/lpmx/master/build"
+if [ -f "/usr/bin/uname" ] || [ -f "/bin/uname" ]; then
+    ARCH_OS=`uname -o`
+    ARCH_PLAT=`uname -m`
+else
+    echo "your os doesn't have uname, it may not be compatible with this
+    installment script"
+    exit 1
+fi
+if [ ! -f "/usr/bin/wget" ];then
+    echo "wget dees not exist in your os, please install wget"
+    exit 1
+fi
+if [ ! -f "/usr/bin/tar" ];then
+  install
+  download_example
+else
+  FILE="lpmx_$ARCH_PLAT.tar.gz"
+  wget $SRC/$FILE
+  tar -xzvf $FILE
+  mkdir -p lpmx
+  mv linux/$ARCH_PLAT/* lpmx/
+  mv examples lpmx/
+fi
+
 
