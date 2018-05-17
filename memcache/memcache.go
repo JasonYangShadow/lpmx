@@ -22,7 +22,7 @@ func MInitServer() (*MemcacheInst, *Error) {
 	client := New(server)
 	if client == nil {
 		err := ErrNew(ErrServerError, fmt.Sprintf("can't create server through the config %s:%s", mem.MemcacheServerList, mem.MemcacheServerPort))
-		return nil, &err
+		return nil, err
 	}
 	mem.ClientInst = client
 	return &mem, nil
@@ -35,7 +35,7 @@ func MInitServers(server ...string) (*MemcacheInst, *Error) {
 	client := New(strings.Join(server, ","))
 	if client == nil {
 		err := ErrNew(ErrServerError, fmt.Sprintf("can't create server through the config %s", server))
-		return nil, &err
+		return nil, err
 	}
 	mem.ClientInst = client
 	return &mem, nil
@@ -45,7 +45,7 @@ func (mem *MemcacheInst) MGetStrValue(key string) (string, *Error) {
 	item, err := mem.ClientInst.Get(key)
 	if err != nil {
 		cerr := ErrNew(err, fmt.Sprintf("getStrValue returns error: %s", err.Error()))
-		return "", &cerr
+		return "", cerr
 	}
 	return string(item.Value[:]), nil
 }
@@ -55,7 +55,7 @@ func (mem *MemcacheInst) MSetStrValue(key string, value string) *Error {
 	err := mem.ClientInst.Set(item)
 	if err != nil {
 		cerr := ErrNew(err, fmt.Sprintf("setStrValue returns error: %s", err.Error()))
-		return &cerr
+		return cerr
 	}
 	return nil
 }
@@ -64,7 +64,7 @@ func (mem *MemcacheInst) MDeleteByKey(key string) *Error {
 	err := mem.ClientInst.Delete(key)
 	if err != nil {
 		cerr := ErrNew(err, fmt.Sprintf("deleteByKey returns error: %s", err.Error()))
-		return &cerr
+		return cerr
 	}
 	return nil
 }

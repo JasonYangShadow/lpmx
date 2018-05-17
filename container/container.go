@@ -31,7 +31,7 @@ const (
 var (
 	ELFOP  = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath", "change_user", "add_privilege", "remove_privilege"}
 	STATUS = []string{"RUNNING", "STOPPED"}
-	llog   = MakeLog("")
+	l, _   = LogNew("")
 )
 
 type Sys struct {
@@ -57,7 +57,6 @@ type Container struct {
 	MemcachedServerList []string
 	ShmFiles            string
 	IpcFiles            string
-	CurrentDir          string
 	UserShell           string
 	RPCPort             int
 	RPCMap              map[int]string
@@ -168,7 +167,7 @@ func List() *Error {
 				}
 			} else {
 				cerr := ErrNew(ErrType, "sys.Containers type error")
-				return &cerr
+				return cerr
 			}
 		}
 		return nil
@@ -180,7 +179,7 @@ func RPCExec(ip string, port string, timeout string, cmd string, args ...string)
 	client, err := rpc.Dial("tcp", fmt.Sprintf("%s:%s", ip, port))
 	if err != nil {
 		cerr := ErrNew(err, "tcp dial error")
-		return nil, &cerr
+		return nil, cerr
 	}
 	var req Request
 	var res Response
@@ -203,14 +202,14 @@ func RPCQuery(ip string, port string) (*Response, *Error) {
 	client, err := rpc.Dial("tcp", fmt.Sprintf("%s:%s", ip, port))
 	if err != nil {
 		cerr := ErrNew(err, "tcp dial error")
-		return nil, &cerr
+		return nil, cerr
 	}
 	var req Request
 	var res Response
 	err = client.Call("RPC.RPCQuery", req, &res)
 	if err != nil {
 		cerr := ErrNew(err, "rpc call encounters error")
-		return nil, &cerr
+		return nil, cerr
 	}
 	return &res, nil
 }
@@ -219,7 +218,7 @@ func RPCDelete(ip string, port string, pid int) (*Response, *Error) {
 	client, err := rpc.Dial("tcp", fmt.Sprintf("%s:%s", ip, port))
 	if err != nil {
 		cerr := ErrNew(err, "tcp dial error")
-		return nil, &cerr
+		return nil, cerr
 	}
 	var req Request
 	var res Response
@@ -227,7 +226,7 @@ func RPCDelete(ip string, port string, pid int) (*Response, *Error) {
 	err = client.Call("RPC.RPCDelete", req, &res)
 	if err != nil {
 		cerr := ErrNew(err, "rpc call encounters error")
-		return nil, &cerr
+		return nil, cerr
 	}
 	return &res, nil
 }
@@ -247,12 +246,12 @@ func Resume(id string) *Error {
 					}
 				} else {
 					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner with id: %s is running, can't resume", id))
-					return &cerr
+					return cerr
 				}
 			}
 		} else {
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
-			return &cerr
+			return cerr
 		}
 		return nil
 	}
@@ -282,13 +281,13 @@ func Destroy(id string) *Error {
 					delete(sys.Containers, id)
 				} else {
 					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner with id: %s is running, can't destroy", id))
-					return &cerr
+					return cerr
 				}
 				return nil
 			}
 		} else {
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
-			return &cerr
+			return cerr
 		}
 		return nil
 	}
@@ -300,60 +299,36 @@ func Run(dir string, config string, passive bool) *Error {
 	rootdir := fmt.Sprintf("%s/.lpmx", dir)
 	var con Container
 	con.RootPath = dir
-	con.CurrentDir = dir
 	con.ConfigPath = rootdir
+	con.SettingPath = config
 
 	defer func() {
 		data, _ := StructMarshal(&con)
-		WriteToFile(data, fmt.Sprintf("%s/.info", rootdir))
+		WriteToFile(data, fmt.Sprintf("%s/.info", con.ConfigPath))
 		con.Status = STOPPED
 		con.appendToSys()
 	}()
 
-	if FolderExist(rootdir) {
-		info := fmt.Sprintf("%s/.info", rootdir)
+	if FolderExist(con.ConfigPath) {
+		info := fmt.Sprintf("%s/.info", con.ConfigPath)
 		if FileExist(info) {
 			data, err := ReadFromFile(info)
 			if err == nil {
 				err := StructUnmarshal(data, &con)
 				if err != nil {
-					llog.LogFatal.Println("struct unmarshal error")
+					err.AddMsg("struct unmarshal error")
 					return err
 				}
 			} else {
-				llog.LogFatal.Println(fmt.Sprintf("read from file: %s error", info))
+				err.AddMsg(fmt.Sprintf("can't read configuration file from %s", info))
 				return err
 			}
 		} else {
-			cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist", rootdir))
-			return &cerr
+			RemoveAll(con.ConfigPath)
+			con.setupContainer()
 		}
 	} else {
-		_, err := MakeDir(rootdir)
-		if err != nil {
-			llog.LogFatal.Println(fmt.Sprintf("mkdir error: %s", rootdir))
-			return err
-		}
-		err = con.createContainer(config)
-		if err != nil {
-			llog.LogFatal.Println(fmt.Sprintf("create container error: %s", config))
-			return err
-		}
-		err = con.patchBineries()
-		if err != nil {
-			llog.LogFatal.Println("patch bineries error")
-			return err
-		}
-		err = con.appendToSys()
-		if err != nil {
-			llog.LogFatal.Println("append to sys info error")
-			return err
-		}
-		err = con.setProgPrivileges()
-		if err != nil {
-			llog.LogFatal.Println("set program privilegies encoutners error")
-			return err
-		}
+		con.setupContainer()
 	}
 
 	if passive {
@@ -361,24 +336,23 @@ func Run(dir string, config string, passive bool) *Error {
 		con.RPCPort = RandomPort(MIN, MAX)
 		err := con.appendToSys()
 		if err != nil {
-			llog.LogFatal.Println("append to sys info error")
 			return err
 		}
 		err = con.startRPCService(con.RPCPort)
 		if err != nil {
-			llog.LogFatal.Println("starting rpc service encounters error")
+			err.AddMsg("starting rpc service encounters error")
 			return err
 		}
 	} else {
 		con.Status = RUNNING
 		err := con.appendToSys()
 		if err != nil {
-			llog.LogFatal.Println("append to sys info error")
+			err.AddMsg("append to sys info error")
 			return err
 		}
 		err = con.bashShell()
 		if err != nil {
-			llog.LogFatal.Println("starting bash shell encounters error")
+			err.AddMsg("starting bash shell encounters error")
 			return err
 		}
 	}
@@ -430,7 +404,7 @@ func Set(id string, tp string, name string, value string) *Error {
 							}
 						} else {
 							cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist", val["RootPath"].(string)))
-							return &cerr
+							return cerr
 						}
 						//read info ends,  get container from file
 
@@ -444,11 +418,11 @@ func Set(id string, tp string, name string, value string) *Error {
 						case ELFOP[4]:
 							if val["Status"].(string) == STATUS[0] {
 								err_new := ErrNew(ErrStatus, "container is running now, can't change the user, please stop it firstly")
-								return &err_new
+								return err_new
 							}
 							if strings.TrimSpace(name) != "user" {
 								err_new := ErrNew(ErrType, "name should be 'user'")
-								return &err_new
+								return err_new
 							}
 							switch value {
 							case "root":
@@ -459,11 +433,11 @@ func Set(id string, tp string, name string, value string) *Error {
 								con.CurrentUser = con.CreateUser
 							default:
 								err_new := ErrNew(ErrType, "value should be either 'root','default' or 'chroot'")
-								return &err_new
+								return err_new
 							}
 						default:
 							err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user'}")
-							return &err_new
+							return err_new
 						}
 
 						//write back
@@ -475,13 +449,13 @@ func Set(id string, tp string, name string, value string) *Error {
 					return nil
 				default:
 					err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user', 'add_privilege','remove_privilege'}")
-					return &err_new
+					return err_new
 				}
 
 			}
 		} else {
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
-			return &cerr
+			return cerr
 		}
 		return nil
 	}
@@ -491,6 +465,30 @@ func Set(id string, tp string, name string, value string) *Error {
 /**
 container methods
 **/
+
+func (con *Container) setupContainer() *Error {
+	_, err := MakeDir(con.ConfigPath)
+	if err != nil {
+		return err
+	}
+	err = con.createContainer()
+	if err != nil {
+		return err
+	}
+	err = con.patchBineries()
+	if err != nil {
+		return err
+	}
+	err = con.appendToSys()
+	if err != nil {
+		return err
+	}
+	err = con.setProgPrivileges()
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 func (con *Container) refreshElf(key string, value []string, prog string) *Error {
 	switch key {
@@ -530,7 +528,7 @@ func (con *Container) refreshElf(key string, value []string, prog string) *Error
 	default:
 		{
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("key: %s doesn't exist", key))
-			return &cerr
+			return cerr
 		}
 	}
 	return nil
@@ -563,6 +561,7 @@ func (con *Container) bashShell() *Error {
 			}
 			err = ShellEnv("fakeroot", env, con.RootPath, "chroot", con.RootPath, con.UserShell)
 		} else {
+			l.Println(DEBUG, con.UserShell, env, con.RootPath)
 			err = ShellEnv(con.UserShell, env, con.RootPath)
 		}
 		if err != nil {
@@ -571,21 +570,10 @@ func (con *Container) bashShell() *Error {
 		return nil
 	}
 	cerr := ErrNew(ErrNExist, fmt.Sprintf("can't locate container root folder %s", con.RootPath))
-	return &cerr
+	return cerr
 }
 
-func (con *Container) createContainer(config string) *Error {
-	for strings.HasSuffix(con.ConfigPath, "/") {
-		con.ConfigPath = strings.TrimSuffix(con.ConfigPath, "/")
-	}
-	err := con.createSysFolders(config)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (con *Container) createSysFolders(config string) *Error {
+func (con *Container) createContainer() *Error {
 	con.Id = RandomString(IDLENGTH)
 	con.LogPath = fmt.Sprintf("%s/log", con.ConfigPath)
 	con.ElfPatcherPath = fmt.Sprintf("%s/elf", con.ConfigPath)
@@ -595,16 +583,16 @@ func (con *Container) createSysFolders(config string) *Error {
 		return err
 	}
 	con.CreateUser = strings.TrimSuffix(user, "\n")
-	con.V, con.SettingConf, err = LoadConfig(config)
+	con.V, con.SettingConf, err = LoadConfig(con.SettingPath)
 	if err != nil {
+		err.AddMsg(fmt.Sprintf("load config from %s encounters error", con.SettingPath))
 		return err
 	}
-	con.SettingPath, _ = filepath.Abs(config)
 	if sh, ok := con.SettingConf["user_shell"]; ok {
 		strsh, _ := sh.(string)
 		con.UserShell = strsh
 	} else {
-		con.UserShell = "/usr/bin/bash"
+		con.UserShell = "/bin/bash"
 	}
 	if c_user, c_ok := con.SettingConf["default_user"]; c_ok {
 		con.CurrentUser = c_user.(string)
@@ -736,7 +724,7 @@ func (con *Container) appendToSys() *Error {
 				cmap["RPCPort"] = fmt.Sprintf("%d", con.RPCPort)
 			} else {
 				cerr := ErrNew(ErrType, "interface{} type assertation error")
-				return &cerr
+				return cerr
 			}
 		} else {
 			cmap := make(map[string]string)
@@ -796,20 +784,20 @@ func (con *Container) setProgPrivileges() *Error {
 								}
 							default:
 								acm_err := ErrNew(ErrType, fmt.Sprintf("type is not right, assume: map[interfacer{}]interface{}, real: %v", ace))
-								return &acm_err
+								return acm_err
 							}
 						}
 					}
 				}
 			} else {
 				aca_err := ErrNew(ErrType, fmt.Sprintf("type is not right, assume: []interface{}, real: %v", ac))
-				return &aca_err
+				return aca_err
 			}
 		}
 		return nil
 	} else {
 		mem_err := ErrNew(err, "memcache server init error")
-		return &mem_err
+		return mem_err
 	}
 	return err
 }
@@ -819,7 +807,7 @@ func (con *Container) startRPCService(port int) *Error {
 	conn, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
 	if err != nil {
 		cerr := ErrNew(err, "start rpc service encounters error")
-		return &cerr
+		return cerr
 	}
 	env := make(map[string]string)
 	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
@@ -885,7 +873,7 @@ func walkfs(dir string) ([]string, *Error) {
 	})
 	if err != nil {
 		cerr := ErrNew(err, "walkfs encountered error")
-		return nil, &cerr
+		return nil, cerr
 	}
 	return fileList, nil
 }
@@ -903,7 +891,7 @@ func readSys(rootdir string, sys *Sys) *Error {
 		}
 	} else {
 		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist, please use command 'lpmx init' firstly", rootdir))
-		return &cerr
+		return cerr
 	}
 	return nil
 }

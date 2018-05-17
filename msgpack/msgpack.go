@@ -11,7 +11,7 @@ func StructMarshal(data interface{}) ([]byte, *Error) {
 		return mp, nil
 	} else {
 		cerr := ErrNew(err, "marshaling data error")
-		return nil, &cerr
+		return nil, cerr
 	}
 }
 
@@ -21,5 +21,5 @@ func StructUnmarshal(data []byte, vtype interface{}) *Error {
 		return nil
 	}
 	cerr := ErrNew(err, "unmarshaling to struct Container encounters error")
-	return &cerr
+	return cerr
 }

@@ -16,7 +16,12 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	llog := MakeLog(dir)
+	l, lerr := LogNew(dir)
+	if lerr != nil {
+		fmt.Println(lerr)
+		os.Exit(1)
+	}
+	LogSet(DEBUG)
 
 	var initCmd = &cobra.Command{
 		Use:   "init",
@@ -26,7 +31,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Init()
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			}
 		},
 	}
@@ -39,7 +44,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := List()
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			}
 		},
 	}
@@ -57,9 +62,8 @@ func main() {
 			RunConfig, _ = filepath.Abs(RunConfig)
 			err := Run(RunSource, RunConfig, RunPassive)
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			}
-
 		},
 	}
 	runCmd.Flags().StringVarP(&RunSource, "source", "s", "", "required")
@@ -79,9 +83,9 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			_, err := RPCExec(RExecIp, RExecPort, RExecTimeout, args[0], args[1:]...)
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			} else {
-				llog.LogInfo.Println("Done")
+				l.Println(INFO, "DONE")
 			}
 		},
 	}
@@ -101,7 +105,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			res, err := RPCQuery(RQueryIp, RQueryPort)
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			} else {
 				fmt.Println("PID", "CMD")
 				for k, v := range res.RPCMap {
@@ -126,13 +130,13 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			i, aerr := strconv.Atoi(RDeletePid)
 			if aerr != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, aerr.Error())
 			}
 			_, err := RPCDelete(RDeleteIp, RDeletePort, i)
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			} else {
-				llog.LogInfo.Println("Done")
+				l.Println(INFO, "DONE")
 			}
 		},
 	}
@@ -158,7 +162,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Resume(args[0])
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			}
 		},
 	}
@@ -171,9 +175,9 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Destroy(args[0])
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			} else {
-				llog.LogInfo.Println(fmt.Sprintf("container: %s is destroyed", args[0]))
+				l.Println(INFO, fmt.Sprintf("container: %s is destroyed", args[0]))
 			}
 		},
 	}
@@ -190,9 +194,9 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Set(SetId, SetType, SetProg, SetVal)
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			} else {
-				llog.LogInfo.Println(fmt.Sprintf("container %s is set with new environment variables", SetId))
+				l.Println(INFO, fmt.Sprintf("container %s is set with new environment variables", SetId))
 			}
 		},
 	}
