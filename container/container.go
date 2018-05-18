@@ -29,7 +29,7 @@ const (
 )
 
 var (
-	ELFOP  = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath", "change_user", "add_privilege", "remove_privilege"}
+	ELFOP  = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath", "change_user", "add_privilege", "remove_privilege", "add_map", "remove_map"}
 	STATUS = []string{"RUNNING", "STOPPED"}
 	l, _   = LogNew("")
 )
@@ -381,6 +381,13 @@ func Set(id string, tp string, name string, value string) *Error {
 			if val, vok := v.(map[string]interface{}); vok {
 				tp = strings.ToLower(strings.TrimSpace(tp))
 				switch tp {
+				case ELFOP[7], ELFOP[8]:
+					{
+						err := setMap(id, tp, name, "all")
+						if err != nil {
+							return err
+						}
+					}
 				case ELFOP[5], ELFOP[6]:
 					{
 						err := setPrivilege(id, tp, name, value)
@@ -448,7 +455,7 @@ func Set(id string, tp string, name string, value string) *Error {
 
 					return nil
 				default:
-					err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user', 'add_privilege','remove_privilege'}")
+					err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user', 'add_privilege','remove_privilege','add_map','remove_map'}")
 					return err_new
 				}
 
@@ -909,6 +916,26 @@ func setPrivilege(id string, tp string, name string, value string) *Error {
 		}
 	} else {
 		err := mem.MDeleteByKey(fmt.Sprintf("%s:%s", id, name))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func setMap(id string, tp string, name string, value string) *Error {
+	mem, err := MInitServer()
+	if err != nil {
+		return err
+	}
+
+	if tp == ELFOP[7] {
+		err := mem.MSetStrValue(fmt.Sprintf("map:%s:%s", id, name), value)
+		if err != nil {
+			return err
+		}
+	} else {
+		err := mem.MDeleteByKey(fmt.Sprintf("map:%s:%s", id, name))
 		if err != nil {
 			return err
 		}

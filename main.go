@@ -202,11 +202,11 @@ func main() {
 	}
 	setCmd.Flags().StringVarP(&SetId, "id", "i", "", "required(container id, you can get the id by command 'lpmx list')")
 	setCmd.MarkFlagRequired("id")
-	setCmd.Flags().StringVarP(&SetType, "type", "t", "", "required('add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user', 'add_privilege', 'remove_privilege')")
+	setCmd.Flags().StringVarP(&SetType, "type", "t", "", "required('add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user', 'add_privilege', 'remove_privilege','add_map','remove_map')")
 	setCmd.MarkFlagRequired("type")
 	setCmd.Flags().StringVarP(&SetProg, "name", "n", "", "required(put 'user' for operation change_user)")
 	setCmd.MarkFlagRequired("name")
-	setCmd.Flags().StringVarP(&SetVal, "value", "v", "", "value (optional for removing privilege operation)")
+	setCmd.Flags().StringVarP(&SetVal, "value", "v", "", "value (optional for removing privilege operation or removing map operation)")
 
 	var rootCmd = &cobra.Command{
 		Use:   "lpmx",
