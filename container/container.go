@@ -383,7 +383,7 @@ func Set(id string, tp string, name string, value string) *Error {
 				switch tp {
 				case ELFOP[7], ELFOP[8]:
 					{
-						err := setMap(id, tp, name, "all")
+						err := setMap(id, tp, name, value)
 						if err != nil {
 							return err
 						}
@@ -541,23 +541,54 @@ func (con *Container) refreshElf(key string, value []string, prog string) *Error
 	return nil
 }
 
-func (con *Container) bashShell() *Error {
-	if FolderExist(con.RootPath) {
-		env := make(map[string]string)
-		env["ContainerId"] = con.Id
-		env["ContainerRoot"] = con.RootPath
-		env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
-		if ld, ok := con.SettingConf["ld_preload_path"]; ok {
-			env["LD_LIBRARY_PATH"] = ld.(string)
+func (con *Container) genEnv() (map[string]string, *Error) {
+	env := make(map[string]string)
+	env["ContainerId"] = con.Id
+	env["ContainerRoot"] = con.RootPath
+	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
+	if ld, ld_ok := con.SettingConf["ld_preload_path"]; ld_ok {
+		env["LD_LIBRARY_PATH"] = ld.(string)
+	}
+	if data, data_ok := con.SettingConf["export_env"]; data_ok {
+		if d1, o1 := data.([]interface{}); o1 {
+			for _, d1_1 := range d1 {
+				if d1_11, o1_11 := d1_1.(interface{}); o1_11 {
+					for k, v := range d1_11.(map[interface{}]interface{}) {
+						if v1, vo1 := v.([]interface{}); vo1 {
+							var libs []string
+							for _, vv1 := range v1 {
+								vv1_abs, _ := filepath.Abs(vv1.(string))
+								libs = append(libs, vv1_abs)
+							}
+							if k1, ok1 := k.(string); ok1 {
+								env[k1] = strings.Join(libs, ";")
+							}
+						}
+					}
+				}
+			}
 		}
-		var err *Error
+
+	}
+	return env, nil
+}
+
+func (con *Container) bashShell() *Error {
+	env, err := con.genEnv()
+	if err != nil {
+		return err
+	}
+	if FolderExist(con.RootPath) {
 		if con.CurrentUser == "root" {
-			err = ShellEnv("fakeroot", env, con.RootPath, con.UserShell)
+			err := ShellEnv("fakeroot", env, con.RootPath, con.UserShell)
+			if err != nil {
+				return err
+			}
 		} else if con.CurrentUser == "chroot" {
 			env["ContainerMode"] = "chroot"
 			shell := fmt.Sprintf("%s/%s", con.RootPath, con.UserShell)
 			if !FileExist(shell) {
-				_, err = MakeDir(filepath.Dir(shell))
+				_, err := MakeDir(filepath.Dir(shell))
 				if err != nil {
 					return err
 				}
@@ -767,6 +798,8 @@ func (con *Container) setProgPrivileges() *Error {
 		}
 	}
 	if err == nil {
+
+		//set allow_list env
 		if ac, ac_ok := con.SettingConf["allow_list"]; ac_ok {
 			if aca, aca_ok := ac.([]interface{}); aca_ok {
 				for _, ace := range aca {
@@ -790,17 +823,54 @@ func (con *Container) setProgPrivileges() *Error {
 									}
 								}
 							default:
-								acm_err := ErrNew(ErrType, fmt.Sprintf("type is not right, assume: map[interfacer{}]interface{}, real: %v", ace))
+								acm_err := ErrNew(ErrType, fmt.Sprintf("allow_list: type is not right, assume: map[interfacer{}]interface{}, real: %v", ace))
 								return acm_err
 							}
 						}
 					}
 				}
 			} else {
-				aca_err := ErrNew(ErrType, fmt.Sprintf("type is not right, assume: []interface{}, real: %v", ac))
+				aca_err := ErrNew(ErrType, fmt.Sprintf("allow_list: type is not right, assume: []interface{}, real: %v", ac))
 				return aca_err
 			}
 		}
+
+		//set add_map
+		if ac, ac_ok := con.SettingConf["add_map"]; ac_ok {
+			if aca, aca_ok := ac.([]interface{}); aca_ok {
+				for _, ace := range aca {
+					if acm, acm_ok := ace.(map[interface{}]interface{}); acm_ok {
+						for k, v := range acm {
+							switch v.(type) {
+							case string:
+								mem_err := mem.MSetStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), v.(string))
+								if mem_err != nil {
+									return mem_err
+								}
+							case interface{}:
+								if acs, acs_ok := v.([]interface{}); acs_ok {
+									value := ""
+									for _, acl := range acs {
+										value = fmt.Sprintf("%s;%s", acl.(string), value)
+									}
+									mem_err := mem.MSetStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), value)
+									if mem_err != nil {
+										return mem_err
+									}
+								}
+							default:
+								acm_err := ErrNew(ErrType, fmt.Sprintf("add_map: type is not right, assume: map[interfacer{}]interface{}, real: %v", ace))
+								return acm_err
+							}
+						}
+					}
+				}
+			} else {
+				aca_err := ErrNew(ErrType, fmt.Sprintf("add_map: type is not right, assume: []interface{}, real: %v", ac))
+				return aca_err
+			}
+		}
+
 		return nil
 	} else {
 		mem_err := ErrNew(err, "memcache server init error")
