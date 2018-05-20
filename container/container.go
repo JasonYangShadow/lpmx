@@ -1032,16 +1032,11 @@ func setMap(id string, tp string, name string, value string) *Error {
 }
 
 func guessPath(base string, in string) string {
-	if FileExist(in) {
-		str, _ := filepath.Abs(in)
+	if strings.HasPrefix(in, "/") {
+		str := fmt.Sprintf("%s%s", base, in)
 		return str
 	} else {
-		if strings.HasPrefix(in, "/") {
-			str := fmt.Sprintf("%s%s", base, in)
-			return str
-		} else {
-			str := fmt.Sprintf("%s/%s", base, in)
-			return str
-		}
+		str := fmt.Sprintf("%s/%s", base, in)
+		return str
 	}
 }
