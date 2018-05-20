@@ -4,7 +4,12 @@ import (
 	"fmt"
 	. "github.com/bradfitz/gomemcache/memcache"
 	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/log"
 	"strings"
+)
+
+var (
+	l, _ = LogNew("")
 )
 
 type MemcacheInst struct {
@@ -61,19 +66,16 @@ func (mem *MemcacheInst) MSetStrValue(key string, value string) *Error {
 }
 
 func (mem *MemcacheInst) MUpdateStrValue(key string, value string) *Error {
-	item, err := mem.ClientInst.Get(key)
-	if err != nil {
-		cerr := ErrNew(err, fmt.Sprintf("getStrValue returns error: %s", err.Error()))
-		return cerr
-	}
-	src_value := string(item.Value[:])
-	if src_value == "" {
+	item, _ := mem.ClientInst.Get(key)
+	if item == nil {
 		err := mem.MSetStrValue(key, value)
 		if err != nil {
 			return err
 		}
 		return nil
 	}
+
+	src_value := string(item.Value[:])
 	if strings.Contains(src_value, value) == false {
 		if strings.HasSuffix(src_value, ";") {
 			src_value = fmt.Sprintf("%s%s", src_value, value)

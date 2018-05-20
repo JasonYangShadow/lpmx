@@ -72,6 +72,25 @@ func main() {
 	runCmd.MarkFlagRequired("config")
 	runCmd.Flags().BoolVarP(&RunPassive, "passive", "p", false, "optional")
 
+	var GetId string
+	var GetName string
+	var getCmd = &cobra.Command{
+		Use:   "get",
+		Short: "get settings from memcache server",
+		Long:  "get command is the basic command of lpmx, which is used for getting settings from cache server",
+		Args:  cobra.ExactArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			err := Get(GetId, GetName)
+			if err != nil {
+				l.Println(ERROR, err.Error())
+			}
+		},
+	}
+	getCmd.Flags().StringVarP(&GetId, "id", "i", "", "required")
+	getCmd.MarkFlagRequired("id")
+	getCmd.Flags().StringVarP(&GetName, "name", "n", "", "required")
+	getCmd.MarkFlagRequired("name")
+
 	var RExecIp string
 	var RExecPort string
 	var RExecTimeout string
@@ -212,6 +231,6 @@ func main() {
 		Use:   "lpmx",
 		Short: "lpmx rootless container",
 	}
-	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, runCmd, setCmd, resumeCmd, rpcCmd)
+	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, runCmd, setCmd, resumeCmd, rpcCmd, getCmd)
 	rootCmd.Execute()
 }
