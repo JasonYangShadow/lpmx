@@ -828,7 +828,7 @@ func (con *Container) appendToSys() *Error {
 			cmap["RPCPort"] = fmt.Sprintf("%d", con.RPCPort)
 			sys.Containers[con.Id] = cmap
 		}
-		sys.MemcachedPid = fmt.Sprintf("%s/.memcache.pid", sys.RootDir)
+		sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", currdir)
 		servers := []string{sys.MemcachedPid}
 		con.MemcachedServerList = servers
 		con.SysDir = sys.RootDir
