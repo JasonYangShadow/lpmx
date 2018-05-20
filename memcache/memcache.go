@@ -60,6 +60,34 @@ func (mem *MemcacheInst) MSetStrValue(key string, value string) *Error {
 	return nil
 }
 
+func (mem *MemcacheInst) MUpdateStrValue(key string, value string) *Error {
+	item, err := mem.ClientInst.Get(key)
+	if err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("getStrValue returns error: %s", err.Error()))
+		return cerr
+	}
+	src_value := string(item.Value[:])
+	if src_value == "" {
+		err := mem.MSetStrValue(key, value)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	if strings.Contains(src_value, value) == false {
+		if strings.HasSuffix(src_value, ";") {
+			src_value = fmt.Sprintf("%s%s", src_value, value)
+		} else {
+			src_value = fmt.Sprintf("%s;%s", src_value, value)
+		}
+		err := mem.MSetStrValue(key, src_value)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (mem *MemcacheInst) MDeleteByKey(key string) *Error {
 	err := mem.ClientInst.Delete(key)
 	if err != nil {

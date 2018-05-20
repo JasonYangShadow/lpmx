@@ -557,7 +557,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 						if v1, vo1 := v.([]interface{}); vo1 {
 							var libs []string
 							for _, vv1 := range v1 {
-								vv1_abs, _ := filepath.Abs(vv1.(string))
+								vv1_abs := guessPath(con.RootPath, vv1.(string))
 								libs = append(libs, vv1_abs)
 							}
 							if k1, ok1 := k.(string); ok1 {
@@ -569,6 +569,24 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 			}
 		}
 
+	}
+
+	if _, l_switch_ok := con.SettingConf["__log_switch"]; l_switch_ok {
+		env["__LOG_SWITCH"] = "TRUE"
+	}
+	if l_level, l_level_ok := con.SettingConf["__log_level"]; l_level_ok {
+		switch l_level {
+		case "DEBUG":
+			env["__LOG_LEVEL"] = "0"
+		case "INFO":
+			env["__LOG_LEVEL"] = "1"
+		case "WARN":
+			env["__LOG_LEVEL"] = "2"
+		case "ERROR":
+			env["__LOG_LEVEL"] = "3"
+		case "FATAL":
+			env["__LOG_LEVEL"] = "4"
+		}
 	}
 	return env, nil
 }
@@ -683,11 +701,11 @@ func (con *Container) patchBineries() *Error {
 								if v1, vo1 := v.([]interface{}); vo1 {
 									var libs []string
 									for _, vv1 := range v1 {
-										vv1_abs, _ := filepath.Abs(vv1.(string))
+										vv1_abs := guessPath(con.RootPath, vv1.(string))
 										libs = append(libs, vv1_abs)
 									}
 									if k1, ok1 := k.(string); ok1 {
-										k1_abs, _ := filepath.Abs(k1)
+										k1_abs := guessPath(con.RootPath, k1)
 										if FileExist(k1_abs) {
 											err := con.refreshElf(op, libs, k1_abs)
 											if err != nil {
@@ -709,12 +727,12 @@ func (con *Container) patchBineries() *Error {
 								var libs []string
 								if v1, vo1 := v.([]interface{}); vo1 {
 									for _, vv1 := range v1 {
-										vv1_abs, _ := filepath.Abs(vv1.(string))
+										vv1_abs := guessPath(con.RootPath, vv1.(string))
 										libs = append(libs, vv1_abs)
 									}
 								}
 
-								k_abs, _ := filepath.Abs(k.(string))
+								k_abs := guessPath(con.RootPath, k.(string))
 								if FileExist(k_abs) {
 									err := con.refreshElf(op, libs, k_abs)
 									if err != nil {
@@ -807,7 +825,7 @@ func (con *Container) setProgPrivileges() *Error {
 						for k, v := range acm {
 							switch v.(type) {
 							case string:
-								mem_err := mem.MSetStrValue(fmt.Sprintf("%s:%s", con.Id, k), v.(string))
+								mem_err := mem.MUpdateStrValue(fmt.Sprintf("%s:%s", con.Id, k), v.(string))
 								if mem_err != nil {
 									return mem_err
 								}
@@ -817,7 +835,7 @@ func (con *Container) setProgPrivileges() *Error {
 									for _, acl := range acs {
 										value = fmt.Sprintf("%s;%s", acl.(string), value)
 									}
-									mem_err := mem.MSetStrValue(fmt.Sprintf("%s:%s", con.Id, k), value)
+									mem_err := mem.MUpdateStrValue(fmt.Sprintf("%s:%s", con.Id, k), value)
 									if mem_err != nil {
 										return mem_err
 									}
@@ -843,7 +861,7 @@ func (con *Container) setProgPrivileges() *Error {
 						for k, v := range acm {
 							switch v.(type) {
 							case string:
-								mem_err := mem.MSetStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), v.(string))
+								mem_err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), v.(string))
 								if mem_err != nil {
 									return mem_err
 								}
@@ -853,7 +871,7 @@ func (con *Container) setProgPrivileges() *Error {
 									for _, acl := range acs {
 										value = fmt.Sprintf("%s;%s", acl.(string), value)
 									}
-									mem_err := mem.MSetStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), value)
+									mem_err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), value)
 									if mem_err != nil {
 										return mem_err
 									}
@@ -980,7 +998,7 @@ func setPrivilege(id string, tp string, name string, value string) *Error {
 	}
 
 	if tp == ELFOP[5] {
-		err := mem.MSetStrValue(fmt.Sprintf("%s:%s", id, name), value)
+		err := mem.MUpdateStrValue(fmt.Sprintf("%s:%s", id, name), value)
 		if err != nil {
 			return err
 		}
@@ -1000,7 +1018,7 @@ func setMap(id string, tp string, name string, value string) *Error {
 	}
 
 	if tp == ELFOP[7] {
-		err := mem.MSetStrValue(fmt.Sprintf("map:%s:%s", id, name), value)
+		err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", id, name), value)
 		if err != nil {
 			return err
 		}
@@ -1011,4 +1029,19 @@ func setMap(id string, tp string, name string, value string) *Error {
 		}
 	}
 	return nil
+}
+
+func guessPath(base string, in string) string {
+	if FileExist(in) {
+		str, _ := filepath.Abs(in)
+		return str
+	} else {
+		if strings.HasPrefix(in, "/") {
+			str := fmt.Sprintf("%s%s", base, in)
+			return str
+		} else {
+			str := fmt.Sprintf("%s/%s", base, in)
+			return str
+		}
+	}
 }
