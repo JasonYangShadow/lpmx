@@ -35,7 +35,8 @@ var (
 )
 
 type Sys struct {
-	RootDir      string
+	RootDir      string // the abs path of folder .lpmxsys
+	BinaryDir    string // the folder cotnainers .lpmxsys and binaries
 	Containers   map[string]interface{}
 	LogPath      string
 	MemcachedPid string
@@ -122,6 +123,7 @@ func Init() *Error {
 	var sys Sys
 	config := fmt.Sprintf("%s/.lpmxsys", currdir)
 	sys.RootDir = config
+	sys.BinaryDir = currdir
 	sys.LogPath = fmt.Sprintf("%s/log", sys.RootDir)
 
 	defer func() {
@@ -569,9 +571,8 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["ContainerRoot"] = con.RootPath
 	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
 	env["LD_LIBRARY_PATH"] = con.SysDir
-	//if ld, ld_ok := con.SettingConf["ld_preload_path"]; ld_ok {
-	//	env["LD_LIBRARY_PATH"] = ld.(string)
-	//}
+	l.Println(DEBUG, con.SysDir, con.MemcachedServerList)
+	env["MEMCACHED_PID"] = con.MemcachedServerList[0]
 	if data, data_ok := con.SettingConf["export_env"]; data_ok {
 		if d1, o1 := data.([]interface{}); o1 {
 			for _, d1_1 := range d1 {
@@ -579,6 +580,11 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 					switch d1_11.(type) {
 					case map[interface{}]interface{}:
 						for k, v := range d1_11.(map[interface{}]interface{}) {
+							if v1, vo1 := v.(string); vo1 {
+								if k1, ko1 := k.(string); ko1 {
+									env[k1] = guessPath(con.RootPath, v1)
+								}
+							}
 							if v1, vo1 := v.([]interface{}); vo1 {
 								var libs []string
 								for _, vv1 := range v1 {
@@ -592,6 +598,9 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 						}
 					case map[string]interface{}:
 						for k, v := range d1_11.(map[string]interface{}) {
+							if v1, vo1 := v.(string); vo1 {
+								env[k] = guessPath(con.RootPath, v1)
+							}
 							if v1, vo1 := v.([]interface{}); vo1 {
 								var libs []string
 								for _, vv1 := range v1 {
@@ -607,6 +616,9 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 			}
 		}
 
+	}
+	if path_value, path_ok := env["PATH"]; path_ok {
+		env["PATH"] = strings.Replace(path_value, ";", ":", -1)
 	}
 
 	if _, l_switch_ok := con.SettingConf["__log_switch"]; l_switch_ok {
@@ -831,7 +843,7 @@ func (con *Container) appendToSys() *Error {
 		sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", currdir)
 		servers := []string{sys.MemcachedPid}
 		con.MemcachedServerList = servers
-		con.SysDir = sys.RootDir
+		con.SysDir = sys.BinaryDir
 		data, _ := StructMarshal(&sys)
 		err := WriteToFile(data, fmt.Sprintf("%s/.info", sys.RootDir))
 		if err != nil {
@@ -846,7 +858,6 @@ func (con *Container) appendToSys() *Error {
 func (con *Container) setProgPrivileges() *Error {
 	var mem *MemcacheInst
 	var err *Error
-	l.Println(DEBUG, fmt.Sprintf("set prog privileges %s", con))
 	if len(con.MemcachedServerList) > 0 {
 		mem, err = MInitServers(con.MemcachedServerList[0:]...)
 		if err != nil {
@@ -1101,6 +1112,9 @@ func getMap(id string, name string, server string) (string, *Error) {
 }
 
 func guessPath(base string, in string) string {
+	if strings.HasPrefix(in, "$") {
+		return strings.TrimPrefix(in, "$")
+	}
 	if strings.HasPrefix(in, "/") {
 		str := fmt.Sprintf("%s%s", base, in)
 		return str
