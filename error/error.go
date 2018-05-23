@@ -1,6 +1,8 @@
 package error
 
 import (
+	"bytes"
+	"container/list"
 	"errors"
 	"fmt"
 )
@@ -24,14 +26,26 @@ var (
 
 type Error struct {
 	Err error
-	Msg string
+	Msg *list.List
 }
 
-func ErrNew(err error, msg string) Error {
-	cerr := Error{err, msg}
+func ErrNew(err error, msg string) *Error {
+	cerr := new(Error)
+	cerr.Err = err
+	cerr.Msg = list.New()
+	cerr.Msg.PushBack(msg)
 	return cerr
 }
 
 func (e *Error) Error() string {
-	return fmt.Sprintf("{\"ErrType\":\"%s\", \"ErrMsg\":\"%s\"}", e.Err.Error(), e.Msg)
+	var buffer bytes.Buffer
+	for m := e.Msg.Front(); m != nil; m = m.Next() {
+		buffer.WriteString(m.Value.(string))
+		buffer.WriteString("\n")
+	}
+	return fmt.Sprintf("[ErrType: %s], [ErrMsg: \n%s]", e.Err.Error(), buffer.String())
+}
+
+func (e *Error) AddMsg(str string) {
+	e.Msg.PushBack(str)
 }

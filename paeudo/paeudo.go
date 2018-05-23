@@ -18,7 +18,7 @@ func Command(cmdStr string, arg ...string) (string, *Error) {
 	err := cmd.Run()
 	if err != nil {
 		cerr := ErrNew(err, "cmd running error")
-		return "", &cerr
+		return "", cerr
 	}
 	return out.String(), nil
 }
@@ -46,7 +46,7 @@ func CommandEnv(cmdStr string, env map[string]string, dir string, arg ...string)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		cerr := ErrNew(err, string(out))
-		return "", &cerr
+		return "", cerr
 	} else {
 		return string(out), nil
 	}
@@ -56,7 +56,7 @@ func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Erro
 	shpath, err := exec.LookPath(sh)
 	if err != nil {
 		cerr := ErrNew(ErrNil, fmt.Sprintf("shell: %s doesn't exist", sh))
-		return &cerr
+		return cerr
 	} else {
 		cmd := exec.Command(shpath, arg...)
 		var envstrs []string
@@ -72,7 +72,7 @@ func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Erro
 		err := cmd.Run()
 		if err != nil {
 			cerr := ErrNew(err, "cmd running error")
-			return &cerr
+			return cerr
 		}
 	}
 	return nil
@@ -83,13 +83,13 @@ func ProcessContextEnv(sh string, env map[string]string, dir string, timeout str
 	shpath, err := exec.LookPath(sh)
 	if err != nil {
 		cerr := ErrNew(ErrNil, fmt.Sprintf("shell: %s doesn't exist", sh))
-		return -1, &cerr
+		return -1, cerr
 	}
 	if strings.TrimSpace(timeout) != "" {
 		t, terr := time.ParseDuration(timeout)
 		if terr != nil {
 			cerr := ErrNew(terr, "time parse error")
-			return -1, &cerr
+			return -1, cerr
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), t)
 		defer cancel()
@@ -110,7 +110,7 @@ func ProcessContextEnv(sh string, env map[string]string, dir string, timeout str
 	err = cmd.Start()
 	if err != nil {
 		cerr := ErrNew(err, "cmd running error")
-		return -1, &cerr
+		return -1, cerr
 	}
 	return cmd.Process.Pid, nil
 }

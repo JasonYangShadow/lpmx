@@ -22,7 +22,7 @@ fi
 echo "restarting memcached server"
 export LD_PRELOAD=$BINARY/libevent.so
 cd $BINARY
-./memcached -d
+./memcached -s $BINARY/.memcached.pid -a 0600 -d
 NEW_MEM_PID=`ps -aux|grep memcached|grep -v "grep"|awk '{print $2}'`
 if [ -n "$NEW_MEM_PID" ];then
   echo "memcached instance is restarted with new pid $NEW_MEM_PID"

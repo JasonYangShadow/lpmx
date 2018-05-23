@@ -4,7 +4,12 @@ import (
 	"fmt"
 	. "github.com/bradfitz/gomemcache/memcache"
 	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/log"
 	"strings"
+)
+
+var (
+	l, _ = LogNew("")
 )
 
 type MemcacheInst struct {
@@ -22,7 +27,7 @@ func MInitServer() (*MemcacheInst, *Error) {
 	client := New(server)
 	if client == nil {
 		err := ErrNew(ErrServerError, fmt.Sprintf("can't create server through the config %s:%s", mem.MemcacheServerList, mem.MemcacheServerPort))
-		return nil, &err
+		return nil, err
 	}
 	mem.ClientInst = client
 	return &mem, nil
@@ -35,7 +40,7 @@ func MInitServers(server ...string) (*MemcacheInst, *Error) {
 	client := New(strings.Join(server, ","))
 	if client == nil {
 		err := ErrNew(ErrServerError, fmt.Sprintf("can't create server through the config %s", server))
-		return nil, &err
+		return nil, err
 	}
 	mem.ClientInst = client
 	return &mem, nil
@@ -45,7 +50,7 @@ func (mem *MemcacheInst) MGetStrValue(key string) (string, *Error) {
 	item, err := mem.ClientInst.Get(key)
 	if err != nil {
 		cerr := ErrNew(err, fmt.Sprintf("getStrValue returns error: %s", err.Error()))
-		return "", &cerr
+		return "", cerr
 	}
 	return string(item.Value[:]), nil
 }
@@ -55,7 +60,32 @@ func (mem *MemcacheInst) MSetStrValue(key string, value string) *Error {
 	err := mem.ClientInst.Set(item)
 	if err != nil {
 		cerr := ErrNew(err, fmt.Sprintf("setStrValue returns error: %s", err.Error()))
-		return &cerr
+		return cerr
+	}
+	return nil
+}
+
+func (mem *MemcacheInst) MUpdateStrValue(key string, value string) *Error {
+	item, _ := mem.ClientInst.Get(key)
+	if item == nil {
+		err := mem.MSetStrValue(key, value)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	src_value := string(item.Value[:])
+	if strings.Contains(src_value, value) == false {
+		if strings.HasSuffix(src_value, ";") {
+			src_value = fmt.Sprintf("%s%s", src_value, value)
+		} else {
+			src_value = fmt.Sprintf("%s;%s", src_value, value)
+		}
+		err := mem.MSetStrValue(key, src_value)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -64,7 +94,7 @@ func (mem *MemcacheInst) MDeleteByKey(key string) *Error {
 	err := mem.ClientInst.Delete(key)
 	if err != nil {
 		cerr := ErrNew(err, fmt.Sprintf("deleteByKey returns error: %s", err.Error()))
-		return &cerr
+		return cerr
 	}
 	return nil
 }

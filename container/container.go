@@ -29,15 +29,17 @@ const (
 )
 
 var (
-	ELFOP  = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath", "change_user", "add_privilege", "remove_privilege"}
+	ELFOP  = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath", "change_user", "add_privilege", "remove_privilege", "add_map", "remove_map"}
 	STATUS = []string{"RUNNING", "STOPPED"}
-	llog   = MakeLog("")
+	l, _   = LogNew("")
 )
 
 type Sys struct {
-	RootDir    string
-	Containers map[string]interface{}
-	LogPath    string
+	RootDir      string // the abs path of folder .lpmxsys
+	BinaryDir    string // the folder cotnainers .lpmxsys and binaries
+	Containers   map[string]interface{}
+	LogPath      string
+	MemcachedPid string
 }
 
 type Container struct {
@@ -50,6 +52,7 @@ type Container struct {
 	FakechrootPath      string
 	SettingConf         map[string]interface{}
 	SettingPath         string
+	SysDir              string //dir of lpmx set by appendToSys function
 	StartTime           string
 	ContainerName       string
 	CreateUser          string
@@ -57,7 +60,6 @@ type Container struct {
 	MemcachedServerList []string
 	ShmFiles            string
 	IpcFiles            string
-	CurrentDir          string
 	UserShell           string
 	RPCPort             int
 	RPCMap              map[int]string
@@ -121,6 +123,7 @@ func Init() *Error {
 	var sys Sys
 	config := fmt.Sprintf("%s/.lpmxsys", currdir)
 	sys.RootDir = config
+	sys.BinaryDir = currdir
 	sys.LogPath = fmt.Sprintf("%s/log", sys.RootDir)
 
 	defer func() {
@@ -168,7 +171,7 @@ func List() *Error {
 				}
 			} else {
 				cerr := ErrNew(ErrType, "sys.Containers type error")
-				return &cerr
+				return cerr
 			}
 		}
 		return nil
@@ -180,7 +183,7 @@ func RPCExec(ip string, port string, timeout string, cmd string, args ...string)
 	client, err := rpc.Dial("tcp", fmt.Sprintf("%s:%s", ip, port))
 	if err != nil {
 		cerr := ErrNew(err, "tcp dial error")
-		return nil, &cerr
+		return nil, cerr
 	}
 	var req Request
 	var res Response
@@ -203,14 +206,14 @@ func RPCQuery(ip string, port string) (*Response, *Error) {
 	client, err := rpc.Dial("tcp", fmt.Sprintf("%s:%s", ip, port))
 	if err != nil {
 		cerr := ErrNew(err, "tcp dial error")
-		return nil, &cerr
+		return nil, cerr
 	}
 	var req Request
 	var res Response
 	err = client.Call("RPC.RPCQuery", req, &res)
 	if err != nil {
 		cerr := ErrNew(err, "rpc call encounters error")
-		return nil, &cerr
+		return nil, cerr
 	}
 	return &res, nil
 }
@@ -219,7 +222,7 @@ func RPCDelete(ip string, port string, pid int) (*Response, *Error) {
 	client, err := rpc.Dial("tcp", fmt.Sprintf("%s:%s", ip, port))
 	if err != nil {
 		cerr := ErrNew(err, "tcp dial error")
-		return nil, &cerr
+		return nil, cerr
 	}
 	var req Request
 	var res Response
@@ -227,7 +230,7 @@ func RPCDelete(ip string, port string, pid int) (*Response, *Error) {
 	err = client.Call("RPC.RPCDelete", req, &res)
 	if err != nil {
 		cerr := ErrNew(err, "rpc call encounters error")
-		return nil, &cerr
+		return nil, cerr
 	}
 	return &res, nil
 }
@@ -247,12 +250,12 @@ func Resume(id string) *Error {
 					}
 				} else {
 					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner with id: %s is running, can't resume", id))
-					return &cerr
+					return cerr
 				}
 			}
 		} else {
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
-			return &cerr
+			return cerr
 		}
 		return nil
 	}
@@ -282,13 +285,13 @@ func Destroy(id string) *Error {
 					delete(sys.Containers, id)
 				} else {
 					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner with id: %s is running, can't destroy", id))
-					return &cerr
+					return cerr
 				}
 				return nil
 			}
 		} else {
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
-			return &cerr
+			return cerr
 		}
 		return nil
 	}
@@ -300,60 +303,36 @@ func Run(dir string, config string, passive bool) *Error {
 	rootdir := fmt.Sprintf("%s/.lpmx", dir)
 	var con Container
 	con.RootPath = dir
-	con.CurrentDir = dir
 	con.ConfigPath = rootdir
+	con.SettingPath = config
 
 	defer func() {
 		data, _ := StructMarshal(&con)
-		WriteToFile(data, fmt.Sprintf("%s/.info", rootdir))
+		WriteToFile(data, fmt.Sprintf("%s/.info", con.ConfigPath))
 		con.Status = STOPPED
 		con.appendToSys()
 	}()
 
-	if FolderExist(rootdir) {
-		info := fmt.Sprintf("%s/.info", rootdir)
+	if FolderExist(con.ConfigPath) {
+		info := fmt.Sprintf("%s/.info", con.ConfigPath)
 		if FileExist(info) {
 			data, err := ReadFromFile(info)
 			if err == nil {
 				err := StructUnmarshal(data, &con)
 				if err != nil {
-					llog.LogFatal.Println("struct unmarshal error")
+					err.AddMsg("struct unmarshal error")
 					return err
 				}
 			} else {
-				llog.LogFatal.Println(fmt.Sprintf("read from file: %s error", info))
+				err.AddMsg(fmt.Sprintf("can't read configuration file from %s", info))
 				return err
 			}
 		} else {
-			cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist", rootdir))
-			return &cerr
+			RemoveAll(con.ConfigPath)
+			con.setupContainer()
 		}
 	} else {
-		_, err := MakeDir(rootdir)
-		if err != nil {
-			llog.LogFatal.Println(fmt.Sprintf("mkdir error: %s", rootdir))
-			return err
-		}
-		err = con.createContainer(config)
-		if err != nil {
-			llog.LogFatal.Println(fmt.Sprintf("create container error: %s", config))
-			return err
-		}
-		err = con.patchBineries()
-		if err != nil {
-			llog.LogFatal.Println("patch bineries error")
-			return err
-		}
-		err = con.appendToSys()
-		if err != nil {
-			llog.LogFatal.Println("append to sys info error")
-			return err
-		}
-		err = con.setProgPrivileges()
-		if err != nil {
-			llog.LogFatal.Println("set program privilegies encoutners error")
-			return err
-		}
+		con.setupContainer()
 	}
 
 	if passive {
@@ -361,24 +340,23 @@ func Run(dir string, config string, passive bool) *Error {
 		con.RPCPort = RandomPort(MIN, MAX)
 		err := con.appendToSys()
 		if err != nil {
-			llog.LogFatal.Println("append to sys info error")
 			return err
 		}
 		err = con.startRPCService(con.RPCPort)
 		if err != nil {
-			llog.LogFatal.Println("starting rpc service encounters error")
+			err.AddMsg("starting rpc service encounters error")
 			return err
 		}
 	} else {
 		con.Status = RUNNING
 		err := con.appendToSys()
 		if err != nil {
-			llog.LogFatal.Println("append to sys info error")
+			err.AddMsg("append to sys info error")
 			return err
 		}
 		err = con.bashShell()
 		if err != nil {
-			llog.LogFatal.Println("starting bash shell encounters error")
+			err.AddMsg("starting bash shell encounters error")
 			return err
 		}
 	}
@@ -396,6 +374,26 @@ func Run(dir string, config string, passive bool) *Error {
 	return nil
 }
 
+func Get(id string, name string) *Error {
+	currdir, _ := filepath.Abs(filepath.Dir("."))
+	var sys Sys
+	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	err := readSys(rootdir, &sys)
+
+	if err == nil {
+		if _, ok := sys.Containers[id]; ok {
+			fmt.Println(fmt.Sprintf("%s%25s%25s%25s", "ContainerID", "PROGRAM", "PRIVILEGES", "REMAP"))
+			p_val, _ := getPrivilege(id, name, sys.MemcachedPid)
+			m_val, _ := getMap(id, name, sys.MemcachedPid)
+			fmt.Println(fmt.Sprintf("%s%25s%25s%25s", id, name, p_val, m_val))
+		} else {
+			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
+			return cerr
+		}
+	}
+	return err
+}
+
 func Set(id string, tp string, name string, value string) *Error {
 	currdir, _ := filepath.Abs(filepath.Dir("."))
 	var sys Sys
@@ -407,9 +405,16 @@ func Set(id string, tp string, name string, value string) *Error {
 			if val, vok := v.(map[string]interface{}); vok {
 				tp = strings.ToLower(strings.TrimSpace(tp))
 				switch tp {
+				case ELFOP[7], ELFOP[8]:
+					{
+						err := setMap(id, tp, name, value, sys.MemcachedPid)
+						if err != nil {
+							return err
+						}
+					}
 				case ELFOP[5], ELFOP[6]:
 					{
-						err := setPrivilege(id, tp, name, value)
+						err := setPrivilege(id, tp, name, value, sys.MemcachedPid)
 						if err != nil {
 							return err
 						}
@@ -430,7 +435,7 @@ func Set(id string, tp string, name string, value string) *Error {
 							}
 						} else {
 							cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist", val["RootPath"].(string)))
-							return &cerr
+							return cerr
 						}
 						//read info ends,  get container from file
 
@@ -444,11 +449,11 @@ func Set(id string, tp string, name string, value string) *Error {
 						case ELFOP[4]:
 							if val["Status"].(string) == STATUS[0] {
 								err_new := ErrNew(ErrStatus, "container is running now, can't change the user, please stop it firstly")
-								return &err_new
+								return err_new
 							}
 							if strings.TrimSpace(name) != "user" {
 								err_new := ErrNew(ErrType, "name should be 'user'")
-								return &err_new
+								return err_new
 							}
 							switch value {
 							case "root":
@@ -459,11 +464,11 @@ func Set(id string, tp string, name string, value string) *Error {
 								con.CurrentUser = con.CreateUser
 							default:
 								err_new := ErrNew(ErrType, "value should be either 'root','default' or 'chroot'")
-								return &err_new
+								return err_new
 							}
 						default:
 							err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user'}")
-							return &err_new
+							return err_new
 						}
 
 						//write back
@@ -474,14 +479,14 @@ func Set(id string, tp string, name string, value string) *Error {
 
 					return nil
 				default:
-					err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user', 'add_privilege','remove_privilege'}")
-					return &err_new
+					err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user', 'add_privilege','remove_privilege','add_map','remove_map'}")
+					return err_new
 				}
 
 			}
 		} else {
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
-			return &cerr
+			return cerr
 		}
 		return nil
 	}
@@ -491,6 +496,30 @@ func Set(id string, tp string, name string, value string) *Error {
 /**
 container methods
 **/
+
+func (con *Container) setupContainer() *Error {
+	_, err := MakeDir(con.ConfigPath)
+	if err != nil {
+		return err
+	}
+	err = con.createContainer()
+	if err != nil {
+		return err
+	}
+	err = con.patchBineries()
+	if err != nil {
+		return err
+	}
+	err = con.appendToSys()
+	if err != nil {
+		return err
+	}
+	err = con.setProgPrivileges()
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 func (con *Container) refreshElf(key string, value []string, prog string) *Error {
 	switch key {
@@ -530,29 +559,104 @@ func (con *Container) refreshElf(key string, value []string, prog string) *Error
 	default:
 		{
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("key: %s doesn't exist", key))
-			return &cerr
+			return cerr
 		}
 	}
 	return nil
 }
 
-func (con *Container) bashShell() *Error {
-	if FolderExist(con.RootPath) {
-		env := make(map[string]string)
-		env["ContainerId"] = con.Id
-		env["ContainerRoot"] = con.RootPath
-		env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
-		if ld, ok := con.SettingConf["ld_preload_path"]; ok {
-			env["LD_LIBRARY_PATH"] = ld.(string)
+func (con *Container) genEnv() (map[string]string, *Error) {
+	env := make(map[string]string)
+	env["ContainerId"] = con.Id
+	env["ContainerRoot"] = con.RootPath
+	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
+	env["LD_LIBRARY_PATH"] = con.SysDir
+	l.Println(DEBUG, con.SysDir, con.MemcachedServerList)
+	env["MEMCACHED_PID"] = con.MemcachedServerList[0]
+	if data, data_ok := con.SettingConf["export_env"]; data_ok {
+		if d1, o1 := data.([]interface{}); o1 {
+			for _, d1_1 := range d1 {
+				if d1_11, o1_11 := d1_1.(interface{}); o1_11 {
+					switch d1_11.(type) {
+					case map[interface{}]interface{}:
+						for k, v := range d1_11.(map[interface{}]interface{}) {
+							if v1, vo1 := v.(string); vo1 {
+								if k1, ko1 := k.(string); ko1 {
+									env[k1] = guessPath(con.RootPath, v1)
+								}
+							}
+							if v1, vo1 := v.([]interface{}); vo1 {
+								var libs []string
+								for _, vv1 := range v1 {
+									vv1_abs := guessPath(con.RootPath, vv1.(string))
+									libs = append(libs, vv1_abs)
+								}
+								if k1, ok1 := k.(string); ok1 {
+									env[k1] = strings.Join(libs, ";")
+								}
+							}
+						}
+					case map[string]interface{}:
+						for k, v := range d1_11.(map[string]interface{}) {
+							if v1, vo1 := v.(string); vo1 {
+								env[k] = guessPath(con.RootPath, v1)
+							}
+							if v1, vo1 := v.([]interface{}); vo1 {
+								var libs []string
+								for _, vv1 := range v1 {
+									vv1_abs := guessPath(con.RootPath, vv1.(string))
+									libs = append(libs, vv1_abs)
+								}
+								env[k] = strings.Join(libs, ";")
+							}
+						}
+					}
+
+				}
+			}
 		}
-		var err *Error
+
+	}
+	if path_value, path_ok := env["PATH"]; path_ok {
+		env["PATH"] = strings.Replace(path_value, ";", ":", -1)
+	}
+
+	if _, l_switch_ok := con.SettingConf["__log_switch"]; l_switch_ok {
+		env["__LOG_SWITCH"] = "TRUE"
+	}
+	if l_level, l_level_ok := con.SettingConf["__log_level"]; l_level_ok {
+		switch l_level {
+		case "DEBUG":
+			env["__LOG_LEVEL"] = "0"
+		case "INFO":
+			env["__LOG_LEVEL"] = "1"
+		case "WARN":
+			env["__LOG_LEVEL"] = "2"
+		case "ERROR":
+			env["__LOG_LEVEL"] = "3"
+		case "FATAL":
+			env["__LOG_LEVEL"] = "4"
+		}
+	}
+	return env, nil
+}
+
+func (con *Container) bashShell() *Error {
+	env, err := con.genEnv()
+	if err != nil {
+		return err
+	}
+	if FolderExist(con.RootPath) {
 		if con.CurrentUser == "root" {
-			err = ShellEnv("fakeroot", env, con.RootPath, con.UserShell)
+			err := ShellEnv("fakeroot", env, con.RootPath, con.UserShell)
+			if err != nil {
+				return err
+			}
 		} else if con.CurrentUser == "chroot" {
 			env["ContainerMode"] = "chroot"
 			shell := fmt.Sprintf("%s/%s", con.RootPath, con.UserShell)
 			if !FileExist(shell) {
-				_, err = MakeDir(filepath.Dir(shell))
+				_, err := MakeDir(filepath.Dir(shell))
 				if err != nil {
 					return err
 				}
@@ -563,6 +667,7 @@ func (con *Container) bashShell() *Error {
 			}
 			err = ShellEnv("fakeroot", env, con.RootPath, "chroot", con.RootPath, con.UserShell)
 		} else {
+			l.Println(DEBUG, con.UserShell, env, con.RootPath)
 			err = ShellEnv(con.UserShell, env, con.RootPath)
 		}
 		if err != nil {
@@ -571,21 +676,10 @@ func (con *Container) bashShell() *Error {
 		return nil
 	}
 	cerr := ErrNew(ErrNExist, fmt.Sprintf("can't locate container root folder %s", con.RootPath))
-	return &cerr
+	return cerr
 }
 
-func (con *Container) createContainer(config string) *Error {
-	for strings.HasSuffix(con.ConfigPath, "/") {
-		con.ConfigPath = strings.TrimSuffix(con.ConfigPath, "/")
-	}
-	err := con.createSysFolders(config)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (con *Container) createSysFolders(config string) *Error {
+func (con *Container) createContainer() *Error {
 	con.Id = RandomString(IDLENGTH)
 	con.LogPath = fmt.Sprintf("%s/log", con.ConfigPath)
 	con.ElfPatcherPath = fmt.Sprintf("%s/elf", con.ConfigPath)
@@ -595,16 +689,16 @@ func (con *Container) createSysFolders(config string) *Error {
 		return err
 	}
 	con.CreateUser = strings.TrimSuffix(user, "\n")
-	con.V, con.SettingConf, err = LoadConfig(config)
+	con.V, con.SettingConf, err = LoadConfig(con.SettingPath)
 	if err != nil {
+		err.AddMsg(fmt.Sprintf("load config from %s encounters error", con.SettingPath))
 		return err
 	}
-	con.SettingPath, _ = filepath.Abs(config)
 	if sh, ok := con.SettingConf["user_shell"]; ok {
 		strsh, _ := sh.(string)
 		con.UserShell = strsh
 	} else {
-		con.UserShell = "/usr/bin/bash"
+		con.UserShell = "/bin/bash"
 	}
 	if c_user, c_ok := con.SettingConf["default_user"]; c_ok {
 		con.CurrentUser = c_user.(string)
@@ -657,11 +751,11 @@ func (con *Container) patchBineries() *Error {
 								if v1, vo1 := v.([]interface{}); vo1 {
 									var libs []string
 									for _, vv1 := range v1 {
-										vv1_abs, _ := filepath.Abs(vv1.(string))
+										vv1_abs := guessPath(con.RootPath, vv1.(string))
 										libs = append(libs, vv1_abs)
 									}
 									if k1, ok1 := k.(string); ok1 {
-										k1_abs, _ := filepath.Abs(k1)
+										k1_abs := guessPath(con.RootPath, k1)
 										if FileExist(k1_abs) {
 											err := con.refreshElf(op, libs, k1_abs)
 											if err != nil {
@@ -683,12 +777,12 @@ func (con *Container) patchBineries() *Error {
 								var libs []string
 								if v1, vo1 := v.([]interface{}); vo1 {
 									for _, vv1 := range v1 {
-										vv1_abs, _ := filepath.Abs(vv1.(string))
+										vv1_abs := guessPath(con.RootPath, vv1.(string))
 										libs = append(libs, vv1_abs)
 									}
 								}
 
-								k_abs, _ := filepath.Abs(k.(string))
+								k_abs := guessPath(con.RootPath, k.(string))
 								if FileExist(k_abs) {
 									err := con.refreshElf(op, libs, k_abs)
 									if err != nil {
@@ -736,7 +830,7 @@ func (con *Container) appendToSys() *Error {
 				cmap["RPCPort"] = fmt.Sprintf("%d", con.RPCPort)
 			} else {
 				cerr := ErrNew(ErrType, "interface{} type assertation error")
-				return &cerr
+				return cerr
 			}
 		} else {
 			cmap := make(map[string]string)
@@ -746,6 +840,10 @@ func (con *Container) appendToSys() *Error {
 			cmap["RPCPort"] = fmt.Sprintf("%d", con.RPCPort)
 			sys.Containers[con.Id] = cmap
 		}
+		sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", currdir)
+		servers := []string{sys.MemcachedPid}
+		con.MemcachedServerList = servers
+		con.SysDir = sys.BinaryDir
 		data, _ := StructMarshal(&sys)
 		err := WriteToFile(data, fmt.Sprintf("%s/.info", sys.RootDir))
 		if err != nil {
@@ -772,6 +870,8 @@ func (con *Container) setProgPrivileges() *Error {
 		}
 	}
 	if err == nil {
+
+		//set allow_list env
 		if ac, ac_ok := con.SettingConf["allow_list"]; ac_ok {
 			if aca, aca_ok := ac.([]interface{}); aca_ok {
 				for _, ace := range aca {
@@ -779,7 +879,7 @@ func (con *Container) setProgPrivileges() *Error {
 						for k, v := range acm {
 							switch v.(type) {
 							case string:
-								mem_err := mem.MSetStrValue(fmt.Sprintf("%s:%s", con.Id, k), v.(string))
+								mem_err := mem.MUpdateStrValue(fmt.Sprintf("%s:%s", con.Id, k), v.(string))
 								if mem_err != nil {
 									return mem_err
 								}
@@ -789,27 +889,64 @@ func (con *Container) setProgPrivileges() *Error {
 									for _, acl := range acs {
 										value = fmt.Sprintf("%s;%s", acl.(string), value)
 									}
-									mem_err := mem.MSetStrValue(fmt.Sprintf("%s:%s", con.Id, k), value)
+									mem_err := mem.MUpdateStrValue(fmt.Sprintf("%s:%s", con.Id, k), value)
 									if mem_err != nil {
 										return mem_err
 									}
 								}
 							default:
-								acm_err := ErrNew(ErrType, fmt.Sprintf("type is not right, assume: map[interfacer{}]interface{}, real: %v", ace))
-								return &acm_err
+								acm_err := ErrNew(ErrType, fmt.Sprintf("allow_list: type is not right, assume: map[interfacer{}]interface{}, real: %v", ace))
+								return acm_err
 							}
 						}
 					}
 				}
 			} else {
-				aca_err := ErrNew(ErrType, fmt.Sprintf("type is not right, assume: []interface{}, real: %v", ac))
-				return &aca_err
+				aca_err := ErrNew(ErrType, fmt.Sprintf("allow_list: type is not right, assume: []interface{}, real: %v", ac))
+				return aca_err
 			}
 		}
+
+		//set add_map
+		if ac, ac_ok := con.SettingConf["add_map"]; ac_ok {
+			if aca, aca_ok := ac.([]interface{}); aca_ok {
+				for _, ace := range aca {
+					if acm, acm_ok := ace.(map[interface{}]interface{}); acm_ok {
+						for k, v := range acm {
+							switch v.(type) {
+							case string:
+								mem_err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), v.(string))
+								if mem_err != nil {
+									return mem_err
+								}
+							case interface{}:
+								if acs, acs_ok := v.([]interface{}); acs_ok {
+									value := ""
+									for _, acl := range acs {
+										value = fmt.Sprintf("%s;%s", acl.(string), value)
+									}
+									mem_err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), value)
+									if mem_err != nil {
+										return mem_err
+									}
+								}
+							default:
+								acm_err := ErrNew(ErrType, fmt.Sprintf("add_map: type is not right, assume: map[interfacer{}]interface{}, real: %v", ace))
+								return acm_err
+							}
+						}
+					}
+				}
+			} else {
+				aca_err := ErrNew(ErrType, fmt.Sprintf("add_map: type is not right, assume: []interface{}, real: %v", ac))
+				return aca_err
+			}
+		}
+
 		return nil
 	} else {
 		mem_err := ErrNew(err, "memcache server init error")
-		return &mem_err
+		return mem_err
 	}
 	return err
 }
@@ -819,7 +956,7 @@ func (con *Container) startRPCService(port int) *Error {
 	conn, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
 	if err != nil {
 		cerr := ErrNew(err, "start rpc service encounters error")
-		return &cerr
+		return cerr
 	}
 	env := make(map[string]string)
 	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
@@ -885,7 +1022,7 @@ func walkfs(dir string) ([]string, *Error) {
 	})
 	if err != nil {
 		cerr := ErrNew(err, "walkfs encountered error")
-		return nil, &cerr
+		return nil, cerr
 	}
 	return fileList, nil
 }
@@ -903,19 +1040,19 @@ func readSys(rootdir string, sys *Sys) *Error {
 		}
 	} else {
 		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist, please use command 'lpmx init' firstly", rootdir))
-		return &cerr
+		return cerr
 	}
 	return nil
 }
 
-func setPrivilege(id string, tp string, name string, value string) *Error {
-	mem, err := MInitServer()
+func setPrivilege(id string, tp string, name string, value string, server string) *Error {
+	mem, err := MInitServers(server)
 	if err != nil {
 		return err
 	}
 
 	if tp == ELFOP[5] {
-		err := mem.MSetStrValue(fmt.Sprintf("%s:%s", id, name), value)
+		err := mem.MUpdateStrValue(fmt.Sprintf("%s:%s", id, name), value)
 		if err != nil {
 			return err
 		}
@@ -926,4 +1063,63 @@ func setPrivilege(id string, tp string, name string, value string) *Error {
 		}
 	}
 	return nil
+}
+
+func getPrivilege(id string, name string, server string) (string, *Error) {
+	mem, err := MInitServers(server)
+	if err != nil {
+		return "", err
+	}
+
+	str, err := mem.MGetStrValue(fmt.Sprintf("%s:%s", id, name))
+	if err != nil {
+		return "", err
+	}
+	return str, nil
+}
+
+func setMap(id string, tp string, name string, value string, server string) *Error {
+	mem, err := MInitServers(server)
+	if err != nil {
+		return err
+	}
+
+	if tp == ELFOP[7] {
+		err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", id, name), value)
+		if err != nil {
+			return err
+		}
+	} else {
+		err := mem.MDeleteByKey(fmt.Sprintf("map:%s:%s", id, name))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func getMap(id string, name string, server string) (string, *Error) {
+	mem, err := MInitServers(server)
+	if err != nil {
+		return "", err
+	}
+
+	str, err := mem.MGetStrValue(fmt.Sprintf("map:%s:%s", id, name))
+	if err != nil {
+		return "", err
+	}
+	return str, nil
+}
+
+func guessPath(base string, in string) string {
+	if strings.HasPrefix(in, "$") {
+		return strings.TrimPrefix(in, "$")
+	}
+	if strings.HasPrefix(in, "/") {
+		str := fmt.Sprintf("%s%s", base, in)
+		return str
+	} else {
+		str := fmt.Sprintf("%s/%s", base, in)
+		return str
+	}
 }

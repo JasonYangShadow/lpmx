@@ -16,7 +16,12 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	llog := MakeLog(dir)
+	l, lerr := LogNew(dir)
+	if lerr != nil {
+		fmt.Println(lerr)
+		os.Exit(1)
+	}
+	LogSet(DEBUG)
 
 	var initCmd = &cobra.Command{
 		Use:   "init",
@@ -26,7 +31,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Init()
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			}
 		},
 	}
@@ -39,7 +44,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := List()
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			}
 		},
 	}
@@ -57,9 +62,8 @@ func main() {
 			RunConfig, _ = filepath.Abs(RunConfig)
 			err := Run(RunSource, RunConfig, RunPassive)
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			}
-
 		},
 	}
 	runCmd.Flags().StringVarP(&RunSource, "source", "s", "", "required")
@@ -67,6 +71,25 @@ func main() {
 	runCmd.Flags().StringVarP(&RunConfig, "config", "c", "", "required")
 	runCmd.MarkFlagRequired("config")
 	runCmd.Flags().BoolVarP(&RunPassive, "passive", "p", false, "optional")
+
+	var GetId string
+	var GetName string
+	var getCmd = &cobra.Command{
+		Use:   "get",
+		Short: "get settings from memcache server",
+		Long:  "get command is the basic command of lpmx, which is used for getting settings from cache server",
+		Args:  cobra.ExactArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			err := Get(GetId, GetName)
+			if err != nil {
+				l.Println(ERROR, err.Error())
+			}
+		},
+	}
+	getCmd.Flags().StringVarP(&GetId, "id", "i", "", "required")
+	getCmd.MarkFlagRequired("id")
+	getCmd.Flags().StringVarP(&GetName, "name", "n", "", "required")
+	getCmd.MarkFlagRequired("name")
 
 	var RExecIp string
 	var RExecPort string
@@ -79,9 +102,9 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			_, err := RPCExec(RExecIp, RExecPort, RExecTimeout, args[0], args[1:]...)
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			} else {
-				llog.LogInfo.Println("Done")
+				l.Println(INFO, "DONE")
 			}
 		},
 	}
@@ -101,7 +124,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			res, err := RPCQuery(RQueryIp, RQueryPort)
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			} else {
 				fmt.Println("PID", "CMD")
 				for k, v := range res.RPCMap {
@@ -126,13 +149,13 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			i, aerr := strconv.Atoi(RDeletePid)
 			if aerr != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, aerr.Error())
 			}
 			_, err := RPCDelete(RDeleteIp, RDeletePort, i)
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			} else {
-				llog.LogInfo.Println("Done")
+				l.Println(INFO, "DONE")
 			}
 		},
 	}
@@ -158,7 +181,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Resume(args[0])
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			}
 		},
 	}
@@ -171,9 +194,9 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Destroy(args[0])
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			} else {
-				llog.LogInfo.Println(fmt.Sprintf("container: %s is destroyed", args[0]))
+				l.Println(INFO, fmt.Sprintf("container: %s is destroyed", args[0]))
 			}
 		},
 	}
@@ -190,24 +213,24 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Set(SetId, SetType, SetProg, SetVal)
 			if err != nil {
-				llog.LogFatal.Println(err)
+				l.Println(ERROR, err.Error())
 			} else {
-				llog.LogInfo.Println(fmt.Sprintf("container %s is set with new environment variables", SetId))
+				l.Println(INFO, fmt.Sprintf("container %s is set with new environment variables", SetId))
 			}
 		},
 	}
 	setCmd.Flags().StringVarP(&SetId, "id", "i", "", "required(container id, you can get the id by command 'lpmx list')")
 	setCmd.MarkFlagRequired("id")
-	setCmd.Flags().StringVarP(&SetType, "type", "t", "", "required('add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user', 'add_privilege', 'remove_privilege')")
+	setCmd.Flags().StringVarP(&SetType, "type", "t", "", "required('add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user', 'add_privilege', 'remove_privilege','add_map','remove_map')")
 	setCmd.MarkFlagRequired("type")
 	setCmd.Flags().StringVarP(&SetProg, "name", "n", "", "required(put 'user' for operation change_user)")
 	setCmd.MarkFlagRequired("name")
-	setCmd.Flags().StringVarP(&SetVal, "value", "v", "", "value (optional for removing privilege operation)")
+	setCmd.Flags().StringVarP(&SetVal, "value", "v", "", "value (optional for removing privilege operation or removing map operation)")
 
 	var rootCmd = &cobra.Command{
 		Use:   "lpmx",
 		Short: "lpmx rootless container",
 	}
-	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, runCmd, setCmd, resumeCmd, rpcCmd)
+	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, runCmd, setCmd, resumeCmd, rpcCmd, getCmd)
 	rootCmd.Execute()
 }

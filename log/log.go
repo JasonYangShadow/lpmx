@@ -11,21 +11,41 @@ import (
 	"time"
 )
 
+const (
+	DEBUG = iota
+	INFO
+	WARNING
+	ERROR
+	FATAL
+)
+
+var (
+	CURRENT_LOG_LEVEL = DEBUG
+	LOG_STR           = []string{"DEBUG", "INFO", "WARNING", "ERROR", "FATAL"}
+)
+
 type Log struct {
-	LogErr   *log.Logger
-	LogWar   *log.Logger
-	LogInfo  *log.Logger
-	LogDebug *log.Logger
-	LogFatal *log.Logger
+	logger *log.Logger
 }
 
-func MakeLog(dir string) *Log {
+func LogNew(dir string) (*Log, *Error) {
 	l := new(Log)
 	err := l.init(dir)
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return l
+	return l, nil
+}
+
+func LogSet(level int) {
+	CURRENT_LOG_LEVEL = level
+}
+
+func (l *Log) Println(level int, a ...interface{}) {
+	if level >= CURRENT_LOG_LEVEL {
+		l.logger.SetPrefix(fmt.Sprintf("[LEVEL: %s] ", LOG_STR[level]))
+		l.logger.Println(a...)
+	}
 }
 
 func (l *Log) init(dir string) *Error {
@@ -45,20 +65,11 @@ func (l *Log) init(dir string) *Error {
 		fp, err := os.OpenFile(file, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0666)
 		if err != nil {
 			cerr := ErrNew(err, fmt.Sprintf("can't open log file: %s", file))
-			return &cerr
+			return cerr
 		}
-		l.LogErr = log.New(io.MultiWriter(fp, os.Stdout, os.Stderr), "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
-		l.LogWar = log.New(io.MultiWriter(fp, os.Stdout, os.Stderr), "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile)
-		l.LogInfo = log.New(io.MultiWriter(fp, os.Stdout), "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
-		l.LogDebug = log.New(io.MultiWriter(fp, os.Stdout), "DEBUGG: ", log.Ldate|log.Ltime|log.Lshortfile)
-		l.LogFatal = log.New(io.MultiWriter(fp, os.Stdout, os.Stderr), "FATAL: ", log.Ldate|log.Ltime|log.Lshortfile)
+		l.logger = log.New(io.MultiWriter(fp, os.Stdout), "", log.Ldate|log.Ltime|log.Lshortfile)
 	} else {
-		l.LogErr = log.New(io.MultiWriter(os.Stdout, os.Stderr), "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
-		l.LogWar = log.New(io.MultiWriter(os.Stdout, os.Stderr), "WARNING: ", log.Ldate|log.Ltime|log.Lshortfile)
-		l.LogInfo = log.New(io.MultiWriter(os.Stdout), "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
-		l.LogDebug = log.New(io.MultiWriter(os.Stdout), "DEBUGG: ", log.Ldate|log.Ltime|log.Lshortfile)
-		l.LogFatal = log.New(io.MultiWriter(os.Stdout, os.Stderr), "FATAL: ", log.Ldate|log.Ltime|log.Lshortfile)
+		l.logger = log.New(io.MultiWriter(os.Stdout), "", log.Ldate|log.Ltime|log.Lshortfile)
 	}
 	return nil
-
 }
