@@ -4,12 +4,14 @@ import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/elf"
 	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/log"
 	. "github.com/jasonyangshadow/lpmx/memcache"
 	. "github.com/jasonyangshadow/lpmx/msgpack"
 	. "github.com/jasonyangshadow/lpmx/paeudo"
 	. "github.com/jasonyangshadow/lpmx/rpc"
 	. "github.com/jasonyangshadow/lpmx/utils"
 	. "github.com/jasonyangshadow/lpmx/yaml"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"net"
 	"net/rpc"
@@ -584,6 +586,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
 	env["LD_LIBRARY_PATH"] = con.SysDir
 	env["MEMCACHED_PID"] = con.MemcachedServerList[0]
+	env["TERM"] = "xterm"
 	if data, data_ok := con.SettingConf["export_env"]; data_ok {
 		if d1, o1 := data.([]interface{}); o1 {
 			for _, d1_1 := range d1 {
@@ -642,8 +645,22 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		}
 
 	}
+
+	LOGGER.WithFields(logrus.Fields{
+		"ENV": env,
+	}).Debug("all envs")
+
 	if path_value, path_ok := env["PATH"]; path_ok {
-		env["PATH"] = strings.Replace(path_value, ";", ":", -1)
+		path_value = strings.Replace(path_value, ";", ":", -1)
+		o_path := os.Getenv("PATH")
+		if o_path != "" {
+			path_value = fmt.Sprintf("%s:%s", path_value, o_path)
+		}
+		LOGGER.WithFields(logrus.Fields{
+			"sys path":   o_path,
+			"path_value": path_value,
+		}).Debug("PATH env setting")
+		env["PATH"] = path_value
 	}
 
 	if _, l_switch_ok := con.SettingConf["__log_switch"]; l_switch_ok {
@@ -914,7 +931,17 @@ func (con *Container) setProgPrivileges() *Error {
 							}
 							switch v.(type) {
 							case string:
-								mem_err := mem.MUpdateStrValue(fmt.Sprintf("allow:%s:%s", con.Id, k), v.(string))
+								v_path, v_err := GuessPath(con.RootPath, v.(string), false)
+								if v_err != nil {
+									LOGGER.WithFields(logrus.Fields{
+										"key":   k,
+										"value": v.(string),
+										"err":   v_err,
+										"type":  "string",
+									}).Error("allow list parse error")
+									continue
+								}
+								mem_err := mem.MUpdateStrValue(fmt.Sprintf("allow:%s:%s", con.Id, k), v_path)
 								if mem_err != nil {
 									return mem_err
 								}
@@ -922,7 +949,17 @@ func (con *Container) setProgPrivileges() *Error {
 								if acs, acs_ok := v.([]interface{}); acs_ok {
 									value := ""
 									for _, acl := range acs {
-										value = fmt.Sprintf("%s;%s", acl.(string), value)
+										v_path, v_err := GuessPath(con.RootPath, acl.(string), false)
+										if v_err != nil {
+											LOGGER.WithFields(logrus.Fields{
+												"key":   k,
+												"value": v.(string),
+												"err":   v_err,
+												"type":  "interface",
+											}).Error("allow list parse error")
+											continue
+										}
+										value = fmt.Sprintf("%s;%s", v_path, value)
 									}
 									mem_err := mem.MUpdateStrValue(fmt.Sprintf("allow:%s:%s", con.Id, k), value)
 									if mem_err != nil {
@@ -957,7 +994,17 @@ func (con *Container) setProgPrivileges() *Error {
 							}
 							switch v.(type) {
 							case string:
-								mem_err := mem.MUpdateStrValue(fmt.Sprintf("deny:%s:%s", con.Id, k), v.(string))
+								v_path, v_err := GuessPath(con.RootPath, v.(string), false)
+								if v_err != nil {
+									LOGGER.WithFields(logrus.Fields{
+										"key":   k,
+										"value": v.(string),
+										"err":   v_err,
+										"type":  "string",
+									}).Error("allow list parse error")
+									continue
+								}
+								mem_err := mem.MUpdateStrValue(fmt.Sprintf("deny:%s:%s", con.Id, k), v_path)
 								if mem_err != nil {
 									return mem_err
 								}
@@ -965,7 +1012,17 @@ func (con *Container) setProgPrivileges() *Error {
 								if acs, acs_ok := v.([]interface{}); acs_ok {
 									value := ""
 									for _, acl := range acs {
-										value = fmt.Sprintf("%s;%s", acl.(string), value)
+										v_path, v_err := GuessPath(con.RootPath, acl.(string), false)
+										if v_err != nil {
+											LOGGER.WithFields(logrus.Fields{
+												"key":   k,
+												"value": v.(string),
+												"err":   v_err,
+												"type":  "interface",
+											}).Error("allow list parse error")
+											continue
+										}
+										value = fmt.Sprintf("%s;%s", v_path, value)
 									}
 									mem_err := mem.MUpdateStrValue(fmt.Sprintf("deny:%s:%s", con.Id, k), value)
 									if mem_err != nil {
@@ -1000,7 +1057,17 @@ func (con *Container) setProgPrivileges() *Error {
 							}
 							switch v.(type) {
 							case string:
-								mem_err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), v.(string))
+								v_path, v_err := GuessPath(con.RootPath, v.(string), false)
+								if v_err != nil {
+									LOGGER.WithFields(logrus.Fields{
+										"key":   k,
+										"value": v.(string),
+										"err":   v_err,
+										"type":  "string",
+									}).Error("allow list parse error")
+									continue
+								}
+								mem_err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), v_path)
 								if mem_err != nil {
 									return mem_err
 								}
@@ -1008,7 +1075,17 @@ func (con *Container) setProgPrivileges() *Error {
 								if acs, acs_ok := v.([]interface{}); acs_ok {
 									value := ""
 									for _, acl := range acs {
-										value = fmt.Sprintf("%s;%s", acl.(string), value)
+										v_path, v_err := GuessPath(con.RootPath, acl.(string), false)
+										if v_err != nil {
+											LOGGER.WithFields(logrus.Fields{
+												"key":   k,
+												"value": v.(string),
+												"err":   v_err,
+												"type":  "interface",
+											}).Error("allow list parse error")
+											continue
+										}
+										value = fmt.Sprintf("%s;%s", v_path, value)
 									}
 									mem_err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), value)
 									if mem_err != nil {

@@ -3,9 +3,7 @@ package utils
 import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/error"
-	. "github.com/jasonyangshadow/lpmx/log"
 	"github.com/phayes/permbits"
-	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -234,13 +232,11 @@ func RandomPort(min, max int) int {
 }
 
 func GuessPath(base string, in string, file bool) (string, *Error) {
-	LOGGER.WithFields(logrus.Fields{
-		"base": base,
-		"in":   in,
-		"file": file,
-	}).Debug("guess path debug")
-	if strings.HasPrefix(in, "$") {
-		return strings.TrimPrefix(in, "$"), nil
+	if strings.Contains(in, "$") {
+		return strings.Replace(in, "$", "", -1), nil
+	}
+	if strings.TrimSpace(in) == "all" {
+		return in, nil
 	}
 	var str string
 	if filepath.IsAbs(in) {
@@ -256,8 +252,8 @@ func GuessPath(base string, in string, file bool) (string, *Error) {
 }
 
 func AddConPath(base string, in string) string {
-	if strings.HasPrefix(in, "$") {
-		return strings.TrimPrefix(in, "$")
+	if strings.Contains(in, "$") {
+		return strings.Replace(in, "$", "", -1)
 	}
 	return filepath.Join(base, in)
 }
