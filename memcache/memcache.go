@@ -4,12 +4,7 @@ import (
 	"fmt"
 	. "github.com/bradfitz/gomemcache/memcache"
 	. "github.com/jasonyangshadow/lpmx/error"
-	. "github.com/jasonyangshadow/lpmx/log"
 	"strings"
-)
-
-var (
-	l, _ = LogNew("")
 )
 
 type MemcacheInst struct {

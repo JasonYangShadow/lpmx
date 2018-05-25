@@ -4,7 +4,6 @@ import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/elf"
 	. "github.com/jasonyangshadow/lpmx/error"
-	. "github.com/jasonyangshadow/lpmx/log"
 	. "github.com/jasonyangshadow/lpmx/memcache"
 	. "github.com/jasonyangshadow/lpmx/msgpack"
 	. "github.com/jasonyangshadow/lpmx/paeudo"
@@ -29,9 +28,8 @@ const (
 )
 
 var (
-	ELFOP  = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath", "change_user", "add_privilege", "remove_privilege", "add_map", "remove_map"}
+	ELFOP  = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath", "change_user", "add_allow_priv", "remove_allow_priv", "add_deny_priv", "remove_deny_priv", "add_map", "remove_map"}
 	STATUS = []string{"RUNNING", "STOPPED"}
-	l, _   = LogNew("")
 )
 
 type Sys struct {
@@ -329,10 +327,16 @@ func Run(dir string, config string, passive bool) *Error {
 			}
 		} else {
 			RemoveAll(con.ConfigPath)
-			con.setupContainer()
+			err := con.setupContainer()
+			if err != nil {
+				return err
+			}
 		}
 	} else {
-		con.setupContainer()
+		err := con.setupContainer()
+		if err != nil {
+			return err
+		}
 	}
 
 	if passive {
@@ -382,10 +386,11 @@ func Get(id string, name string) *Error {
 
 	if err == nil {
 		if _, ok := sys.Containers[id]; ok {
-			fmt.Println(fmt.Sprintf("%s%25s%25s%25s", "ContainerID", "PROGRAM", "PRIVILEGES", "REMAP"))
-			p_val, _ := getPrivilege(id, name, sys.MemcachedPid)
+			fmt.Println(fmt.Sprintf("|%-s|%-30s|%-20s|%-20s|%-10s|", "ContainerID", "PROGRAM", "ALLOW_PRIVILEGES", "DENY_PRIVILEGES", "REMAP"))
+			a_val, _ := getPrivilege(id, name, sys.MemcachedPid, true)
+			d_val, _ := getPrivilege(id, name, sys.MemcachedPid, false)
 			m_val, _ := getMap(id, name, sys.MemcachedPid)
-			fmt.Println(fmt.Sprintf("%s%25s%25s%25s", id, name, p_val, m_val))
+			fmt.Println(fmt.Sprintf("|%-s|%-30s|%-20s|%-20s|%-10s|", id, name, a_val, d_val, m_val))
 		} else {
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
 			return cerr
@@ -405,7 +410,7 @@ func Set(id string, tp string, name string, value string) *Error {
 			if val, vok := v.(map[string]interface{}); vok {
 				tp = strings.ToLower(strings.TrimSpace(tp))
 				switch tp {
-				case ELFOP[7], ELFOP[8]:
+				case ELFOP[9], ELFOP[10]:
 					{
 						err := setMap(id, tp, name, value, sys.MemcachedPid)
 						if err != nil {
@@ -414,7 +419,14 @@ func Set(id string, tp string, name string, value string) *Error {
 					}
 				case ELFOP[5], ELFOP[6]:
 					{
-						err := setPrivilege(id, tp, name, value, sys.MemcachedPid)
+						err := setPrivilege(id, tp, name, value, sys.MemcachedPid, true)
+						if err != nil {
+							return err
+						}
+					}
+				case ELFOP[7], ELFOP[8]:
+					{
+						err := setPrivilege(id, tp, name, value, sys.MemcachedPid, false)
 						if err != nil {
 							return err
 						}
@@ -479,7 +491,7 @@ func Set(id string, tp string, name string, value string) *Error {
 
 					return nil
 				default:
-					err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user', 'add_privilege','remove_privilege','add_map','remove_map'}")
+					err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user', 'add_allow_priv','remove_allow_priv','add_deny_priv','remove_deny_priv','add_map','remove_map'}")
 					return err_new
 				}
 
@@ -571,7 +583,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["ContainerRoot"] = con.RootPath
 	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
 	env["LD_LIBRARY_PATH"] = con.SysDir
-	l.Println(DEBUG, con.SysDir, con.MemcachedServerList)
 	env["MEMCACHED_PID"] = con.MemcachedServerList[0]
 	if data, data_ok := con.SettingConf["export_env"]; data_ok {
 		if d1, o1 := data.([]interface{}); o1 {
@@ -582,13 +593,20 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 						for k, v := range d1_11.(map[interface{}]interface{}) {
 							if v1, vo1 := v.(string); vo1 {
 								if k1, ko1 := k.(string); ko1 {
-									env[k1] = guessPath(con.RootPath, v1)
+									var err *Error
+									env[k1], err = GuessPath(con.RootPath, v1, false)
+									if err != nil {
+										continue
+									}
 								}
 							}
 							if v1, vo1 := v.([]interface{}); vo1 {
 								var libs []string
 								for _, vv1 := range v1 {
-									vv1_abs := guessPath(con.RootPath, vv1.(string))
+									vv1_abs, err := GuessPath(con.RootPath, vv1.(string), false)
+									if err != nil {
+										continue
+									}
 									libs = append(libs, vv1_abs)
 								}
 								if k1, ok1 := k.(string); ok1 {
@@ -599,12 +617,19 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 					case map[string]interface{}:
 						for k, v := range d1_11.(map[string]interface{}) {
 							if v1, vo1 := v.(string); vo1 {
-								env[k] = guessPath(con.RootPath, v1)
+								var err *Error
+								env[k], err = GuessPath(con.RootPath, v1, false)
+								if err != nil {
+									continue
+								}
 							}
 							if v1, vo1 := v.([]interface{}); vo1 {
 								var libs []string
 								for _, vv1 := range v1 {
-									vv1_abs := guessPath(con.RootPath, vv1.(string))
+									vv1_abs, err := GuessPath(con.RootPath, vv1.(string), false)
+									if err != nil {
+										continue
+									}
 									libs = append(libs, vv1_abs)
 								}
 								env[k] = strings.Join(libs, ";")
@@ -667,7 +692,6 @@ func (con *Container) bashShell() *Error {
 			}
 			err = ShellEnv("fakeroot", env, con.RootPath, "chroot", con.RootPath, con.UserShell)
 		} else {
-			l.Println(DEBUG, con.UserShell, env, con.RootPath)
 			err = ShellEnv(con.UserShell, env, con.RootPath)
 		}
 		if err != nil {
@@ -751,16 +775,20 @@ func (con *Container) patchBineries() *Error {
 								if v1, vo1 := v.([]interface{}); vo1 {
 									var libs []string
 									for _, vv1 := range v1 {
-										vv1_abs := guessPath(con.RootPath, vv1.(string))
+										vv1_abs, err := GuessPath(con.RootPath, vv1.(string), true)
+										if err != nil {
+											continue
+										}
 										libs = append(libs, vv1_abs)
 									}
 									if k1, ok1 := k.(string); ok1 {
-										k1_abs := guessPath(con.RootPath, k1)
-										if FileExist(k1_abs) {
-											err := con.refreshElf(op, libs, k1_abs)
-											if err != nil {
-												return err
-											}
+										k1_abs, err := GuessPath(con.RootPath, k1, true)
+										if err != nil {
+											continue
+										}
+										err = con.refreshElf(op, libs, k1_abs)
+										if err != nil {
+											return err
 										}
 									}
 								}
@@ -777,12 +805,15 @@ func (con *Container) patchBineries() *Error {
 								var libs []string
 								if v1, vo1 := v.([]interface{}); vo1 {
 									for _, vv1 := range v1 {
-										vv1_abs := guessPath(con.RootPath, vv1.(string))
+										vv1_abs, err := GuessPath(con.RootPath, vv1.(string), false)
+										if err != nil {
+											continue
+										}
 										libs = append(libs, vv1_abs)
 									}
 								}
 
-								k_abs := guessPath(con.RootPath, k.(string))
+								k_abs := AddConPath(con.RootPath, k.(string))
 								if FileExist(k_abs) {
 									err := con.refreshElf(op, libs, k_abs)
 									if err != nil {
@@ -877,9 +908,13 @@ func (con *Container) setProgPrivileges() *Error {
 				for _, ace := range aca {
 					if acm, acm_ok := ace.(map[interface{}]interface{}); acm_ok {
 						for k, v := range acm {
+							k, err := GuessPath(con.RootPath, k.(string), true)
+							if err != nil {
+								return err
+							}
 							switch v.(type) {
 							case string:
-								mem_err := mem.MUpdateStrValue(fmt.Sprintf("%s:%s", con.Id, k), v.(string))
+								mem_err := mem.MUpdateStrValue(fmt.Sprintf("allow:%s:%s", con.Id, k), v.(string))
 								if mem_err != nil {
 									return mem_err
 								}
@@ -889,7 +924,7 @@ func (con *Container) setProgPrivileges() *Error {
 									for _, acl := range acs {
 										value = fmt.Sprintf("%s;%s", acl.(string), value)
 									}
-									mem_err := mem.MUpdateStrValue(fmt.Sprintf("%s:%s", con.Id, k), value)
+									mem_err := mem.MUpdateStrValue(fmt.Sprintf("allow:%s:%s", con.Id, k), value)
 									if mem_err != nil {
 										return mem_err
 									}
@@ -899,10 +934,56 @@ func (con *Container) setProgPrivileges() *Error {
 								return acm_err
 							}
 						}
+					} else {
+						acm_err := ErrNew(ErrType, fmt.Sprintf("allow_list: type is not right, assume: map[string]interface{}, real: %v", ac))
+						return acm_err
 					}
 				}
 			} else {
 				aca_err := ErrNew(ErrType, fmt.Sprintf("allow_list: type is not right, assume: []interface{}, real: %v", ac))
+				return aca_err
+			}
+		}
+
+		//set deny_list env
+		if ac, ac_ok := con.SettingConf["deny_list"]; ac_ok {
+			if aca, aca_ok := ac.([]interface{}); aca_ok {
+				for _, ace := range aca {
+					if acm, acm_ok := ace.(map[interface{}]interface{}); acm_ok {
+						for k, v := range acm {
+							k, err := GuessPath(con.RootPath, k.(string), true)
+							if err != nil {
+								return err
+							}
+							switch v.(type) {
+							case string:
+								mem_err := mem.MUpdateStrValue(fmt.Sprintf("deny:%s:%s", con.Id, k), v.(string))
+								if mem_err != nil {
+									return mem_err
+								}
+							case interface{}:
+								if acs, acs_ok := v.([]interface{}); acs_ok {
+									value := ""
+									for _, acl := range acs {
+										value = fmt.Sprintf("%s;%s", acl.(string), value)
+									}
+									mem_err := mem.MUpdateStrValue(fmt.Sprintf("deny:%s:%s", con.Id, k), value)
+									if mem_err != nil {
+										return mem_err
+									}
+								}
+							default:
+								acm_err := ErrNew(ErrType, fmt.Sprintf("deny_list: type is not right, assume: map[interfacer{}]interface{}, real: %v", ace))
+								return acm_err
+							}
+						}
+					} else {
+						acm_err := ErrNew(ErrType, fmt.Sprintf("allow_list: type is not right, assume: map[string]interface{}, real: %v", ac))
+						return acm_err
+					}
+				}
+			} else {
+				aca_err := ErrNew(ErrType, fmt.Sprintf("deny_list: type is not right, assume: []interface{}, real: %v", ac))
 				return aca_err
 			}
 		}
@@ -913,6 +994,10 @@ func (con *Container) setProgPrivileges() *Error {
 				for _, ace := range aca {
 					if acm, acm_ok := ace.(map[interface{}]interface{}); acm_ok {
 						for k, v := range acm {
+							k, err := GuessPath(con.RootPath, k.(string), true)
+							if err != nil {
+								return err
+							}
 							switch v.(type) {
 							case string:
 								mem_err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), v.(string))
@@ -935,6 +1020,9 @@ func (con *Container) setProgPrivileges() *Error {
 								return acm_err
 							}
 						}
+					} else {
+						acm_err := ErrNew(ErrType, fmt.Sprintf("allow_list: type is not right, assume: map[string]interface{}, real: %v", ac))
+						return acm_err
 					}
 				}
 			} else {
@@ -1045,33 +1133,55 @@ func readSys(rootdir string, sys *Sys) *Error {
 	return nil
 }
 
-func setPrivilege(id string, tp string, name string, value string, server string) *Error {
+func setPrivilege(id string, tp string, name string, value string, server string, allow bool) *Error {
 	mem, err := MInitServers(server)
 	if err != nil {
 		return err
 	}
 
-	if tp == ELFOP[5] {
-		err := mem.MUpdateStrValue(fmt.Sprintf("%s:%s", id, name), value)
-		if err != nil {
-			return err
+	if allow {
+		if tp == ELFOP[5] {
+			err := mem.MUpdateStrValue(fmt.Sprintf("allow:%s:%s", id, name), value)
+			if err != nil {
+				return err
+			}
+		}
+		if tp == ELFOP[6] {
+			err := mem.MDeleteByKey(fmt.Sprintf("allow:%s:%s", id, name))
+			if err != nil {
+				return err
+			}
 		}
 	} else {
-		err := mem.MDeleteByKey(fmt.Sprintf("%s:%s", id, name))
-		if err != nil {
-			return err
+		if tp == ELFOP[7] {
+			err := mem.MUpdateStrValue(fmt.Sprintf("deny:%s:%s", id, name), value)
+			if err != nil {
+				return err
+			}
+		}
+		if tp == ELFOP[8] {
+			err := mem.MDeleteByKey(fmt.Sprintf("deny:%s:%s", id, name))
+			if err != nil {
+				return err
+			}
 		}
 	}
+
 	return nil
 }
 
-func getPrivilege(id string, name string, server string) (string, *Error) {
+func getPrivilege(id string, name string, server string, allow bool) (string, *Error) {
 	mem, err := MInitServers(server)
 	if err != nil {
 		return "", err
 	}
 
-	str, err := mem.MGetStrValue(fmt.Sprintf("%s:%s", id, name))
+	var str string
+	if allow {
+		str, err = mem.MGetStrValue(fmt.Sprintf("allow:%s:%s", id, name))
+	} else {
+		str, err = mem.MGetStrValue(fmt.Sprintf("deny:%s:%s", id, name))
+	}
 	if err != nil {
 		return "", err
 	}
@@ -1084,7 +1194,7 @@ func setMap(id string, tp string, name string, value string, server string) *Err
 		return err
 	}
 
-	if tp == ELFOP[7] {
+	if tp == ELFOP[9] {
 		err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", id, name), value)
 		if err != nil {
 			return err
@@ -1109,17 +1219,4 @@ func getMap(id string, name string, server string) (string, *Error) {
 		return "", err
 	}
 	return str, nil
-}
-
-func guessPath(base string, in string) string {
-	if strings.HasPrefix(in, "$") {
-		return strings.TrimPrefix(in, "$")
-	}
-	if strings.HasPrefix(in, "/") {
-		str := fmt.Sprintf("%s%s", base, in)
-		return str
-	} else {
-		str := fmt.Sprintf("%s/%s", base, in)
-		return str
-	}
 }

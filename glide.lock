@@ -1,5 +1,5 @@
-hash: a6c70956dada379462b90b1e0c31a0ff91ba2fae1aecb989e4968c985ee90b5e
-updated: 2018-05-13T14:23:13.288853673+09:00
+hash: 4e616d6fa387615cc4fae70971342f93b8a1dddb323d203ee326a605d62ac1af
+updated: 2018-05-24T22:11:43.916858177+09:00
 imports:
 - name: github.com/bradfitz/gomemcache
   version: 1952afaa557dc08e8e0d89eafab110fb501c1a2b
@@ -35,6 +35,8 @@ imports:
   version: 529f712b661aa1075f21a3d7380f3a998556c1a2
 - name: github.com/sergi/go-diff
   version: 1744e2970ca51c86172c8190fadad617561ed6e7
+- name: github.com/sirupsen/logrus
+  version: c155da19408a8799da419ed3eeb0cb5db0ad5dbc
 - name: github.com/spf13/afero
   version: 63644898a8da0bc22138abf860edaf5277b6102e
   subpackages:
@@ -55,6 +57,10 @@ imports:
   version: a053f3dac71df214bfe8b367f34220f0029c9c02
   subpackages:
   - codes
+- name: golang.org/x/crypto
+  version: 159ae71589f303f9fbfd7528413e0fe944b9c1cb
+  subpackages:
+  - ssh/terminal
 - name: golang.org/x/net
   version: 5f9ae10d9af5b1c89ae6904293b14b064d4ada23
   subpackages:
@@ -63,6 +69,7 @@ imports:
   version: bb9c189858d91f42db229b04d45a4c3d23a7662a
   subpackages:
   - unix
+  - windows
 - name: golang.org/x/text
   version: 7922cc490dd5a7dbaa7fd5d6196b49db59ac042f
   subpackages:

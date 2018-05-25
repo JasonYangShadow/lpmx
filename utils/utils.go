@@ -3,11 +3,15 @@ package utils
 import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/log"
 	"github.com/phayes/permbits"
+	"github.com/sirupsen/logrus"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -227,4 +231,33 @@ func RandomString(n int) string {
 func RandomPort(min, max int) int {
 	rand.Seed(time.Now().Unix())
 	return rand.Intn(max-min) + min
+}
+
+func GuessPath(base string, in string, file bool) (string, *Error) {
+	LOGGER.WithFields(logrus.Fields{
+		"base": base,
+		"in":   in,
+		"file": file,
+	}).Debug("guess path debug")
+	if strings.HasPrefix(in, "$") {
+		return strings.TrimPrefix(in, "$"), nil
+	}
+	var str string
+	if filepath.IsAbs(in) {
+		str = in
+	} else {
+		str = filepath.Join(base, in)
+	}
+	if (file && FileExist(str)) || (!file && FolderExist(str)) {
+		return str, nil
+	}
+	cerr := ErrNew(ErrNil, fmt.Sprintf("%s doesn't exist both in abs path and relative path", str))
+	return "", cerr
+}
+
+func AddConPath(base string, in string) string {
+	if strings.HasPrefix(in, "$") {
+		return strings.TrimPrefix(in, "$")
+	}
+	return filepath.Join(base, in)
 }
