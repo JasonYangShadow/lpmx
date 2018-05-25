@@ -584,9 +584,28 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["ContainerId"] = con.Id
 	env["ContainerRoot"] = con.RootPath
 	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
-	env["LD_LIBRARY_PATH"] = con.SysDir
 	env["MEMCACHED_PID"] = con.MemcachedServerList[0]
 	env["TERM"] = "xterm"
+
+	//ld_library_path
+	if data, data_ok := con.SettingConf["ld_library_path"]; data_ok {
+		if d1, do1 := data.([]interface{}); do1 {
+			var libs []string
+			for _, d1_1 := range d1 {
+				if d1_str, d1_str_ok := d1_1.(string); d1_str_ok {
+					d1_str, d1_err := GuessPath(con.RootPath, d1_str, false)
+					if d1_err != nil {
+						continue
+					}
+					libs = append(libs, d1_str)
+				}
+			}
+			libs = append(libs, con.SysDir)
+			env["LD_LIBRARY_PATH"] = strings.Join(libs, ":")
+		}
+	}
+
+	//export env
 	if data, data_ok := con.SettingConf["export_env"]; data_ok {
 		if d1, o1 := data.([]interface{}); o1 {
 			for _, d1_1 := range d1 {
@@ -645,10 +664,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		}
 
 	}
-
-	LOGGER.WithFields(logrus.Fields{
-		"ENV": env,
-	}).Debug("all envs")
 
 	if path_value, path_ok := env["PATH"]; path_ok {
 		path_value = strings.Replace(path_value, ";", ":", -1)
@@ -953,7 +968,7 @@ func (con *Container) setProgPrivileges() *Error {
 										if v_err != nil {
 											LOGGER.WithFields(logrus.Fields{
 												"key":   k,
-												"value": v.(string),
+												"value": acl.(string),
 												"err":   v_err,
 												"type":  "interface",
 											}).Error("allow list parse error")
@@ -1016,7 +1031,7 @@ func (con *Container) setProgPrivileges() *Error {
 										if v_err != nil {
 											LOGGER.WithFields(logrus.Fields{
 												"key":   k,
-												"value": v.(string),
+												"value": acl.(string),
 												"err":   v_err,
 												"type":  "interface",
 											}).Error("allow list parse error")
@@ -1079,7 +1094,7 @@ func (con *Container) setProgPrivileges() *Error {
 										if v_err != nil {
 											LOGGER.WithFields(logrus.Fields{
 												"key":   k,
-												"value": v.(string),
+												"value": acl.(string),
 												"err":   v_err,
 												"type":  "interface",
 											}).Error("allow list parse error")
