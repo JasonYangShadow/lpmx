@@ -4,6 +4,7 @@ import (
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/container"
 	. "github.com/jasonyangshadow/lpmx/log"
+	. "github.com/jasonyangshadow/lpmx/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"os"
@@ -27,7 +28,7 @@ func main() {
 	case "PANIC":
 		LOGGER.SetLevel(logrus.PanicLevel)
 	default:
-		LOGGER.SetLevel(logrus.DebugLevel)
+		LOGGER.SetLevel(logrus.InfoLevel)
 	}
 
 	var initCmd = &cobra.Command{
@@ -66,7 +67,16 @@ func main() {
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
 			RunSource, _ = filepath.Abs(RunSource)
-			RunConfig, _ = filepath.Abs(RunConfig)
+			if RunConfig != "" {
+				RunConfig, _ = filepath.Abs(RunConfig)
+			} else {
+				config_path := fmt.Sprintf("%s/setting.yml", RunSource)
+				if FileExist(config_path) {
+					RunConfig = config_path
+				} else {
+					LOGGER.Panic("can't locate the setting.yml in source folder")
+				}
+			}
 			err := Run(RunSource, RunConfig, RunPassive)
 			if err != nil {
 				LOGGER.Panic(err.Error())
@@ -75,8 +85,7 @@ func main() {
 	}
 	runCmd.Flags().StringVarP(&RunSource, "source", "s", "", "required")
 	runCmd.MarkFlagRequired("source")
-	runCmd.Flags().StringVarP(&RunConfig, "config", "c", "", "required")
-	runCmd.MarkFlagRequired("config")
+	runCmd.Flags().StringVarP(&RunConfig, "config", "c", "", "optional(if the setting.yml exists in source folder, then you don't need to specify the path)")
 	runCmd.Flags().BoolVarP(&RunPassive, "passive", "p", false, "optional")
 
 	var GetId string
