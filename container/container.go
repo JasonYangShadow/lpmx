@@ -703,6 +703,11 @@ func (con *Container) bashShell() *Error {
 	if err != nil {
 		return err
 	}
+
+	LOGGER.WithFields(logrus.Fields{
+		"con": con,
+	}).Debug("bashShell debug")
+
 	if FolderExist(con.RootPath) {
 		if con.CurrentUser == "root" {
 			err := ShellEnv("fakeroot", env, con.RootPath, con.UserShell)
@@ -724,6 +729,11 @@ func (con *Container) bashShell() *Error {
 			}
 			err = ShellEnv("fakeroot", env, con.RootPath, "chroot", con.RootPath, con.UserShell)
 		} else {
+			LOGGER.WithFields(logrus.Fields{
+				"con.userShell": con.UserShell,
+				"env":           env,
+				"con.RootPath":  con.RootPath,
+			}).Debug("shell env paramters")
 			err = ShellEnv(con.UserShell, env, con.RootPath)
 		}
 		if err != nil {

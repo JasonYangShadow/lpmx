@@ -7,29 +7,11 @@ import (
 	. "github.com/jasonyangshadow/lpmx/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"os"
 	"path/filepath"
 	"strconv"
 )
 
 func main() {
-	level := os.Getenv("LPMX_LOG_LEVEL")
-	switch level {
-	case "DEBUG":
-		LOGGER.SetLevel(logrus.DebugLevel)
-	case "INFO":
-		LOGGER.SetLevel(logrus.InfoLevel)
-	case "WARN":
-		LOGGER.SetLevel(logrus.WarnLevel)
-	case "ERROR":
-		LOGGER.SetLevel(logrus.ErrorLevel)
-	case "FATAL":
-		LOGGER.SetLevel(logrus.FatalLevel)
-	case "PANIC":
-		LOGGER.SetLevel(logrus.PanicLevel)
-	default:
-		LOGGER.SetLevel(logrus.InfoLevel)
-	}
 
 	var initCmd = &cobra.Command{
 		Use:   "init",
