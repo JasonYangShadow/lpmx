@@ -216,7 +216,7 @@ func main() {
 				LOGGER.Panic(err.Error())
 			} else {
 				LOGGER.WithFields(logrus.Fields{
-					"container id": args[0],
+					"container id": SetId,
 				}).Info("container is set with new environment variables")
 			}
 		},
