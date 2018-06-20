@@ -2,6 +2,14 @@ package container
 
 import (
 	"fmt"
+	"net"
+	"net/rpc"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"time"
+
 	. "github.com/jasonyangshadow/lpmx/elf"
 	. "github.com/jasonyangshadow/lpmx/error"
 	. "github.com/jasonyangshadow/lpmx/log"
@@ -13,13 +21,6 @@ import (
 	. "github.com/jasonyangshadow/lpmx/yaml"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"net"
-	"net/rpc"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"strings"
-	"time"
 )
 
 const (
@@ -586,24 +587,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
 	env["MEMCACHED_PID"] = con.MemcachedServerList[0]
 	env["TERM"] = "xterm"
-
-	//ld_library_path
-	if data, data_ok := con.SettingConf["ld_library_path"]; data_ok {
-		if d1, do1 := data.([]interface{}); do1 {
-			var libs []string
-			for _, d1_1 := range d1 {
-				if d1_str, d1_str_ok := d1_1.(string); d1_str_ok {
-					d1_str, d1_err := GuessPath(con.RootPath, d1_str, false)
-					if d1_err != nil {
-						continue
-					}
-					libs = append(libs, d1_str)
-				}
-			}
-			libs = append(libs, con.SysDir)
-			env["LD_LIBRARY_PATH"] = strings.Join(libs, ":")
-		}
-	}
+	env["SHELL"] = con.UserShell
 
 	//export env
 	if data, data_ok := con.SettingConf["export_env"]; data_ok {
@@ -617,6 +601,11 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 								if k1, ko1 := k.(string); ko1 {
 									var err *Error
 									env[k1], err = GuessPath(con.RootPath, v1, false)
+									LOGGER.WithFields(logrus.Fields{
+										"k":   k1,
+										"v":   v1,
+										"err": err,
+									}).Debug("export_env, map[interface{}]interface, string")
 									if err != nil {
 										continue
 									}
@@ -632,8 +621,12 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 									libs = append(libs, vv1_abs)
 								}
 								if k1, ok1 := k.(string); ok1 {
-									env[k1] = strings.Join(libs, ";")
+									env[k1] = strings.Join(libs, ":")
 								}
+								LOGGER.WithFields(logrus.Fields{
+									"k": k.(string),
+									"v": libs,
+								}).Debug("export_env, map[interface{}]interface, string array")
 							}
 						}
 					case map[string]interface{}:
@@ -641,6 +634,11 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 							if v1, vo1 := v.(string); vo1 {
 								var err *Error
 								env[k], err = GuessPath(con.RootPath, v1, false)
+								LOGGER.WithFields(logrus.Fields{
+									"k":   k,
+									"v":   v1,
+									"err": err,
+								}).Debug("export_env, map[string]interface, string")
 								if err != nil {
 									continue
 								}
@@ -654,7 +652,11 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 									}
 									libs = append(libs, vv1_abs)
 								}
-								env[k] = strings.Join(libs, ";")
+								env[k] = strings.Join(libs, ":")
+								LOGGER.WithFields(logrus.Fields{
+									"k": k,
+									"v": libs,
+								}).Debug("export_env, map[string]interface, string array")
 							}
 						}
 					}
@@ -663,19 +665,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 			}
 		}
 
-	}
-
-	if path_value, path_ok := env["PATH"]; path_ok {
-		path_value = strings.Replace(path_value, ";", ":", -1)
-		o_path := os.Getenv("PATH")
-		if o_path != "" {
-			path_value = fmt.Sprintf("%s:%s", path_value, o_path)
-		}
-		LOGGER.WithFields(logrus.Fields{
-			"sys path":   o_path,
-			"path_value": path_value,
-		}).Debug("PATH env setting")
-		env["PATH"] = path_value
 	}
 
 	if _, l_switch_ok := con.SettingConf["__log_switch"]; l_switch_ok {
@@ -700,13 +689,14 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 
 func (con *Container) bashShell() *Error {
 	env, err := con.genEnv()
+	LOGGER.WithFields(logrus.Fields{
+		"env": env,
+		"err": err,
+	}).Debug("genEnv debug")
+
 	if err != nil {
 		return err
 	}
-
-	LOGGER.WithFields(logrus.Fields{
-		"con": con,
-	}).Debug("bashShell debug")
 
 	if FolderExist(con.RootPath) {
 		if con.CurrentUser == "root" {
@@ -716,17 +706,9 @@ func (con *Container) bashShell() *Error {
 			}
 		} else if con.CurrentUser == "chroot" {
 			env["ContainerMode"] = "chroot"
-			shell := fmt.Sprintf("%s/%s", con.RootPath, con.UserShell)
-			if !FileExist(shell) {
-				_, err := MakeDir(filepath.Dir(shell))
-				if err != nil {
-					return err
-				}
-				_, err = CopyFile(con.UserShell, shell)
-				if err != nil {
-					return err
-				}
-			}
+			LOGGER.WithFields(logrus.Fields{
+				"env": env,
+			}).Debug("chroot mode debug")
 			err = ShellEnv("fakeroot", env, con.RootPath, "chroot", con.RootPath, con.UserShell)
 		} else {
 			LOGGER.WithFields(logrus.Fields{
@@ -762,7 +744,11 @@ func (con *Container) createContainer() *Error {
 	}
 	if sh, ok := con.SettingConf["user_shell"]; ok {
 		strsh, _ := sh.(string)
-		con.UserShell = strsh
+		if strings.HasSuffix(strsh, "/") {
+			con.UserShell = strsh
+		} else {
+			con.UserShell = filepath.Join(con.RootPath, strsh)
+		}
 	} else {
 		con.UserShell = "/bin/bash"
 	}
