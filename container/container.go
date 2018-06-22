@@ -588,6 +588,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["MEMCACHED_PID"] = con.MemcachedServerList[0]
 	env["TERM"] = "xterm"
 	env["SHELL"] = con.UserShell
+	env["FAKECHROOT_BASE"] = con.RootPath
 
 	//export env
 	if data, data_ok := con.SettingConf["export_env"]; data_ok {
