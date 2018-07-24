@@ -1,14 +1,18 @@
-hash: 4e616d6fa387615cc4fae70971342f93b8a1dddb323d203ee326a605d62ac1af
-updated: 2018-06-08T07:01:44.852485148+09:00
+hash: 4f1be9b585a003137c42230d8cbf68faf2b46b1e8a47dcda4f178d3236f99cd5
+updated: 2018-07-24T14:53:14.487085016+09:00
 imports:
 - name: github.com/bradfitz/gomemcache
-  version: 1952afaa557dc08e8e0d89eafab110fb501c1a2b
+  version: bc664df9673713a0ccf26e3b55a673ec7301088b
   subpackages:
   - memcache
+- name: github.com/docker/docker
+  version: 90d35abf7b3535c1c319c872900fbd76374e521c
+  subpackages:
+  - client
 - name: github.com/fsnotify/fsnotify
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: github.com/golang/protobuf
-  version: 05f48f4eaf0e05663b562bab533cdd472238ce29
+  version: 427e165155e0a4ff5993a36657c1f733f5b0f782
   subpackages:
   - proto
 - name: github.com/hashicorp/hcl
@@ -28,9 +32,9 @@ imports:
 - name: github.com/magiconair/properties
   version: c2353362d570a7bfa228149c62842019201cfb71
 - name: github.com/mitchellh/mapstructure
-  version: bb74f1db0675b241733089d5a1faa5dd8b0ef57b
+  version: f15292f7a699fcc1a38a80977f80a046874ba8ac
 - name: github.com/pelletier/go-toml
-  version: c01d1270ff3e442a8a57cddc1c92dc1138598194
+  version: 5c5490133daa8660ec676ca8b096cc27e223beaa
 - name: github.com/phayes/permbits
   version: 529f712b661aa1075f21a3d7380f3a998556c1a2
 - name: github.com/sergi/go-diff
@@ -52,26 +56,26 @@ imports:
 - name: github.com/spf13/pflag
   version: 3ebe029320b2676d667ae88da602a5f854788a8a
 - name: github.com/spf13/viper
-  version: 15738813a09db5c8e5b60a19d67d3f9bd38da3a4
+  version: d493c32b69b8c6f2377bf30bc4d70267ffbc0793
 - name: github.com/vmihailenco/msgpack
   version: a053f3dac71df214bfe8b367f34220f0029c9c02
   subpackages:
   - codes
 - name: golang.org/x/crypto
-  version: b47b1587369238182299fe4dad77d05b8b461e06
+  version: c126467f60eb25f8f27e5a981f32a87e3965053f
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: 1e491301e022f8f977054da4c2d852decd59571f
+  version: a680a1efc54dd51c040b3b5ce4939ea3cf2ea0d1
   subpackages:
   - context
 - name: golang.org/x/sys
-  version: 9527bec2660bd847c050fda93a0f0c6dee0800bb
+  version: ac767d655b305d4e9612f5f6e33120b9176c4ad4
   subpackages:
   - unix
   - windows
 - name: golang.org/x/text
-  version: 5c1cf69b5978e5a34c5f9ba09a83e56acc4b7877
+  version: 0605a8320aceb4207a5fb3521281e17ec2075476
   subpackages:
   - transform
   - unicode/norm

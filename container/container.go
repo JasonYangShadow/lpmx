@@ -701,6 +701,10 @@ func (con *Container) bashShell() *Error {
 
 	if FolderExist(con.RootPath) {
 		if con.CurrentUser == "root" {
+			LOGGER.WithFields(logrus.Fields{
+				"env":   env,
+				"shell": con.UserShell,
+			}).Debug("root mode debug")
 			err := ShellEnv("fakeroot", env, con.RootPath, con.UserShell)
 			if err != nil {
 				return err
