@@ -1,3 +1,4 @@
+![lpmx logo](./lpmx_small.PNG)
 # LPMX 
 lpmx is rootless container other than local package manager. 
 It employs the LD_PRELOAD mechanism and ELF header patch to implement both elf modification and system calls interception.

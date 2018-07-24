@@ -8,6 +8,8 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -23,11 +25,12 @@ const (
 	TYPE_DIR
 	TYPE_SYMLINK
 	TYPE_PIPE
+	TYPE_OTHER
 )
 
 func FileExist(file string) bool {
 	ftype, err := FileType(file)
-	if err == nil && ftype == TYPE_REGULAR {
+	if err == nil && (ftype == TYPE_REGULAR || ftype == TYPE_OTHER) {
 		return true
 	}
 	return false
@@ -57,8 +60,7 @@ func FileType(file string) (int8, *Error) {
 	case mode&os.ModeNamedPipe != 0:
 		return TYPE_PIPE, nil
 	default:
-		cerr := ErrNew(ErrNExist, fmt.Sprintf("file mode is not recognized %s ", file))
-		return -1, cerr
+		return TYPE_OTHER, nil
 	}
 }
 
@@ -113,6 +115,25 @@ func FilePermission(file interface{}, permType int8) (bool, *Error) {
 		return false, cerr
 	}
 
+}
+
+func GetFilePermission(file interface{}) (uint32, *Error) {
+	switch file.(type) {
+	case string:
+		permissions, err := permbits.Stat(file.(string))
+		if err != nil {
+			cerr := ErrNew(ErrFileStat, fmt.Sprintf("os.stat %s error: %s", file, err.Error()))
+			return 1, cerr
+		}
+		return uint32(permissions), nil
+	case os.FileInfo:
+		fileMode := file.(os.FileInfo).Mode()
+		permissions := permbits.FileMode(fileMode)
+		return uint32(permissions), nil
+	default:
+		cerr := ErrNew(ErrMismatch, "file type is not in (string, os.FileInfo)")
+		return 1, cerr
+	}
 }
 
 func MakeDir(dir string) (bool, *Error) {
@@ -227,4 +248,35 @@ func RandomString(n int) string {
 func RandomPort(min, max int) int {
 	rand.Seed(time.Now().Unix())
 	return rand.Intn(max-min) + min
+}
+
+func GuessPath(base string, in string, file bool) (string, *Error) {
+	if strings.HasPrefix(in, "$") {
+		return strings.Replace(in, "$", "", -1), nil
+	}
+	if strings.HasPrefix(in, "^") {
+		in = strings.Replace(in, "^", "", -1)
+		file = true
+	}
+	if strings.TrimSpace(in) == "all" {
+		return in, nil
+	}
+	var str string
+	if filepath.IsAbs(in) {
+		str = in
+	} else {
+		str = filepath.Join(base, in)
+	}
+	if (file && FileExist(str)) || (!file && FolderExist(str)) {
+		return str, nil
+	}
+	cerr := ErrNew(ErrNil, fmt.Sprintf("%s doesn't exist both in abs path and relative path", str))
+	return "", cerr
+}
+
+func AddConPath(base string, in string) string {
+	if strings.HasPrefix(in, "$") {
+		return strings.Replace(in, "$", "", -1)
+	}
+	return filepath.Join(base, in)
 }

@@ -1,9 +1,13 @@
 package elf
 
 import (
+	"bytes"
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/error"
 	. "github.com/jasonyangshadow/lpmx/paeudo"
+	. "github.com/jasonyangshadow/lpmx/utils"
+	"io/ioutil"
+	"os"
 )
 
 const (
@@ -85,4 +89,33 @@ func ElfReplaceNeeded(elfpath string, lib_old string, lib_new string, prog strin
 		return false, err
 	}
 	return true, nil
+}
+
+func Patchldso(elfpath string) *Error {
+	content, err := ioutil.ReadFile(elfpath)
+	if err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("elf file doesn't exist %s", elfpath))
+		return cerr
+	}
+	permissions, p_err := GetFilePermission(elfpath)
+	if p_err != nil {
+		return p_err
+	}
+	nul := []byte("\x00/\x00\x00\x00")
+	etc := []byte("\x00/etc")
+	lib := []byte("\x00/lib")
+	usr := []byte("\x00/usr")
+	ld_path_orig := []byte("\x00LD_LIBRARY_PATH\x00")
+	ld_path_new := []byte("\x00LD_LIBRARY_LPMX\x00")
+	content = bytes.Replace(content, etc, nul, -1)
+	content = bytes.Replace(content, lib, nul, -1)
+	content = bytes.Replace(content, usr, nul, -1)
+	content = bytes.Replace(content, ld_path_orig, ld_path_new, -1)
+	elfpath_new := fmt.Sprintf("%s.patch", elfpath)
+	err = ioutil.WriteFile(elfpath_new, content, os.FileMode(permissions))
+	if err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("ld.so patch failed %s", elfpath_new))
+		return cerr
+	}
+	return nil
 }

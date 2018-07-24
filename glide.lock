@@ -1,14 +1,18 @@
-hash: a6c70956dada379462b90b1e0c31a0ff91ba2fae1aecb989e4968c985ee90b5e
-updated: 2018-05-13T14:23:13.288853673+09:00
+hash: 4f1be9b585a003137c42230d8cbf68faf2b46b1e8a47dcda4f178d3236f99cd5
+updated: 2018-07-24T14:53:14.487085016+09:00
 imports:
 - name: github.com/bradfitz/gomemcache
-  version: 1952afaa557dc08e8e0d89eafab110fb501c1a2b
+  version: bc664df9673713a0ccf26e3b55a673ec7301088b
   subpackages:
   - memcache
+- name: github.com/docker/docker
+  version: 90d35abf7b3535c1c319c872900fbd76374e521c
+  subpackages:
+  - client
 - name: github.com/fsnotify/fsnotify
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: github.com/golang/protobuf
-  version: e09c5db296004fbe3f74490e84dcd62c3c5ddb1b
+  version: 427e165155e0a4ff5993a36657c1f733f5b0f782
   subpackages:
   - proto
 - name: github.com/hashicorp/hcl
@@ -26,17 +30,19 @@ imports:
 - name: github.com/inconshreveable/mousetrap
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/magiconair/properties
-  version: 2c9e9502788518c97fe44e8955cd069417ee89df
+  version: c2353362d570a7bfa228149c62842019201cfb71
 - name: github.com/mitchellh/mapstructure
-  version: 00c29f56e2386353d58c599509e8dc3801b0d716
+  version: f15292f7a699fcc1a38a80977f80a046874ba8ac
 - name: github.com/pelletier/go-toml
-  version: 66540cf1fcd2c3aee6f6787dfa32a6ae9a870f12
+  version: 5c5490133daa8660ec676ca8b096cc27e223beaa
 - name: github.com/phayes/permbits
   version: 529f712b661aa1075f21a3d7380f3a998556c1a2
 - name: github.com/sergi/go-diff
   version: 1744e2970ca51c86172c8190fadad617561ed6e7
+- name: github.com/sirupsen/logrus
+  version: c155da19408a8799da419ed3eeb0cb5db0ad5dbc
 - name: github.com/spf13/afero
-  version: 63644898a8da0bc22138abf860edaf5277b6102e
+  version: 787d034dfe70e44075ccc060d346146ef53270ad
   subpackages:
   - mem
 - name: github.com/spf13/cast
@@ -48,28 +54,33 @@ imports:
 - name: github.com/spf13/jwalterweatherman
   version: 7c0cea34c8ece3fbeb2b27ab9b59511d360fb394
 - name: github.com/spf13/pflag
-  version: 583c0c0531f06d5278b7d917446061adc344b5cd
+  version: 3ebe029320b2676d667ae88da602a5f854788a8a
 - name: github.com/spf13/viper
-  version: 8dc2790b029dc41e2b8ff772c63c26adbb1db70d
+  version: d493c32b69b8c6f2377bf30bc4d70267ffbc0793
 - name: github.com/vmihailenco/msgpack
   version: a053f3dac71df214bfe8b367f34220f0029c9c02
   subpackages:
   - codes
+- name: golang.org/x/crypto
+  version: c126467f60eb25f8f27e5a981f32a87e3965053f
+  subpackages:
+  - ssh/terminal
 - name: golang.org/x/net
-  version: 5f9ae10d9af5b1c89ae6904293b14b064d4ada23
+  version: a680a1efc54dd51c040b3b5ce4939ea3cf2ea0d1
   subpackages:
   - context
 - name: golang.org/x/sys
-  version: bb9c189858d91f42db229b04d45a4c3d23a7662a
+  version: ac767d655b305d4e9612f5f6e33120b9176c4ad4
   subpackages:
   - unix
+  - windows
 - name: golang.org/x/text
-  version: 7922cc490dd5a7dbaa7fd5d6196b49db59ac042f
+  version: 0605a8320aceb4207a5fb3521281e17ec2075476
   subpackages:
   - transform
   - unicode/norm
 - name: google.golang.org/appengine
-  version: 0a24098c0ec68416ec050f567f75df563d6b231e
+  version: b1f26356af11148e710935ed1ac8a7f5702c7612
   subpackages:
   - datastore
   - internal

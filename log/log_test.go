@@ -1,14 +1,11 @@
 package log
 
 import (
+	"github.com/sirupsen/logrus"
 	"testing"
 )
 
 func TestLog(t *testing.T) {
-	log, err := LogNew("")
-	if err != nil {
-		t.Error(err)
-	}
-	LogSet(WARNING)
-	log.Println(FATAL, "test")
+	LOGGER.SetLevel(logrus.DebugLevel)
+	LOGGER.Debug("test logrus")
 }
