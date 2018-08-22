@@ -4,14 +4,18 @@ import (
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
-	. "github.com/jasonyangshadow/lpmx/error"
+	"io"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"time"
+
+	. "github.com/jasonyangshadow/lpmx/error"
 )
 
 const (
 	DOCKER_HUB_TOKEN = "https://auth.docker.io/token?serivce=registry.docker.io&scope="
+	DOCKER_HUB_REQ   = "https://registry-1.docker.io/v2/"
 	CATALOG_LIMIT    = 50
 )
 
@@ -25,6 +29,7 @@ func createTransport() *http.Transport {
 }
 
 func httpExCode(r *http.Response) (int, *Error) {
+	bodyBytes, _ := ioutil.ReadAll(r.Body)
 	switch r.StatusCode {
 	case 200:
 		return 200, nil
@@ -35,16 +40,32 @@ func httpExCode(r *http.Response) (int, *Error) {
 		cerr := ErrNew(ErrHttpNotFound, "404 not found")
 		return 404, cerr
 	default:
-		cerr := ErrNew(ErrUnknown, "http exception unknown")
+		cerr := ErrNew(ErrUnknown, string(bodyBytes))
 		return -1, cerr
 	}
 }
 
 var http_client = &http.Client{Transport: createTransport()}
 
-//return params are: successful(bool), statuscode, token, refresh_token, err(if it has)
-func RegistryAuthenticate(target string, operations string) (bool, int, string, *Error) {
-	requrl := DOCKER_HUB_TOKEN + "repository:" + target + ":" + operations
+func V2Available() (bool, *Error) {
+	resp, err := http_client.Get(DOCKER_HUB_REQ)
+	defer resp.Body.Close()
+	if err != nil {
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		cerr := ErrNew(err, string(bodyBytes))
+		return false, cerr
+	}
+	fmt.Println(resp)
+	retcode, cerr := httpExCode(resp)
+	if retcode == 200 {
+		return true, nil
+	}
+	return false, cerr
+}
+
+//return params are: successful(bool), statuscode, token, err(if it has)
+func RegistryAuthenticate(name string, operations string) (bool, int, string, *Error) {
+	requrl := DOCKER_HUB_TOKEN + "repository:" + name + ":" + operations
 	resp, err := http_client.Get(requrl)
 	defer resp.Body.Close()
 	if err != nil {
@@ -55,6 +76,10 @@ func RegistryAuthenticate(target string, operations string) (bool, int, string, 
 	retcode, cerr := httpExCode(resp)
 	if retcode == 200 && cerr == nil {
 		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		if len(bodyBytes) == 0 {
+			cerr := ErrNew(ErrZero, "size of http return body is 0")
+			return false, -1, "", cerr
+		}
 		data := make(map[string]interface{})
 		if err := json.Unmarshal(bodyBytes, &data); err != nil {
 			cerr := ErrNew(err, "json unmarshal http body failure")
@@ -68,11 +93,11 @@ func RegistryAuthenticate(target string, operations string) (bool, int, string, 
 	}
 }
 
-func RegistryAuthenticateBasic(target string, operations string, user string, pass string) (bool, int, string, *Error) {
-	requrl := DOCKER_HUB_TOKEN + "repository:" + target + ":" + operations
+func RegistryAuthenticateBasic(name string, operations string, user string, pass string) (bool, int, string, *Error) {
+	requrl := DOCKER_HUB_TOKEN + "repository:" + name + ":" + operations
 	req, _ := http.NewRequest("GET", requrl, nil)
 	auth := b64.StdEncoding.EncodeToString([]byte(user + ":" + pass))
-	req.Header.Add("Authorization", auth)
+	req.Header.Add("Authorization", "Basic "+auth)
 	resp, err := http_client.Do(req)
 	defer resp.Body.Close()
 	if err != nil {
@@ -82,11 +107,123 @@ func RegistryAuthenticateBasic(target string, operations string, user string, pa
 	}
 	retcode, cerr := httpExCode(resp)
 	if retcode == 200 && cerr == nil {
-		return true, 200, "token", nil
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		if len(bodyBytes) == 0 {
+			cerr := ErrNew(ErrZero, "size of http return body is 0")
+			return false, -1, "", cerr
+		}
+		data := make(map[string]interface{})
+		if err := json.Unmarshal(bodyBytes, &data); err != nil {
+			cerr := ErrNew(err, "json unmarshal http body failure")
+			return false, -1, "", cerr
+		}
+		return true, 200, data["token"].(string), nil
 	} else {
 		cerr := ErrNew(err, "http get encountered failure")
-		fmt.Println(resp)
 		bodyBytes, _ := ioutil.ReadAll(resp.Body)
 		return false, resp.StatusCode, string(bodyBytes), cerr
 	}
+}
+
+func PullManifest(name string, tag string, token string) *Error {
+	requrl := DOCKER_HUB_REQ + name + "/manifests/" + tag
+	req, _ := http.NewRequest("Get", requrl, nil)
+	req.Header.Add("Authorization", "Bearer "+token)
+	resp, err := http_client.Do(req)
+	defer resp.Body.Close()
+	if err != nil {
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		cerr := ErrNew(err, string(bodyBytes))
+		return cerr
+	}
+	fmt.Println(resp)
+	retcode, cerr := httpExCode(resp)
+	if retcode == 200 {
+		return nil
+	}
+	return cerr
+}
+
+func CheckManifest(name string, tag string, token string) (bool, *Error) {
+	requrl := DOCKER_HUB_REQ + name + "/manifests/" + tag
+	req, _ := http.NewRequest("HEAD", requrl, nil)
+	req.Header.Add("Authorization", "Bearer "+token)
+	resp, err := http_client.Do(req)
+	defer resp.Body.Close()
+	if err != nil {
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		cerr := ErrNew(err, string(bodyBytes))
+		return false, cerr
+	}
+	retcode, cerr := httpExCode(resp)
+	if retcode == 200 {
+		fmt.Println(resp)
+		return true, nil
+	}
+	return false, cerr
+}
+
+func PullLayer(name string, digest string, path string, token string) *Error {
+	requrl := DOCKER_HUB_REQ + name + "/blobs/" + digest
+	req, _ := http.NewRequest("GET", requrl, nil)
+	req.Header.Add("Authorization", "Bearer "+token)
+	resp, err := http_client.Do(req)
+	defer resp.Body.Close()
+	if err != nil {
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		cerr := ErrNew(err, string(bodyBytes))
+		return cerr
+	}
+	retcode, cerr := httpExCode(resp)
+	if retcode == 200 {
+		out, err := os.Create(path)
+		if err != nil {
+			cerr := ErrNew(ErrUnknown, "create file error")
+			return cerr
+		}
+		defer out.Close()
+		_, err = io.Copy(out, resp.Body)
+		if err != nil {
+			cerr := ErrNew(ErrUnknown, fmt.Sprintf("can't copy file from http to %s", path))
+			return cerr
+		}
+		return nil
+	}
+	return cerr
+}
+
+func ListRepositories(token string) (string, *Error) {
+	requrl := DOCKER_HUB_REQ + "_catalog"
+	req, _ := http.NewRequest("GET", requrl, nil)
+	req.Header.Add("Authorization", "Bearer "+token)
+	resp, err := http_client.Do(req)
+	defer resp.Body.Close()
+	bodyBytes, _ := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		cerr := ErrNew(err, string(bodyBytes))
+		return "", cerr
+	}
+	retcode, cerr := httpExCode(resp)
+	if retcode == 200 {
+		return string(bodyBytes), nil
+	}
+	return string(bodyBytes), cerr
+}
+
+func ListTags(name string, token string) (string, *Error) {
+	requrl := DOCKER_HUB_REQ + name + "/tags/list"
+	req, _ := http.NewRequest("GET", requrl, nil)
+	req.Header.Add("Authorization", "Bearer "+token)
+	resp, err := http_client.Do(req)
+	defer resp.Body.Close()
+	bodyBytes, _ := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		cerr := ErrNew(err, string(bodyBytes))
+		return "", cerr
+	}
+	retcode, cerr := httpExCode(resp)
+	if retcode == 200 {
+		return string(bodyBytes), nil
+	}
+	return string(bodyBytes), cerr
 }
