@@ -29,7 +29,6 @@ func createTransport() *http.Transport {
 }
 
 func httpExCode(r *http.Response) (int, *Error) {
-	bodyBytes, _ := ioutil.ReadAll(r.Body)
 	switch r.StatusCode {
 	case 200:
 		return 200, nil
@@ -40,12 +39,13 @@ func httpExCode(r *http.Response) (int, *Error) {
 		cerr := ErrNew(ErrHttpNotFound, "404 not found")
 		return 404, cerr
 	default:
+		bodyBytes, _ := ioutil.ReadAll(r.Body)
 		cerr := ErrNew(ErrUnknown, string(bodyBytes))
 		return -1, cerr
 	}
 }
 
-var http_client = &http.Client{Transport: createTransport()}
+var http_client = &http.Client{Transport: createTransport(), Timeout: time.Second * 5}
 
 func V2Available() (bool, *Error) {
 	resp, err := http_client.Get(DOCKER_HUB_REQ)
@@ -55,7 +55,6 @@ func V2Available() (bool, *Error) {
 		cerr := ErrNew(err, string(bodyBytes))
 		return false, cerr
 	}
-	fmt.Println(resp)
 	retcode, cerr := httpExCode(resp)
 	if retcode == 200 {
 		return true, nil
@@ -70,8 +69,7 @@ func RegistryAuthenticate(name string, operations string) (bool, int, string, *E
 	defer resp.Body.Close()
 	if err != nil {
 		cerr := ErrNew(err, "http get encountered failure")
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
-		return false, -1, string(bodyBytes), cerr
+		return false, -1, "", cerr
 	}
 	retcode, cerr := httpExCode(resp)
 	if retcode == 200 && cerr == nil {
@@ -130,15 +128,21 @@ func PullManifest(name string, tag string, token string) *Error {
 	req, _ := http.NewRequest("Get", requrl, nil)
 	req.Header.Add("Authorization", "Bearer "+token)
 	resp, err := http_client.Do(req)
+	bodyBytes, _ := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	if err != nil {
-		bodyBytes, _ := ioutil.ReadAll(resp.Body)
 		cerr := ErrNew(err, string(bodyBytes))
 		return cerr
 	}
-	fmt.Println(resp)
+
 	retcode, cerr := httpExCode(resp)
 	if retcode == 200 {
+		data := make(map[string]interface{})
+		if err := json.Unmarshal(bodyBytes, &data); err != nil {
+			cerr := ErrNew(err, "json unmarshal http body failure")
+			return cerr
+		}
+		fmt.Println(data)
 		return nil
 	}
 	return cerr
@@ -215,8 +219,26 @@ func ListTags(name string, token string) (string, *Error) {
 	req, _ := http.NewRequest("GET", requrl, nil)
 	req.Header.Add("Authorization", "Bearer "+token)
 	resp, err := http_client.Do(req)
-	defer resp.Body.Close()
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	if err != nil {
+		cerr := ErrNew(err, string(bodyBytes))
+		return "", cerr
+	}
+	retcode, cerr := httpExCode(resp)
+	if retcode == 200 {
+		return string(bodyBytes), nil
+	}
+	return string(bodyBytes), cerr
+}
+
+func GetCatalog(token string) (string, *Error) {
+	requrl := DOCKER_HUB_REQ + "_catalog"
+	req, _ := http.NewRequest("GET", requrl, nil)
+	req.Header.Add("Authorization", "Bearer "+token)
+	resp, err := http_client.Do(req)
+	bodyBytes, _ := ioutil.ReadAll(resp.Body)
+	defer resp.Body.Close()
 	if err != nil {
 		cerr := ErrNew(err, string(bodyBytes))
 		return "", cerr

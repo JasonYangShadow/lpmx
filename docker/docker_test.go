@@ -4,16 +4,23 @@ import (
 	"testing"
 )
 
-var name = "jasonyangshadow/python"
-var _, _, token, _ = RegistryAuthenticate(name, "pull")
+var name = "library/ubuntu"
+var _, _, token, _ = RegistryAuthenticate(name, "*")
 
-func TestPullManifest(t *testing.T) {
+func TestAuthentication(t *testing.T) {
 	t.Skip("skip test")
-	t.Log(PullManifest(name, "latest", token))
+	ret, code, token, err := RegistryAuthenticate(name, "pull")
+	t.Log(ret, code, token, err)
 }
 
-func TestAuthenticationBasic(t *testing.T) {
+func TestGetCatalog(t *testing.T) {
+	t.Skip("skip test")
+	t.Log(GetCatalog(token))
+}
+
+func TestPullManifest(t *testing.T) {
 	//t.Skip("skip test")
+	t.Log(PullManifest(name, "latest", token))
 }
 
 func TestDockerV2(t *testing.T) {
