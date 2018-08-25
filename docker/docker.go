@@ -15,8 +15,7 @@ import (
 
 const (
 	DOCKER_HUB_TOKEN = "https://auth.docker.io/token?serivce=registry.docker.io&scope="
-	DOCKER_HUB_REQ   = "https://registry-1.docker.io/v2/"
-	CATALOG_LIMIT    = 50
+	DOCKER_HUB_REQ   = "https://index.docker.io/v2/"
 )
 
 func createTransport() *http.Transport {
@@ -128,6 +127,7 @@ func PullManifest(name string, tag string, token string) *Error {
 	req, _ := http.NewRequest("Get", requrl, nil)
 	req.Header.Add("Authorization", "Bearer "+token)
 	resp, err := http_client.Do(req)
+	fmt.Println(resp.Header)
 	bodyBytes, _ := ioutil.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	if err != nil {
@@ -135,6 +135,7 @@ func PullManifest(name string, tag string, token string) *Error {
 		return cerr
 	}
 
+	fmt.Println(string(bodyBytes))
 	retcode, cerr := httpExCode(resp)
 	if retcode == 200 {
 		data := make(map[string]interface{})
@@ -161,10 +162,45 @@ func CheckManifest(name string, tag string, token string) (bool, *Error) {
 	}
 	retcode, cerr := httpExCode(resp)
 	if retcode == 200 {
-		fmt.Println(resp)
 		return true, nil
 	}
 	return false, cerr
+}
+
+func CheckLayers(name string, digest string, token string) (bool, *Error) {
+	requrl := DOCKER_HUB_REQ + name + "/blobs/" + digest
+	req, _ := http.NewRequest("HEAD", requrl, nil)
+	req.Header.Add("Authorization", "Bearer "+token)
+	resp, err := http_client.Do(req)
+	defer resp.Body.Close()
+	if err != nil {
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		cerr := ErrNew(err, string(bodyBytes))
+		return false, cerr
+	}
+	retcode, cerr := httpExCode(resp)
+	if retcode == 200 {
+		return true, nil
+	}
+	return false, cerr
+}
+
+func PushLayer(name string, token string) *Error {
+	requrl := DOCKER_HUB_REQ + name + "/blobs/uploads/"
+	req, _ := http.NewRequest("POST", requrl, nil)
+	req.Header.Add("Authorization", "Bearer "+token)
+	resp, err := http_client.Do(req)
+	defer resp.Body.Close()
+	if err != nil {
+		bodyBytes, _ := ioutil.ReadAll(resp.Body)
+		cerr := ErrNew(err, string(bodyBytes))
+		return cerr
+	}
+	retcode, cerr := httpExCode(resp)
+	if retcode == 200 {
+		return nil
+	}
+	return cerr
 }
 
 func PullLayer(name string, digest string, path string, token string) *Error {

@@ -4,8 +4,8 @@ import (
 	"testing"
 )
 
-var name = "library/ubuntu"
-var _, _, token, _ = RegistryAuthenticate(name, "*")
+var name = "library/alpine"
+var _, _, token, _ = RegistryAuthenticate(name, "pull")
 
 func TestAuthentication(t *testing.T) {
 	t.Skip("skip test")
@@ -20,6 +20,7 @@ func TestGetCatalog(t *testing.T) {
 
 func TestPullManifest(t *testing.T) {
 	//t.Skip("skip test")
+	t.Log(token)
 	t.Log(PullManifest(name, "latest", token))
 }
 
