@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/error"
 	"github.com/phayes/permbits"
@@ -279,4 +281,105 @@ func AddConPath(base string, in string) string {
 		return strings.Replace(in, "$", "", -1)
 	}
 	return filepath.Join(base, in)
+}
+
+func Tar(src string, writers ...io.Writer) *Error {
+	// ensure the src actually exists before trying to tar it
+	if !FolderExist(src) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s folder not exist", src))
+		return cerr
+	}
+
+	mw := io.MultiWriter(writers...)
+	gzw := gzip.NewWriter(mw)
+	defer gzw.Close()
+
+	tw := tar.NewWriter(gzw)
+	defer tw.Close()
+
+	err := filepath.Walk(src, func(file string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		header, err := tar.FileInfoHeader(fi, fi.Name())
+		if err != nil {
+			return err
+		}
+		// update the name to correctly reflect the desired destination when untaring
+		header.Name = strings.TrimPrefix(strings.Replace(file, src, "", -1), string(filepath.Separator))
+
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+		f, err := os.Open(file)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(tw, f); err != nil {
+			return err
+		}
+		f.Close()
+		return nil
+	})
+	if err != nil {
+		cerr := ErrNew(err, "tar file error")
+		return cerr
+	}
+	return nil
+}
+
+func Untar(dst string, r io.Reader) *Error {
+	gzr, err := gzip.NewReader(r)
+	if err != nil {
+		cerr := ErrNew(err, "io.reader fails")
+		return cerr
+	}
+	defer gzr.Close()
+
+	tr := tar.NewReader(gzr)
+
+	for {
+		header, err := tr.Next()
+
+		switch {
+		case err == io.EOF:
+			return nil
+
+		case err != nil:
+			cerr := ErrNew(err, "reading tar header errors")
+			return cerr
+
+		case header == nil:
+			continue
+		}
+
+		target := filepath.Join(dst, header.Name)
+
+		switch header.Typeflag {
+
+		// if its a dir and it doesn't exist create it
+		case tar.TypeDir:
+			if _, err := os.Stat(target); err != nil {
+				if err := os.MkdirAll(target, 0755); err != nil {
+					cerr := ErrNew(err, "untar making dir error")
+					return cerr
+				}
+			}
+
+		case tar.TypeReg:
+			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			if err != nil {
+				cerr := ErrNew(err, fmt.Sprintf("untar create file %s error", target))
+				return cerr
+			}
+
+			// copy over contents
+			if _, err := io.Copy(f, tr); err != nil {
+				cerr := ErrNew(err, "untar copying file content error")
+				return cerr
+			}
+
+			f.Close()
+		}
+	}
 }
