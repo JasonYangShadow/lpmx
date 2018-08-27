@@ -1,22 +1,38 @@
-hash: 4f1be9b585a003137c42230d8cbf68faf2b46b1e8a47dcda4f178d3236f99cd5
-updated: 2018-07-24T14:53:14.487085016+09:00
+hash: 13a2cfaf7f65615ad7e6ad99bbc17a512cd4e2af1de311bd922f0d6531d583c6
+updated: 2018-08-27T18:03:48.698798672+09:00
 imports:
 - name: github.com/bradfitz/gomemcache
   version: bc664df9673713a0ccf26e3b55a673ec7301088b
   subpackages:
   - memcache
+- name: github.com/docker/distribution
+  version: 48294d928ced5dd9b378f7fd7c6f5da3ff3f2c89
+  subpackages:
+  - context
+  - digest
+  - manifest
+  - manifest/schema1
+  - manifest/schema2
+  - reference
+  - uuid
 - name: github.com/docker/docker
   version: 90d35abf7b3535c1c319c872900fbd76374e521c
   subpackages:
   - client
+- name: github.com/docker/libtrust
+  version: fa567046d9b14f6aa788882a950d69651d230b21
 - name: github.com/fsnotify/fsnotify
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: github.com/golang/protobuf
-  version: 427e165155e0a4ff5993a36657c1f733f5b0f782
+  version: 8d92cf5fc15a4382f8964b08e1f42a75c0591aa3
   subpackages:
   - proto
+- name: github.com/gorilla/context
+  version: 14f550f51af52180c2eefed15e5fd18d63c0a64a
+- name: github.com/gorilla/mux
+  version: e444e69cbd2e2e3e0749a2f3c717cec491552bbf
 - name: github.com/hashicorp/hcl
-  version: ef8a98b0bbce4a65b5aa4c368430a80ddc533168
+  version: 8cb6e5b959231cc1119e43259c4a608f9c51a241
   subpackages:
   - hcl/ast
   - hcl/parser
@@ -27,20 +43,30 @@ imports:
   - json/parser
   - json/scanner
   - json/token
+- name: github.com/heroku/docker-registry-client
+  version: fd2fe803496897db70c236ee244f41487ea92ec2
+  subpackages:
+  - registry
 - name: github.com/inconshreveable/mousetrap
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/magiconair/properties
   version: c2353362d570a7bfa228149c62842019201cfb71
 - name: github.com/mitchellh/mapstructure
-  version: f15292f7a699fcc1a38a80977f80a046874ba8ac
+  version: fa473d140ef3c6adf42d6b391fe76707f1f243c8
+- name: github.com/opencontainers/go-digest
+  version: 279bed98673dd5bef374d3b6e4b09e2af76183bf
 - name: github.com/pelletier/go-toml
-  version: 5c5490133daa8660ec676ca8b096cc27e223beaa
+  version: c2dbbc24a97911339e01bda0b8cabdbd8f13b602
 - name: github.com/phayes/permbits
   version: 529f712b661aa1075f21a3d7380f3a998556c1a2
 - name: github.com/sergi/go-diff
   version: 1744e2970ca51c86172c8190fadad617561ed6e7
 - name: github.com/sirupsen/logrus
   version: c155da19408a8799da419ed3eeb0cb5db0ad5dbc
+- name: github.com/Sirupsen/logrus
+  version: 55eb11d21d2a31a3cc93838241d04800f52e823d
+  subpackages:
+  - formatters/logstash
 - name: github.com/spf13/afero
   version: 787d034dfe70e44075ccc060d346146ef53270ad
   subpackages:
@@ -52,35 +78,40 @@ imports:
   subpackages:
   - cobra
 - name: github.com/spf13/jwalterweatherman
-  version: 7c0cea34c8ece3fbeb2b27ab9b59511d360fb394
+  version: 14d3d4c518341bea657dd8a226f5121c0ff8c9f2
 - name: github.com/spf13/pflag
-  version: 3ebe029320b2676d667ae88da602a5f854788a8a
+  version: d929dcbb10863323c436af3cf76cb16a6dfc9b29
 - name: github.com/spf13/viper
-  version: d493c32b69b8c6f2377bf30bc4d70267ffbc0793
+  version: 907c19d40d9a6c9bb55f040ff4ae45271a4754b9
 - name: github.com/vmihailenco/msgpack
   version: a053f3dac71df214bfe8b367f34220f0029c9c02
   subpackages:
   - codes
 - name: golang.org/x/crypto
-  version: c126467f60eb25f8f27e5a981f32a87e3965053f
+  version: 614d502a4dac94afa3a6ce146bd1736da82514c6
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: a680a1efc54dd51c040b3b5ce4939ea3cf2ea0d1
+  version: 4876518f9e71663000c348837735820161a42df7
   subpackages:
   - context
+  - context/ctxhttp
+  - http2
+  - http2/hpack
+  - internal/timeseries
+  - trace
 - name: golang.org/x/sys
-  version: ac767d655b305d4e9612f5f6e33120b9176c4ad4
+  version: 8dbc5d05d6edcc104950cc299a1ce6641235bc86
   subpackages:
   - unix
   - windows
 - name: golang.org/x/text
-  version: 0605a8320aceb4207a5fb3521281e17ec2075476
+  version: 6e3c4e7365ddcc329f090f96e4348398f6310088
   subpackages:
   - transform
   - unicode/norm
 - name: google.golang.org/appengine
-  version: b1f26356af11148e710935ed1ac8a7f5702c7612
+  version: 12d5545dc1cfa6047a286d5e853841b6471f4c19
   subpackages:
   - datastore
   - internal
