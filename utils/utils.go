@@ -328,10 +328,20 @@ func Tar(src string, writers ...io.Writer) *Error {
 	return nil
 }
 
-func Untar(dst string, r io.Reader) *Error {
+func Untar(target string, folder string) *Error {
+	if !FileExist(target) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("file %s does not exist", target))
+		return cerr
+	}
+	r, err := os.Open(target)
+	if err != nil {
+		cerr := ErrNew(ErrFileIO, fmt.Sprintf("open file %s failure", target))
+		return cerr
+	}
+	defer r.Close()
 	gzr, err := gzip.NewReader(r)
 	if err != nil {
-		cerr := ErrNew(err, "io.reader fails")
+		cerr := ErrNew(err, fmt.Sprintf("gzip open file %s failure", target))
 		return cerr
 	}
 	defer gzr.Close()
@@ -353,7 +363,10 @@ func Untar(dst string, r io.Reader) *Error {
 			continue
 		}
 
-		target := filepath.Join(dst, header.Name)
+		if !strings.HasSuffix(folder, "/") {
+			folder = folder + "/"
+		}
+		target := filepath.Join(folder, header.Name)
 
 		switch header.Typeflag {
 

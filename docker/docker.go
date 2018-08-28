@@ -81,30 +81,30 @@ func DeleteManifest(username string, pass string, name string, tag string) *Erro
 	return nil
 }
 
-func DownloadLayers(username string, pass string, name string, tag string, folder string) *Error {
-	log.SetOutput(ioutil.Discard)
+func DownloadLayers(username string, pass string, name string, tag string, folder string) (map[string]int64, *Error) {
 	if !FolderExist(folder) {
 		_, err := MakeDir(folder)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 	hub, err := registry.New(DOCKER_URL, username, pass)
 	if err != nil {
 		cerr := ErrNew(err, "create docker registry instance failure")
-		return cerr
+		return nil, cerr
 	}
 	man, err := hub.ManifestV2(name, tag)
 	if err != nil {
 		cerr := ErrNew(err, "query docker manifest failure")
-		return cerr
+		return nil, cerr
 	}
+	data := make(map[string]int64)
 	for _, element := range man.Layers {
 		dig := element.Digest
 		reader, err := hub.DownloadLayer(name, dig)
 		if err != nil {
 			cerr := ErrNew(err, "download docker layers failure")
-			return cerr
+			return nil, cerr
 		}
 		defer reader.Close()
 		if strings.HasSuffix(folder, "/") {
@@ -114,14 +114,15 @@ func DownloadLayers(username string, pass string, name string, tag string, folde
 		to, err := os.Create(filename)
 		if err != nil {
 			cerr := ErrNew(err, fmt.Sprintf("create file %s failure", filename))
-			return cerr
+			return nil, cerr
 		}
 		defer to.Close()
 		fmt.Println(fmt.Sprintf("Downloading file with type: %s, size: %d, destination: %s", element.MediaType, element.Size, filename))
 		if _, err := io.Copy(to, reader); err != nil {
 			cerr := ErrNew(err, fmt.Sprintf("copy file %s content failure", filename))
-			return cerr
+			return nil, cerr
 		}
+		data[filename] = element.Size
 	}
-	return nil
+	return data, nil
 }

@@ -1,5 +1,5 @@
 hash: 13a2cfaf7f65615ad7e6ad99bbc17a512cd4e2af1de311bd922f0d6531d583c6
-updated: 2018-08-27T18:03:48.698798672+09:00
+updated: 2018-08-28T13:24:30.654568725+09:00
 imports:
 - name: github.com/bradfitz/gomemcache
   version: bc664df9673713a0ccf26e3b55a673ec7301088b
@@ -20,7 +20,7 @@ imports:
   subpackages:
   - client
 - name: github.com/docker/libtrust
-  version: fa567046d9b14f6aa788882a950d69651d230b21
+  version: aabc10ec26b754e797f9028f4589c5b7bd90dc20
 - name: github.com/fsnotify/fsnotify
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: github.com/golang/protobuf
@@ -28,9 +28,9 @@ imports:
   subpackages:
   - proto
 - name: github.com/gorilla/context
-  version: 14f550f51af52180c2eefed15e5fd18d63c0a64a
+  version: 08b5f424b9271eedf6f9f0ce86cb9396ed337a42
 - name: github.com/gorilla/mux
-  version: e444e69cbd2e2e3e0749a2f3c717cec491552bbf
+  version: 0a192a193177452756c362c20087ddafcf6829c4
 - name: github.com/hashicorp/hcl
   version: 8cb6e5b959231cc1119e43259c4a608f9c51a241
   subpackages:
@@ -92,14 +92,9 @@ imports:
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: 4876518f9e71663000c348837735820161a42df7
+  version: a333c534c871727fb95745870e8b98a69447f2ce
   subpackages:
   - context
-  - context/ctxhttp
-  - http2
-  - http2/hpack
-  - internal/timeseries
-  - trace
 - name: golang.org/x/sys
   version: 8dbc5d05d6edcc104950cc299a1ce6641235bc86
   subpackages:

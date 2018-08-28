@@ -4,10 +4,12 @@ import (
 	"testing"
 )
 
-func TestAuthentication(t *testing.T) {
+func TestDownloadLayers(t *testing.T) {
 	//t.Skip("skip test")
-	err := DownloadLayers("", "", "library/ubuntu", "latest", "/tmp")
+	data, err := DownloadLayers("", "", "library/alpine", "latest", "/tmp")
 	if err != nil {
 		t.Error(err)
+	} else {
+		t.Log(data)
 	}
 }
