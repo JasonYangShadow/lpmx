@@ -82,6 +82,7 @@ func DeleteManifest(username string, pass string, name string, tag string) *Erro
 }
 
 func DownloadLayers(username string, pass string, name string, tag string, folder string) (map[string]int64, *Error) {
+	log.SetOutput(ioutil.Discard)
 	if !FolderExist(folder) {
 		_, err := MakeDir(folder)
 		if err != nil {

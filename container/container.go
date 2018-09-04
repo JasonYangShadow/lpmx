@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	. "github.com/jasonyangshadow/lpmx/docker"
 	. "github.com/jasonyangshadow/lpmx/elf"
 	. "github.com/jasonyangshadow/lpmx/error"
 	. "github.com/jasonyangshadow/lpmx/log"
@@ -71,6 +72,11 @@ type RPC struct {
 	Env map[string]string
 	Dir string
 	Con *Container
+}
+
+type Docker struct {
+	RootDir string
+	Images  map[string]interface{}
 }
 
 func (server *RPC) RPCExec(req Request, res *Response) error {
@@ -504,6 +510,121 @@ func Set(id string, tp string, name string, value string) *Error {
 			return cerr
 		}
 		return nil
+	}
+	return err
+}
+
+func DockerSearch(name string) ([]string, *Error) {
+	tags, err := ListTags("", "", name)
+	return tags, err
+}
+
+func DockerDownload(name string, user string, pass string) *Error {
+	currdir, _ := filepath.Abs(filepath.Dir("."))
+	rootdir := fmt.Sprintf("%s/.docker", currdir)
+	doc, err := readDocker(rootdir)
+	if err == nil && doc == nil {
+		ret, err := MakeDir(rootdir)
+		doc.RootDir = rootdir
+		doc.Images = make(map[string]interface{})
+		if !ret {
+			return err
+		}
+	}
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(name, ":") {
+		name = name + ":latest"
+	}
+	if _, ok := doc.Images[name]; ok {
+		cerr := ErrNew(ErrExist, fmt.Sprintf("%s already exists", name))
+		return cerr
+	} else {
+		mdata := make(map[string]interface{})
+		mdata["dir"] = fmt.Sprintf("%s/%s", doc.RootDir, name)
+		mdata["config"] = fmt.Sprintf("%s/setting.yml", mdata["dir"])
+		tdata := strings.Split(name, ":")
+		tname := tdata[0]
+		ttag := tdata[1]
+		dir, _ := mdata["dir"].(string)
+		ret, err := DownloadLayers(user, pass, tname, ttag, dir)
+		if err != nil {
+			return err
+		}
+		mdata["layer"] = ret
+		doc.Images[name] = mdata
+	}
+	ddata, _ := StructMarshal(&doc)
+	err = WriteToFile(ddata, fmt.Sprintf("%s/.docinfo", doc.RootDir))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func DockerList() *Error {
+	currdir, _ := filepath.Abs(filepath.Dir("."))
+	rootdir := fmt.Sprintf("%s/.docker", currdir)
+	doc, err := readDocker(rootdir)
+	if err == nil {
+		fmt.Println(fmt.Sprintf("%s%25s", "Name", "Dir"))
+		for k, v := range doc.Images {
+			if cmap, ok := v.(map[string]interface{}); ok {
+				dir, _ := cmap["dir"].(string)
+				dir = strings.TrimSpace(dir)
+				fmt.Println(fmt.Sprintf("%s%25s", k, dir))
+			} else {
+				cerr := ErrNew(ErrType, "doc.Images type error")
+				return cerr
+			}
+		}
+		return nil
+	}
+	return err
+}
+
+func DockerRun(name string) *Error {
+	currdir, _ := filepath.Abs(filepath.Dir("."))
+	rootdir := fmt.Sprintf("%s/.docker", currdir)
+	doc, err := readDocker(rootdir)
+	if err == nil {
+		if val, ok := doc.Images[name]; ok {
+			if vval, vok := val.(map[string]interface{}); vok {
+				dir, _ := vval["dir"].(string)
+				config, _ := vval["config"].(string)
+				err := Run(dir, config, false)
+				if err != nil {
+					return err
+				}
+				return nil
+			}
+		}
+		cerr := ErrNew(ErrType, "doc.Images type error")
+		return cerr
+	}
+	return err
+}
+
+func DockerDelete(name string) *Error {
+	currdir, _ := filepath.Abs(filepath.Dir("."))
+	rootdir := fmt.Sprintf("%s/.docker", currdir)
+	doc, err := readDocker(rootdir)
+	if err == nil {
+		if val, ok := doc.Images[name]; ok {
+			if vval, vok := val.(map[string]interface{}); vok {
+				dir, _ := vval["dir"].(string)
+				rok, rerr := RemoveAll(dir)
+				if rok {
+					delete(doc.Images, name)
+					return nil
+				} else {
+					return rerr
+				}
+			}
+		}
+		cerr := ErrNew(ErrType, "doc.Images type error")
+		return cerr
 	}
 	return err
 }
@@ -1224,6 +1345,24 @@ func readSys(rootdir string, sys *Sys) *Error {
 		return cerr
 	}
 	return nil
+}
+
+func readDocker(rootdir string) (*Docker, *Error) {
+	info := fmt.Sprintf("%s/.docinfo", rootdir)
+	doc := new(Docker)
+	if FileExist(info) {
+		data, err := ReadFromFile(info)
+		if err != nil {
+			return nil, err
+		}
+		err = StructUnmarshal(data, doc)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, nil
+	}
+	return doc, nil
 }
 
 func setPrivilege(id string, tp string, name string, value string, server string, allow bool) *Error {
