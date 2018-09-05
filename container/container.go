@@ -553,6 +553,20 @@ func DockerDownload(name string, user string, pass string) *Error {
 			return err
 		}
 		mdata["layer"] = ret
+
+		//extract layers
+		workspace := fmt.Sprintf("%s/workspace", mdata["dir"])
+		MakeDir(workspace)
+		for k, _ := range ret {
+			tar_path := fmt.Sprintf("%s/%s", mdata["dir"], k)
+			err := Untar(tar_path, workspace)
+			if err != nil {
+				return err
+			}
+		}
+
+		mdata["workspace"] = workspace
+		//add map to this image
 		doc.Images[name] = mdata
 	}
 	ddata, _ := StructMarshal(&doc)
@@ -591,7 +605,7 @@ func DockerRun(name string) *Error {
 	if err == nil {
 		if val, ok := doc.Images[name]; ok {
 			if vval, vok := val.(map[string]interface{}); vok {
-				dir, _ := vval["dir"].(string)
+				dir, _ := vval["workspace"].(string)
 				config, _ := vval["config"].(string)
 				err := Run(dir, config, false)
 				if err != nil {
