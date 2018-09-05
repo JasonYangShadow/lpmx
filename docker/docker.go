@@ -33,6 +33,9 @@ func ListRepositories(username string, pass string) ([]string, *Error) {
 
 func ListTags(username string, pass string, name string) ([]string, *Error) {
 	log.SetOutput(ioutil.Discard)
+	if !strings.Contains(name, "library/") {
+		name = "library/" + name
+	}
 	hub, err := registry.New(DOCKER_URL, username, pass)
 	if err != nil {
 		cerr := ErrNew(err, "create docker registry instance failure")
@@ -48,6 +51,9 @@ func ListTags(username string, pass string, name string) ([]string, *Error) {
 
 func GetDigest(username string, pass string, name string, tag string) (string, *Error) {
 	log.SetOutput(ioutil.Discard)
+	if !strings.Contains(name, "library/") {
+		name = "library/" + name
+	}
 	hub, err := registry.New(DOCKER_URL, username, pass)
 	if err != nil {
 		cerr := ErrNew(err, "create docker registry instance failure")
@@ -63,6 +69,9 @@ func GetDigest(username string, pass string, name string, tag string) (string, *
 
 func DeleteManifest(username string, pass string, name string, tag string) *Error {
 	log.SetOutput(ioutil.Discard)
+	if !strings.Contains(name, "library/") {
+		name = "library/" + name
+	}
 	hub, err := registry.New(DOCKER_URL, username, pass)
 	if err != nil {
 		cerr := ErrNew(err, "create docker registry instance failure")
@@ -83,6 +92,9 @@ func DeleteManifest(username string, pass string, name string, tag string) *Erro
 
 func DownloadLayers(username string, pass string, name string, tag string, folder string) (map[string]int64, *Error) {
 	log.SetOutput(ioutil.Discard)
+	if !strings.Contains(name, "library/") {
+		name = "library/" + name
+	}
 	if !FolderExist(folder) {
 		_, err := MakeDir(folder)
 		if err != nil {

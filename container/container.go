@@ -6,6 +6,7 @@ import (
 	"net/rpc"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -522,9 +523,11 @@ func DockerSearch(name string) ([]string, *Error) {
 func DockerDownload(name string, user string, pass string) *Error {
 	currdir, _ := filepath.Abs(filepath.Dir("."))
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
-	doc, err := readDocker(rootdir)
-	if err == nil && doc == nil {
+	var doc *Docker
+	err := readDocker(rootdir, doc)
+	if err == nil {
 		ret, err := MakeDir(rootdir)
+		doc = new(Docker)
 		doc.RootDir = rootdir
 		doc.Images = make(map[string]interface{})
 		if !ret {
@@ -556,8 +559,11 @@ func DockerDownload(name string, user string, pass string) *Error {
 
 		//extract layers
 		workspace := fmt.Sprintf("%s/workspace", mdata["dir"])
-		MakeDir(workspace)
+		if !FolderExist(workspace) {
+			MakeDir(workspace)
+		}
 		for k, _ := range ret {
+			k = path.Base(k)
 			tar_path := fmt.Sprintf("%s/%s", mdata["dir"], k)
 			err := Untar(tar_path, workspace)
 			if err != nil {
@@ -569,7 +575,7 @@ func DockerDownload(name string, user string, pass string) *Error {
 		//add map to this image
 		doc.Images[name] = mdata
 	}
-	ddata, _ := StructMarshal(&doc)
+	ddata, _ := StructMarshal(doc)
 	err = WriteToFile(ddata, fmt.Sprintf("%s/.docinfo", doc.RootDir))
 	if err != nil {
 		return err
@@ -580,9 +586,10 @@ func DockerDownload(name string, user string, pass string) *Error {
 func DockerList() *Error {
 	currdir, _ := filepath.Abs(filepath.Dir("."))
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
-	doc, err := readDocker(rootdir)
-	if err == nil {
-		fmt.Println(fmt.Sprintf("%s%25s", "Name", "Dir"))
+	var doc *Docker
+	err := readDocker(rootdir, doc)
+	fmt.Println(fmt.Sprintf("%s%25s", "Name", "Dir"))
+	if err == nil && doc != nil {
 		for k, v := range doc.Images {
 			if cmap, ok := v.(map[string]interface{}); ok {
 				dir, _ := cmap["dir"].(string)
@@ -601,8 +608,9 @@ func DockerList() *Error {
 func DockerRun(name string) *Error {
 	currdir, _ := filepath.Abs(filepath.Dir("."))
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
-	doc, err := readDocker(rootdir)
-	if err == nil {
+	var doc *Docker
+	err := readDocker(rootdir, doc)
+	if err == nil && doc != nil {
 		if val, ok := doc.Images[name]; ok {
 			if vval, vok := val.(map[string]interface{}); vok {
 				dir, _ := vval["workspace"].(string)
@@ -623,8 +631,9 @@ func DockerRun(name string) *Error {
 func DockerDelete(name string) *Error {
 	currdir, _ := filepath.Abs(filepath.Dir("."))
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
-	doc, err := readDocker(rootdir)
-	if err == nil {
+	var doc *Docker
+	err := readDocker(rootdir, doc)
+	if err == nil && doc != nil {
 		if val, ok := doc.Images[name]; ok {
 			if vval, vok := val.(map[string]interface{}); vok {
 				dir, _ := vval["dir"].(string)
@@ -1361,22 +1370,21 @@ func readSys(rootdir string, sys *Sys) *Error {
 	return nil
 }
 
-func readDocker(rootdir string) (*Docker, *Error) {
+func readDocker(rootdir string, doc *Docker) *Error {
 	info := fmt.Sprintf("%s/.docinfo", rootdir)
-	doc := new(Docker)
 	if FileExist(info) {
 		data, err := ReadFromFile(info)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		err = StructUnmarshal(data, doc)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	} else {
-		return nil, nil
+		return nil
 	}
-	return doc, nil
+	return nil
 }
 
 func setPrivilege(id string, tp string, name string, value string, server string, allow bool) *Error {
