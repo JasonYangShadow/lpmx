@@ -571,6 +571,12 @@ func DockerDownload(name string, user string, pass string) *Error {
 		}
 
 		mdata["workspace"] = workspace
+
+		diff := fmt.Sprintf("%s/diff", mdata["dir"])
+		if !FolderExist(diff) {
+			MakeDir(diff)
+		}
+		mdata["diff"] = diff
 		//add map to this image
 		doc.Images[name] = mdata
 
