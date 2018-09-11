@@ -59,7 +59,11 @@ func main() {
 					LOGGER.Panic("can't locate the setting.yml in source folder")
 				}
 			}
-			err := Run(RunSource, RunConfig, RunPassive)
+			configmap := make(map[string]interface{})
+			configmap["dir"] = RunSource
+			configmap["config"] = RunConfig
+			configmap["passive"] = RunPassive
+			err := Run(&configmap)
 			if err != nil {
 				LOGGER.Panic(err.Error())
 			}
@@ -194,21 +198,21 @@ func main() {
 	dockerDownloadCmd.Flags().StringVarP(&DockerDownloadUser, "user", "u", "", "optional")
 	dockerDownloadCmd.Flags().StringVarP(&DockerDownloadPass, "pass", "p", "", "optional")
 
-	var DockerRunName string
-	var dockerRunCmd = &cobra.Command{
-		Use:   "run",
-		Short: "run the local docker images",
-		Long:  "docker run sub-command is the advanced command of lpmx, which is used for running the images downloaded from docker hub",
+	var DockerCreateName string
+	var dockerCreateCmd = &cobra.Command{
+		Use:   "create",
+		Short: "initialize the local docker images",
+		Long:  "docker create sub-command is the advanced command of lpmx, which is used for initializing and running the images downloaded from docker hub",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := DockerRun(DockerRunName)
+			err := DockerCreate(DockerCreateName)
 			if err != nil {
 				LOGGER.Panic(err.Error())
 			}
 		},
 	}
-	dockerRunCmd.Flags().StringVarP(&DockerRunName, "name", "n", "", "required")
-	dockerRunCmd.MarkFlagRequired("name")
+	dockerCreateCmd.Flags().StringVarP(&DockerCreateName, "name", "n", "", "required")
+	dockerCreateCmd.MarkFlagRequired("name")
 
 	var DockerDeleteName string
 	var dockerDeleteCmd = &cobra.Command{
@@ -263,7 +267,7 @@ func main() {
 		Short: "docker command",
 		Long:  "docker command is the advanced comand of lpmx, which is used for executing docker related commands",
 	}
-	dockerCmd.AddCommand(dockerRunCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd)
+	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd)
 
 	var resumeCmd = &cobra.Command{
 		Use:   "resume",
