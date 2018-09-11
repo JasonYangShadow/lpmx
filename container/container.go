@@ -294,9 +294,16 @@ func Destroy(id string) *Error {
 		if v, ok := sys.Containers[id]; ok {
 			if val, vok := v.(map[string]interface{}); vok {
 				if val["Status"].(string) == STATUS[1] {
-					cdir := fmt.Sprintf("%s/.lpmx", val["RootPath"])
-					if FolderExist(cdir) {
-						os.RemoveAll(cdir)
+					//check if container is based on docker
+					docker, _ := val["DockerBase"].(string)
+					if dockerb, _ := strconv.ParseBool(docker); dockerb {
+						diff, _ := val["DiffPath"].(string)
+						RemoveAll(diff)
+						rootdir, _ := val["RootPath"].(string)
+						RemoveAll(rootdir)
+					} else {
+						cdir := fmt.Sprintf("%s/.lpmx", val["RootPath"])
+						RemoveAll(cdir)
 					}
 					delete(sys.Containers, id)
 				} else {
@@ -553,7 +560,7 @@ func DockerDownload(name string, user string, pass string) *Error {
 	if err != nil && err.Err != ErrNExist {
 		return err
 	}
-	if err.Err == ErrNExist {
+	if err != nil && err.Err == ErrNExist {
 		ret, err := MakeDir(rootdir)
 		doc.RootDir = rootdir
 		doc.Images = make(map[string]interface{})
@@ -663,40 +670,41 @@ func DockerCreate(name string) *Error {
 					if err != nil {
 						return err
 					}
-					_, err = MakeDir(fmt.Sprintf("%s/%s", diff, id))
-					if err != nil {
-						return err
-					}
+				}
 
-					//extractt layers
-					for k, _ := range layers {
-						k = path.Base(k)
-						tar_path := fmt.Sprintf("%s/%s", images, k)
-						err := Untar(tar_path, rootfolder)
-						if err != nil {
-							return err
-						}
-					}
-					configmap := make(map[string]interface{})
-					configmap["dir"] = rootfolder
-					configmap["config"] = config
-					configmap["passive"] = false
-					configmap["id"] = id
-					configmap["diff"] = diff
-					configmap["image"] = name
-					configmap["docker"] = true
-					err = Run(&configmap)
+				difffolder := fmt.Sprintf("%s/%s", diff, id)
+				if !FolderExist(difffolder) {
+					_, err := MakeDir(difffolder)
 					if err != nil {
 						return err
 					}
-				} else {
-					cerr := ErrNew(ErrExist, fmt.Sprintf("%s folder already exists, if you would like to run existing docker container, please use 'lpmx resume' command"))
-					return cerr
+				}
+
+				//extractt layers
+				for k, _ := range layers {
+					k = path.Base(k)
+					tar_path := fmt.Sprintf("%s/%s", images, k)
+					err := Untar(tar_path, rootfolder)
+					if err != nil {
+						return err
+					}
+				}
+				configmap := make(map[string]interface{})
+				configmap["dir"] = rootfolder
+				configmap["config"] = config
+				configmap["passive"] = false
+				configmap["id"] = id
+				configmap["diff"] = difffolder
+				configmap["image"] = name
+				configmap["docker"] = true
+				err = Run(&configmap)
+				if err != nil {
+					return err
 				}
 				return nil
 			}
 		}
-		cerr := ErrNew(ErrType, "doc.Images type error")
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("image %s doesn't exist", name))
 		return cerr
 	}
 	return err
@@ -710,7 +718,7 @@ func DockerDelete(name string) *Error {
 	if err == nil {
 		if val, ok := doc.Images[name]; ok {
 			if vval, vok := val.(map[string]interface{}); vok {
-				dir, _ := vval["dir"].(string)
+				dir, _ := vval["rootdir"].(string)
 				rok, rerr := RemoveAll(dir)
 				if rok {
 					delete(doc.Images, name)
