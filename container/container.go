@@ -50,9 +50,9 @@ type Container struct {
 	Id                  string
 	RootPath            string
 	ConfigPath          string
-	DiffPath            string
 	ImageBase           string
 	DockerBase          bool
+	Layers              string
 	Status              int
 	LogPath             string
 	ElfPatcherPath      string
@@ -168,7 +168,7 @@ func List() *Error {
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
 	if err == nil {
-		fmt.Println(fmt.Sprintf("%-s%-15s%-15s%-15s%-15s%-15s%-15s", "ContainerID", "RootPath", "Status", "RPC", "DockerBased", "Image", "DiffPath"))
+		fmt.Println(fmt.Sprintf("%-s%-15s%-15s%-15s%-15s%-15s%", "ContainerID", "RootPath", "Status", "RPC", "DockerBased", "Image"))
 		for k, v := range sys.Containers {
 			if cmap, ok := v.(map[string]interface{}); ok {
 				port := strings.TrimSpace(cmap["RPCPort"].(string))
@@ -176,10 +176,10 @@ func List() *Error {
 					conn, err := net.DialTimeout("tcp", net.JoinHostPort("", port), time.Millisecond*200)
 					if err == nil && conn != nil {
 						conn.Close()
-						fmt.Println(fmt.Sprintf("%-s%-15s%-15s%-15s%-15s%-15s%-15s", k, cmap["RootPath"].(string), cmap["Status"].(string), cmap["RPCPort"].(string), cmap["DockerBase"].(string), cmap["ImageBase"].(string), cmap["DiffPath"].(string)))
+						fmt.Println(fmt.Sprintf("%-s%-15s%-15s%-15s%-15s%-15s%", k, cmap["RootPath"].(string), cmap["Status"].(string), cmap["RPCPort"].(string), cmap["DockerBase"].(string), cmap["ImageBase"].(string)))
 					}
 				} else {
-					fmt.Println(fmt.Sprintf("%-s%-15s%-15s%-15s%-15s%-15s%-15s", k, cmap["RootPath"].(string), cmap["Status"].(string), "NA", cmap["DockerBase"].(string), cmap["ImageBase"].(string), cmap["DiffPath"].(string)))
+					fmt.Println(fmt.Sprintf("%-s%-15s%-15s%-15s%-15s%-15s", k, cmap["RootPath"].(string), cmap["Status"].(string), "NA", cmap["DockerBase"].(string), cmap["ImageBase"].(string)))
 				}
 			} else {
 				cerr := ErrNew(ErrType, "sys.Containers type error")
@@ -297,8 +297,6 @@ func Destroy(id string) *Error {
 					//check if container is based on docker
 					docker, _ := val["DockerBase"].(string)
 					if dockerb, _ := strconv.ParseBool(docker); dockerb {
-						diff, _ := val["DiffPath"].(string)
-						RemoveAll(diff)
 						rootdir, _ := val["RootPath"].(string)
 						RemoveAll(rootdir)
 					} else {
@@ -335,9 +333,9 @@ func Run(configmap *map[string]interface{}) *Error {
 		dbase, _ := dockerbase.(bool)
 		if dbase {
 			con.Id = (*configmap)["id"].(string)
-			con.DiffPath = (*configmap)["diff"].(string)
 			con.DockerBase = true
 			con.ImageBase = (*configmap)["image"].(string)
+			con.Layers = (*configmap)["layers"].(string)
 		}
 	} else {
 		con.DockerBase = false
@@ -597,12 +595,6 @@ func DockerDownload(name string, user string, pass string) *Error {
 		}
 		mdata["workspace"] = workspace
 
-		diff := fmt.Sprintf("%s/diff", mdata["rootdir"])
-		if !FolderExist(diff) {
-			MakeDir(diff)
-		}
-		mdata["diff"] = diff
-
 		//download setting from github
 		rdir, _ := mdata["rootdir"].(string)
 		err = DownloadSetting(tname, ttag, rdir)
@@ -660,7 +652,6 @@ func DockerCreate(name string) *Error {
 			if vval, vok := val.(map[string]interface{}); vok {
 				workspace, _ := vval["workspace"].(string)
 				config, _ := vval["config"].(string)
-				diff, _ := vval["diff"].(string)
 				layers, _ := vval["layer"].(map[string]interface{})
 				images, _ := vval["image"].(string)
 				id := RandomString(IDLENGTH)
@@ -672,31 +663,29 @@ func DockerCreate(name string) *Error {
 					}
 				}
 
-				difffolder := fmt.Sprintf("%s/%s", diff, id)
-				if !FolderExist(difffolder) {
-					_, err := MakeDir(difffolder)
-					if err != nil {
-						return err
-					}
-				}
-
-				//extractt layers
+				//extract layers
+				keys := make([]string, len(layers))
 				for k, _ := range layers {
 					k = path.Base(k)
 					tar_path := fmt.Sprintf("%s/%s", images, k)
-					err := Untar(tar_path, rootfolder)
+					layerfolder := fmt.Sprintf("%s/%s", rootfolder, k)
+					if !FolderExist(layerfolder) {
+						MakeDir(layerfolder)
+					}
+					keys = append(keys, k)
+					err := Untar(tar_path, layerfolder)
 					if err != nil {
 						return err
 					}
 				}
 				configmap := make(map[string]interface{})
-				configmap["dir"] = rootfolder
+				configmap["dir"] = fmt.Sprintf("%s/rw", rootdir)
 				configmap["config"] = config
 				configmap["passive"] = false
 				configmap["id"] = id
-				configmap["diff"] = difffolder
 				configmap["image"] = name
 				configmap["docker"] = true
+				configmap["layers"] = strings.Join(keys, ":")
 				err = Run(&configmap)
 				if err != nil {
 					return err
@@ -819,8 +808,8 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["MEMCACHED_PID"] = con.MemcachedServerList[0]
 	env["TERM"] = "xterm"
 	env["SHELL"] = con.UserShell
-	env["FAKECHROOT_BASE"] = con.RootPath
-	env["ContainerDiff"] = con.DiffPath
+	env["ContainerLayers"] = con.Layers
+	//env["FAKECHROOT_BASE"] = con.RootPath
 	if con.DockerBase {
 		env["DockerBase"] = "TRUE"
 	} else {
@@ -1141,7 +1130,6 @@ func (con *Container) appendToSys() *Error {
 			cmap["RPCPort"] = fmt.Sprintf("%d", con.RPCPort)
 			cmap["DockerBase"] = strconv.FormatBool(con.DockerBase)
 			cmap["ImageBase"] = con.ImageBase
-			cmap["DiffPath"] = con.DiffPath
 			sys.Containers[con.Id] = cmap
 		}
 		sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", currdir)

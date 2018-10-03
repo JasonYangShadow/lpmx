@@ -95,7 +95,7 @@ func DeleteManifest(username string, pass string, name string, tag string) *Erro
 
 func DownloadLayers(username string, pass string, name string, tag string, folder string) (map[string]int64, *Error) {
 	log.SetOutput(ioutil.Discard)
-	if !strings.Contains(name, "library/") {
+	if !strings.Contains(name, "library/") && !strings.Contains(name, "/") {
 		name = "library/" + name
 	}
 	if !FolderExist(folder) {
