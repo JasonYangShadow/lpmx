@@ -168,7 +168,7 @@ func List() *Error {
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
 	if err == nil {
-		fmt.Println(fmt.Sprintf("%-s%-15s%-15s%-15s%-15s%-15s%", "ContainerID", "RootPath", "Status", "RPC", "DockerBased", "Image"))
+		fmt.Println(fmt.Sprintf("%-s%-15s%-15s%-15s%-15s%-15s", "ContainerID", "RootPath", "Status", "RPC", "DockerBased", "Image"))
 		for k, v := range sys.Containers {
 			if cmap, ok := v.(map[string]interface{}); ok {
 				port := strings.TrimSpace(cmap["RPCPort"].(string))
@@ -298,6 +298,7 @@ func Destroy(id string) *Error {
 					docker, _ := val["DockerBase"].(string)
 					if dockerb, _ := strconv.ParseBool(docker); dockerb {
 						rootdir, _ := val["RootPath"].(string)
+						rootdir = path.Dir(rootdir)
 						RemoveAll(rootdir)
 					} else {
 						cdir := fmt.Sprintf("%s/.lpmx", val["RootPath"])
@@ -664,7 +665,7 @@ func DockerCreate(name string) *Error {
 				}
 
 				//extract layers
-				keys := make([]string, len(layers))
+				var keys []string
 				for k, _ := range layers {
 					k = path.Base(k)
 					tar_path := fmt.Sprintf("%s/%s", images, k)
@@ -679,13 +680,17 @@ func DockerCreate(name string) *Error {
 					}
 				}
 				configmap := make(map[string]interface{})
-				configmap["dir"] = fmt.Sprintf("%s/rw", rootdir)
+				configmap["dir"] = fmt.Sprintf("%s/rw", rootfolder)
 				configmap["config"] = config
 				configmap["passive"] = false
 				configmap["id"] = id
 				configmap["image"] = name
 				configmap["docker"] = true
-				configmap["layers"] = strings.Join(keys, ":")
+				LOGGER.WithFields(logrus.Fields{
+					"keys": keys,
+				}).Debug("layers sha256 list")
+				reverse_keys := ReverseStrArray(keys)
+				configmap["layers"] = strings.Join(reverse_keys, ":")
 				err = Run(&configmap)
 				if err != nil {
 					return err

@@ -27,7 +27,7 @@ func init() {
 	case "PANIC":
 		LOGGER.SetLevel(logrus.PanicLevel)
 	default:
-		LOGGER.SetLevel(logrus.InfoLevel)
+		LOGGER.SetLevel(logrus.DebugLevel)
 	}
 
 }
