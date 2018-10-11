@@ -679,6 +679,7 @@ func DockerCreate(name string) *Error {
 						return err
 					}
 				}
+				keys = append(keys, "rw")
 				configmap := make(map[string]interface{})
 				configmap["dir"] = fmt.Sprintf("%s/rw", rootfolder)
 				configmap["config"] = config
@@ -930,16 +931,14 @@ func (con *Container) bashShell() *Error {
 		return err
 	}
 
+	var err Error
 	if FolderExist(con.RootPath) {
 		if con.CurrentUser == "root" {
 			LOGGER.WithFields(logrus.Fields{
 				"env":   env,
 				"shell": con.UserShell,
 			}).Debug("root mode debug")
-			err := ShellEnv("fakeroot", env, con.RootPath, con.UserShell)
-			if err != nil {
-				return err
-			}
+			err = ShellEnv("fakeroot", env, con.RootPath, con.UserShell)
 		} else if con.CurrentUser == "chroot" {
 			env["ContainerMode"] = "chroot"
 			LOGGER.WithFields(logrus.Fields{
@@ -952,7 +951,12 @@ func (con *Container) bashShell() *Error {
 				"env":           env,
 				"con.RootPath":  con.RootPath,
 			}).Debug("shell env paramters")
-			err = ShellEnv(con.UserShell, env, con.RootPath)
+			if con.DockerBase {
+				rootpath := filepath.Dir(con.RootPath)
+				err = DockerShellEnv(con.UserShell, env, rootpath)
+			} else {
+				err = ShellEnv(con.UserShell, env, con.RootPath)
+			}
 		}
 		if err != nil {
 			return err

@@ -1,5 +1,5 @@
 hash: 13a2cfaf7f65615ad7e6ad99bbc17a512cd4e2af1de311bd922f0d6531d583c6
-updated: 2018-08-28T13:24:30.654568725+09:00
+updated: 2018-10-11T11:00:22.718753877Z
 imports:
 - name: github.com/bradfitz/gomemcache
   version: bc664df9673713a0ccf26e3b55a673ec7301088b
@@ -20,19 +20,19 @@ imports:
   subpackages:
   - client
 - name: github.com/docker/libtrust
-  version: aabc10ec26b754e797f9028f4589c5b7bd90dc20
+  version: fa567046d9b14f6aa788882a950d69651d230b21
 - name: github.com/fsnotify/fsnotify
-  version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
+  version: ccc981bf80385c528a65fbfdd49bf2d8da22aa23
 - name: github.com/golang/protobuf
   version: 8d92cf5fc15a4382f8964b08e1f42a75c0591aa3
   subpackages:
   - proto
 - name: github.com/gorilla/context
-  version: 08b5f424b9271eedf6f9f0ce86cb9396ed337a42
+  version: 14f550f51af52180c2eefed15e5fd18d63c0a64a
 - name: github.com/gorilla/mux
-  version: 0a192a193177452756c362c20087ddafcf6829c4
+  version: e444e69cbd2e2e3e0749a2f3c717cec491552bbf
 - name: github.com/hashicorp/hcl
-  version: 8cb6e5b959231cc1119e43259c4a608f9c51a241
+  version: 65a6292f0157eff210d03ed1bf6c59b190b8b906
   subpackages:
   - hcl/ast
   - hcl/parser
@@ -44,7 +44,7 @@ imports:
   - json/scanner
   - json/token
 - name: github.com/heroku/docker-registry-client
-  version: fd2fe803496897db70c236ee244f41487ea92ec2
+  version: 47ecf50fd8d4fba87593c00ca0959029c7d6b95c
   subpackages:
   - registry
 - name: github.com/inconshreveable/mousetrap
@@ -52,13 +52,13 @@ imports:
 - name: github.com/magiconair/properties
   version: c2353362d570a7bfa228149c62842019201cfb71
 - name: github.com/mitchellh/mapstructure
-  version: fa473d140ef3c6adf42d6b391fe76707f1f243c8
+  version: 3536a929edddb9a5b34bd6861dc4a9647cb459fe
 - name: github.com/opencontainers/go-digest
-  version: 279bed98673dd5bef374d3b6e4b09e2af76183bf
+  version: c9281466c8b2f606084ac71339773efd177436e7
 - name: github.com/pelletier/go-toml
-  version: c2dbbc24a97911339e01bda0b8cabdbd8f13b602
+  version: 81a861c69d25a841d0c4394f0e6f84bc8c5afae0
 - name: github.com/phayes/permbits
-  version: 529f712b661aa1075f21a3d7380f3a998556c1a2
+  version: 59f2482cd4603d9795e7b2385448d5d7f42fdeee
 - name: github.com/sergi/go-diff
   version: 1744e2970ca51c86172c8190fadad617561ed6e7
 - name: github.com/sirupsen/logrus
@@ -68,7 +68,7 @@ imports:
   subpackages:
   - formatters/logstash
 - name: github.com/spf13/afero
-  version: 787d034dfe70e44075ccc060d346146ef53270ad
+  version: d40851caa0d747393da1ffb28f7f9d8b4eeffebd
   subpackages:
   - mem
 - name: github.com/spf13/cast
@@ -78,30 +78,35 @@ imports:
   subpackages:
   - cobra
 - name: github.com/spf13/jwalterweatherman
-  version: 14d3d4c518341bea657dd8a226f5121c0ff8c9f2
+  version: 103a6da826d08544f49833dabd4f1cdf8a1038bb
 - name: github.com/spf13/pflag
-  version: d929dcbb10863323c436af3cf76cb16a6dfc9b29
+  version: 298182f68c66c05229eb03ac171abe6e309ee79a
 - name: github.com/spf13/viper
-  version: 907c19d40d9a6c9bb55f040ff4ae45271a4754b9
+  version: 62edee319679b6ceaec16de03b966102d2dea709
 - name: github.com/vmihailenco/msgpack
   version: a053f3dac71df214bfe8b367f34220f0029c9c02
   subpackages:
   - codes
 - name: golang.org/x/crypto
-  version: 614d502a4dac94afa3a6ce146bd1736da82514c6
+  version: 7c1a557ab941a71c619514f229f0b27ccb0c27cf
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: a333c534c871727fb95745870e8b98a69447f2ce
+  version: 4876518f9e71663000c348837735820161a42df7
   subpackages:
   - context
+  - context/ctxhttp
+  - http2
+  - http2/hpack
+  - internal/timeseries
+  - trace
 - name: golang.org/x/sys
-  version: 8dbc5d05d6edcc104950cc299a1ce6641235bc86
+  version: 4497e2df6f9e69048a54498c7affbbec3294ad47
   subpackages:
   - unix
   - windows
 - name: golang.org/x/text
-  version: 6e3c4e7365ddcc329f090f96e4348398f6310088
+  version: 4d1c5fb19474adfe9562c9847ba425e7da817e81
   subpackages:
   - transform
   - unicode/norm
