@@ -4,8 +4,6 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"fmt"
-	. "github.com/jasonyangshadow/lpmx/error"
-	"github.com/phayes/permbits"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -13,6 +11,11 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/log"
+	"github.com/phayes/permbits"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -273,6 +276,36 @@ func GuessPath(base string, in string, file bool) (string, *Error) {
 		return str, nil
 	}
 	cerr := ErrNew(ErrNil, fmt.Sprintf("%s doesn't exist both in abs path and relative path", str))
+	return "", cerr
+}
+
+func GuessPathContainer(base string, layers []string, in string, file bool) (string, *Error) {
+	if strings.HasPrefix(in, "$") {
+		return strings.Replace(in, "$", "", -1), nil
+	}
+	if strings.HasPrefix(in, "^") {
+		in = strings.Replace(in, "^", "", -1)
+		file = true
+	}
+	if strings.TrimSpace(in) == "all" {
+		return in, nil
+	}
+	if filepath.IsAbs(in) {
+		if (file && FileExist(in)) || (!file && FolderExist(in)) {
+			return in, nil
+		}
+	} else {
+		for _, layer := range layers {
+			tpath := fmt.Sprintf("%s/%s/%s", base, layer, in)
+			LOGGER.WithFields(logrus.Fields{
+				"tpath": tpath,
+			}).Debug("guess path container debug")
+			if (file && FileExist(tpath)) || (!file && FolderExist(tpath)) {
+				return tpath, nil
+			}
+		}
+	}
+	cerr := ErrNew(ErrNil, fmt.Sprintf("%s doesn't exist both in abs path and relative path", in))
 	return "", cerr
 }
 

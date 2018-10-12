@@ -260,6 +260,10 @@ func Resume(id string) *Error {
 					configmap["dir"] = val["RootPath"].(string)
 					configmap["config"] = val["SettingPath"].(string)
 					configmap["passive"] = false
+					if b, _ := strconv.ParseBool(val["DockerBase"].(string)); b {
+						configmap["docker"] = true
+						configmap["layers"] = val["Layers"].(string)
+					}
 					err := Run(&configmap)
 					if err != nil {
 						return err
@@ -584,11 +588,12 @@ func DockerDownload(name string, user string, pass string) *Error {
 		image_dir, _ := mdata["image"].(string)
 
 		//download lyaers
-		ret, err := DownloadLayers(user, pass, tname, ttag, image_dir)
+		ret, layer_order, err := DownloadLayers(user, pass, tname, ttag, image_dir)
 		if err != nil {
 			return err
 		}
 		mdata["layer"] = ret
+		mdata["layer_order"] = strings.Join(layer_order, ":")
 
 		workspace := fmt.Sprintf("%s/workspace", mdata["rootdir"])
 		if !FolderExist(workspace) {
@@ -653,7 +658,7 @@ func DockerCreate(name string) *Error {
 			if vval, vok := val.(map[string]interface{}); vok {
 				workspace, _ := vval["workspace"].(string)
 				config, _ := vval["config"].(string)
-				layers, _ := vval["layer"].(map[string]interface{})
+				layers, _ := vval["layer_order"].(string)
 				images, _ := vval["image"].(string)
 				id := RandomString(IDLENGTH)
 				rootfolder := fmt.Sprintf("%s/%s", workspace, id)
@@ -666,7 +671,7 @@ func DockerCreate(name string) *Error {
 
 				//extract layers
 				var keys []string
-				for k, _ := range layers {
+				for _, k := range strings.Split(layers, ":") {
 					k = path.Base(k)
 					tar_path := fmt.Sprintf("%s/%s", images, k)
 					layerfolder := fmt.Sprintf("%s/%s", rootfolder, k)
@@ -688,7 +693,8 @@ func DockerCreate(name string) *Error {
 				configmap["image"] = name
 				configmap["docker"] = true
 				LOGGER.WithFields(logrus.Fields{
-					"keys": keys,
+					"keys":   keys,
+					"layers": layers,
 				}).Debug("layers sha256 list")
 				reverse_keys := ReverseStrArray(keys)
 				configmap["layers"] = strings.Join(reverse_keys, ":")
@@ -833,7 +839,11 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 							if v1, vo1 := v.(string); vo1 {
 								if k1, ko1 := k.(string); ko1 {
 									var err *Error
-									env[k1], err = GuessPath(con.RootPath, v1, false)
+									if con.DockerBase {
+										env[k1], err = GuessPathContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), v1, false)
+									} else {
+										env[k1], err = GuessPath(con.RootPath, v1, false)
+									}
 									LOGGER.WithFields(logrus.Fields{
 										"k":   k1,
 										"v":   v1,
@@ -847,11 +857,19 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 							if v1, vo1 := v.([]interface{}); vo1 {
 								var libs []string
 								for _, vv1 := range v1 {
-									vv1_abs, err := GuessPath(con.RootPath, vv1.(string), false)
-									if err != nil {
-										continue
+									if con.DockerBase {
+										vv1_abs, err := GuessPathContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), vv1.(string), false)
+										if err != nil {
+											continue
+										}
+										libs = append(libs, vv1_abs)
+									} else {
+										vv1_abs, err := GuessPath(con.RootPath, vv1.(string), false)
+										if err != nil {
+											continue
+										}
+										libs = append(libs, vv1_abs)
 									}
-									libs = append(libs, vv1_abs)
 								}
 								if k1, ok1 := k.(string); ok1 {
 									env[k1] = strings.Join(libs, ":")
@@ -866,7 +884,11 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 						for k, v := range d1_11.(map[string]interface{}) {
 							if v1, vo1 := v.(string); vo1 {
 								var err *Error
-								env[k], err = GuessPath(con.RootPath, v1, false)
+								if con.DockerBase {
+									env[k], err = GuessPathContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), v1, false)
+								} else {
+									env[k], err = GuessPath(con.RootPath, v1, false)
+								}
 								LOGGER.WithFields(logrus.Fields{
 									"k":   k,
 									"v":   v1,
@@ -879,11 +901,19 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 							if v1, vo1 := v.([]interface{}); vo1 {
 								var libs []string
 								for _, vv1 := range v1 {
-									vv1_abs, err := GuessPath(con.RootPath, vv1.(string), false)
-									if err != nil {
-										continue
+									if con.DockerBase {
+										vv1_abs, err := GuessPathContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), vv1.(string), false)
+										if err != nil {
+											continue
+										}
+										libs = append(libs, vv1_abs)
+									} else {
+										vv1_abs, err := GuessPath(con.RootPath, vv1.(string), false)
+										if err != nil {
+											continue
+										}
+										libs = append(libs, vv1_abs)
 									}
-									libs = append(libs, vv1_abs)
 								}
 								env[k] = strings.Join(libs, ":")
 								LOGGER.WithFields(logrus.Fields{
@@ -931,7 +961,6 @@ func (con *Container) bashShell() *Error {
 		return err
 	}
 
-	var err Error
 	if FolderExist(con.RootPath) {
 		if con.CurrentUser == "root" {
 			LOGGER.WithFields(logrus.Fields{
@@ -951,12 +980,7 @@ func (con *Container) bashShell() *Error {
 				"env":           env,
 				"con.RootPath":  con.RootPath,
 			}).Debug("shell env paramters")
-			if con.DockerBase {
-				rootpath := filepath.Dir(con.RootPath)
-				err = DockerShellEnv(con.UserShell, env, rootpath)
-			} else {
-				err = ShellEnv(con.UserShell, env, con.RootPath)
-			}
+			err = ShellEnv(con.UserShell, env, con.RootPath)
 		}
 		if err != nil {
 			return err
@@ -989,7 +1013,15 @@ func (con *Container) createContainer() *Error {
 		if strings.HasSuffix(strsh, "/") {
 			con.UserShell = strsh
 		} else {
-			con.UserShell = filepath.Join(con.RootPath, strsh)
+			if con.DockerBase {
+				shpath, err := GuessPathContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), strsh, true)
+				if err != nil {
+					return err
+				}
+				con.UserShell = shpath
+			} else {
+				con.UserShell = filepath.Join(con.RootPath, strsh)
+			}
 		}
 	} else {
 		con.UserShell = "/bin/bash"

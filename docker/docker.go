@@ -93,7 +93,7 @@ func DeleteManifest(username string, pass string, name string, tag string) *Erro
 	return nil
 }
 
-func DownloadLayers(username string, pass string, name string, tag string, folder string) (map[string]int64, *Error) {
+func DownloadLayers(username string, pass string, name string, tag string, folder string) (map[string]int64, []string, *Error) {
 	log.SetOutput(ioutil.Discard)
 	if !strings.Contains(name, "library/") && !strings.Contains(name, "/") {
 		name = "library/" + name
@@ -101,26 +101,27 @@ func DownloadLayers(username string, pass string, name string, tag string, folde
 	if !FolderExist(folder) {
 		_, err := MakeDir(folder)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	hub, err := registry.New(DOCKER_URL, username, pass)
 	if err != nil {
 		cerr := ErrNew(err, "create docker registry instance failure")
-		return nil, cerr
+		return nil, nil, cerr
 	}
 	man, err := hub.ManifestV2(name, tag)
 	if err != nil {
 		cerr := ErrNew(err, "query docker manifest failure")
-		return nil, cerr
+		return nil, nil, cerr
 	}
 	data := make(map[string]int64)
+	var layer_order []string
 	for _, element := range man.Layers {
 		dig := element.Digest
 		reader, err := hub.DownloadLayer(name, dig)
 		if err != nil {
 			cerr := ErrNew(err, "download docker layers failure")
-			return nil, cerr
+			return nil, nil, cerr
 		}
 		defer reader.Close()
 		if strings.HasSuffix(folder, "/") {
@@ -130,7 +131,7 @@ func DownloadLayers(username string, pass string, name string, tag string, folde
 		to, err := os.Create(filename)
 		if err != nil {
 			cerr := ErrNew(err, fmt.Sprintf("create file %s failure", filename))
-			return nil, cerr
+			return nil, nil, cerr
 		}
 		defer to.Close()
 		fmt.Println(fmt.Sprintf("Downloading file with type: %s, size: %d, destination: %s", element.MediaType, element.Size, filename))
@@ -159,11 +160,12 @@ func DownloadLayers(username string, pass string, name string, tag string, folde
 
 		if _, err := io.Copy(to, reader); err != nil {
 			cerr := ErrNew(err, fmt.Sprintf("copy file %s content failure", filename))
-			return nil, cerr
+			return nil, nil, cerr
 		}
 		data[filename] = element.Size
+		layer_order = append(layer_order, filename)
 	}
-	return data, nil
+	return data, layer_order, nil
 }
 
 func DownloadSetting(name string, tag string, folder string) *Error {
