@@ -601,6 +601,27 @@ func DockerDownload(name string, user string, pass string) *Error {
 		}
 		mdata["workspace"] = workspace
 
+		//extract layers
+		base := fmt.Sprintf("%s/base", mdata["rootdir"])
+		if !FolderExist(base) {
+			MakeDir(base)
+		}
+		mdata["base"] = base
+
+		for _, k := range layer_order {
+			k = path.Base(k)
+			tar_path := fmt.Sprintf("%s/%s", image_dir, k)
+			layerfolder := fmt.Sprintf("%s/%s", mdata["base"], k)
+			if !FolderExist(layerfolder) {
+				MakeDir(layerfolder)
+			}
+
+			err := Untar(tar_path, layerfolder)
+			if err != nil {
+				return err
+			}
+		}
+
 		//download setting from github
 		rdir, _ := mdata["rootdir"].(string)
 		err = DownloadSetting(tname, ttag, rdir)
@@ -656,10 +677,11 @@ func DockerCreate(name string) *Error {
 	if err == nil {
 		if val, ok := doc.Images[name]; ok {
 			if vval, vok := val.(map[string]interface{}); vok {
+				base, _ := vval["base"].(string)
 				workspace, _ := vval["workspace"].(string)
 				config, _ := vval["config"].(string)
 				layers, _ := vval["layer_order"].(string)
-				images, _ := vval["image"].(string)
+				//randomly generate id
 				id := RandomString(IDLENGTH)
 				rootfolder := fmt.Sprintf("%s/%s", workspace, id)
 				if !FolderExist(rootfolder) {
@@ -669,24 +691,28 @@ func DockerCreate(name string) *Error {
 					}
 				}
 
-				//extract layers
+				//create symlink folder
 				var keys []string
 				for _, k := range strings.Split(layers, ":") {
 					k = path.Base(k)
-					tar_path := fmt.Sprintf("%s/%s", images, k)
-					layerfolder := fmt.Sprintf("%s/%s", rootfolder, k)
-					if !FolderExist(layerfolder) {
-						MakeDir(layerfolder)
+					src_path := fmt.Sprintf("%s/%s", base, k)
+					target_path := fmt.Sprintf("%s/%s", rootfolder, k)
+					err := os.Symlink(src_path, target_path)
+					if err != nil {
+						cerr := ErrNew(err, fmt.Sprintf("can't create symlink from path: %s to %s", src_path, target_path))
+						return cerr
 					}
 					keys = append(keys, k)
-					err := Untar(tar_path, layerfolder)
-					if err != nil {
-						return err
-					}
 				}
 				keys = append(keys, "rw")
 				configmap := make(map[string]interface{})
 				configmap["dir"] = fmt.Sprintf("%s/rw", rootfolder)
+				if !FolderExist(configmap["dir"].(string)) {
+					_, err := MakeDir(configmap["dir"].(string))
+					if err != nil {
+						return err
+					}
+				}
 				configmap["config"] = config
 				configmap["passive"] = false
 				configmap["id"] = id

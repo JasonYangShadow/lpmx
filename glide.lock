@@ -1,5 +1,5 @@
 hash: 13a2cfaf7f65615ad7e6ad99bbc17a512cd4e2af1de311bd922f0d6531d583c6
-updated: 2018-10-11T11:00:22.718753877Z
+updated: 2018-11-15T14:50:56.213192046Z
 imports:
 - name: github.com/bradfitz/gomemcache
   version: bc664df9673713a0ccf26e3b55a673ec7301088b
@@ -56,7 +56,7 @@ imports:
 - name: github.com/opencontainers/go-digest
   version: c9281466c8b2f606084ac71339773efd177436e7
 - name: github.com/pelletier/go-toml
-  version: 81a861c69d25a841d0c4394f0e6f84bc8c5afae0
+  version: aa79e12a973495d00b01f2353330e5275d084731
 - name: github.com/phayes/permbits
   version: 59f2482cd4603d9795e7b2385448d5d7f42fdeee
 - name: github.com/sergi/go-diff
@@ -72,23 +72,23 @@ imports:
   subpackages:
   - mem
 - name: github.com/spf13/cast
-  version: 8965335b8c7107321228e3e3702cab9832751bac
+  version: 8c9545af88b134710ab1cd196795e7f2388358d7
 - name: github.com/spf13/cobra
   version: a1f051bc3eba734da4772d60e2d677f47cf93ef4
   subpackages:
   - cobra
 - name: github.com/spf13/jwalterweatherman
-  version: 103a6da826d08544f49833dabd4f1cdf8a1038bb
+  version: 94f6ae3ed3bceceafa716478c5fbf8d29ca601a1
 - name: github.com/spf13/pflag
-  version: 298182f68c66c05229eb03ac171abe6e309ee79a
+  version: aea12ed6721610dc6ed40141676d7ab0a1dac9e9
 - name: github.com/spf13/viper
-  version: 62edee319679b6ceaec16de03b966102d2dea709
+  version: ae103d7e593e371c69e832d5eb3347e2b80cbbc9
 - name: github.com/vmihailenco/msgpack
   version: a053f3dac71df214bfe8b367f34220f0029c9c02
   subpackages:
   - codes
 - name: golang.org/x/crypto
-  version: 7c1a557ab941a71c619514f229f0b27ccb0c27cf
+  version: 3d3f9f413869b949e48070b5bc593aa22cc2b8f2
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -101,12 +101,12 @@ imports:
   - internal/timeseries
   - trace
 - name: golang.org/x/sys
-  version: 4497e2df6f9e69048a54498c7affbbec3294ad47
+  version: 66b7b1311ac80bbafcd2daeef9a5e6e2cd1e2399
   subpackages:
   - unix
   - windows
 - name: golang.org/x/text
-  version: 4d1c5fb19474adfe9562c9847ba425e7da817e81
+  version: 6f44c5a2ea40ee3593d98cdcc905cc1fdaa660e2
   subpackages:
   - transform
   - unicode/norm

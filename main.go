@@ -176,16 +176,15 @@ func main() {
 	rpcCmd.AddCommand(rpcExecCmd, rpcQueryCmd, rpcDeleteCmd)
 
 	//docker cmd
-	var DockerDownloadName string
 	var DockerDownloadUser string
 	var DockerDownloadPass string
 	var dockerDownloadCmd = &cobra.Command{
 		Use:   "download",
 		Short: "download the docker images from docker hub",
 		Long:  "docker download sub-command is the advanced command of lpmx, which is used for downloading the images from docker hub",
-		Args:  cobra.ExactArgs(0),
+		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := DockerDownload(DockerDownloadName, DockerDownloadUser, DockerDownloadPass)
+			err := DockerDownload(args[0], DockerDownloadUser, DockerDownloadPass)
 			if err != nil {
 				LOGGER.Panic(err.Error())
 			} else {
@@ -193,35 +192,29 @@ func main() {
 			}
 		},
 	}
-	dockerDownloadCmd.Flags().StringVarP(&DockerDownloadName, "name", "n", "", "required")
-	dockerDownloadCmd.MarkFlagRequired("name")
 	dockerDownloadCmd.Flags().StringVarP(&DockerDownloadUser, "user", "u", "", "optional")
 	dockerDownloadCmd.Flags().StringVarP(&DockerDownloadPass, "pass", "p", "", "optional")
 
-	var DockerCreateName string
 	var dockerCreateCmd = &cobra.Command{
 		Use:   "create",
 		Short: "initialize the local docker images",
 		Long:  "docker create sub-command is the advanced command of lpmx, which is used for initializing and running the images downloaded from docker hub",
-		Args:  cobra.ExactArgs(0),
+		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := DockerCreate(DockerCreateName)
+			err := DockerCreate(args[0])
 			if err != nil {
 				LOGGER.Panic(err.Error())
 			}
 		},
 	}
-	dockerCreateCmd.Flags().StringVarP(&DockerCreateName, "name", "n", "", "required")
-	dockerCreateCmd.MarkFlagRequired("name")
 
-	var DockerDeleteName string
 	var dockerDeleteCmd = &cobra.Command{
 		Use:   "delete",
 		Short: "delete the local docker images",
 		Long:  "docker delete sub-command is the advanced command of lpmx, which is used for deleting the images downloaded from docker hub",
-		Args:  cobra.ExactArgs(0),
+		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := DockerDelete(DockerDeleteName)
+			err := DockerDelete(args[0])
 			if err != nil {
 				LOGGER.Panic(err.Error())
 			} else {
@@ -229,25 +222,20 @@ func main() {
 			}
 		},
 	}
-	dockerDeleteCmd.Flags().StringVarP(&DockerDeleteName, "name", "n", "", "required")
-	dockerDeleteCmd.MarkFlagRequired("name")
 
-	var DockerSearchName string
 	var dockerSearchCmd = &cobra.Command{
 		Use:   "search",
 		Short: "search the docker images from docker hub",
 		Long:  "docker search sub-command is the advanced command of lpmx, which is used for searching the images from docker hub",
-		Args:  cobra.ExactArgs(0),
+		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			tags, err := DockerSearch(DockerSearchName)
+			tags, err := DockerSearch(args[0])
 			if err != nil {
 				LOGGER.Error(err.Error())
 			}
-			fmt.Println(fmt.Sprintf("Name: %s, Available Tags: %s", DockerSearchName, tags))
+			fmt.Println(fmt.Sprintf("Name: %s, Available Tags: %s", args[0], tags))
 		},
 	}
-	dockerSearchCmd.Flags().StringVarP(&DockerSearchName, "name", "n", "", "required")
-	dockerSearchCmd.MarkFlagRequired("name")
 
 	var dockerListCmd = &cobra.Command{
 		Use:   "list",

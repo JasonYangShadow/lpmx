@@ -118,7 +118,9 @@ func DownloadLayers(username string, pass string, name string, tag string, folde
 	var layer_order []string
 	for _, element := range man.Layers {
 		dig := element.Digest
-		reader, err := hub.DownloadLayer(name, dig)
+		//reader, err := hub.DownloadLayer(name, dig)
+		//function name is changed
+		reader, err := hub.DownloadBlob(name, dig)
 		if err != nil {
 			cerr := ErrNew(err, "download docker layers failure")
 			return nil, nil, cerr
