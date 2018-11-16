@@ -263,6 +263,8 @@ func Resume(id string) *Error {
 					if b, _ := strconv.ParseBool(val["DockerBase"].(string)); b {
 						configmap["docker"] = true
 						configmap["layers"] = val["Layers"].(string)
+						configmap["id"] = val["id"].(string)
+						configmap["image"] = val["image"].(string)
 					}
 					err := Run(&configmap)
 					if err != nil {
@@ -1197,6 +1199,9 @@ func (con *Container) appendToSys() *Error {
 			cmap["RPCPort"] = fmt.Sprintf("%d", con.RPCPort)
 			cmap["DockerBase"] = strconv.FormatBool(con.DockerBase)
 			cmap["ImageBase"] = con.ImageBase
+			cmap["Layers"] = con.Layers
+			cmap["id"] = con.Id
+			cmap["image"] = con.ImageBase
 			sys.Containers[con.Id] = cmap
 		}
 		sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", currdir)
