@@ -53,6 +53,7 @@ type Container struct {
 	ImageBase           string
 	DockerBase          bool
 	Layers              string
+	BaseLayerPath       string
 	Status              int
 	LogPath             string
 	ElfPatcherPath      string
@@ -263,8 +264,9 @@ func Resume(id string) *Error {
 					if b, _ := strconv.ParseBool(val["DockerBase"].(string)); b {
 						configmap["docker"] = true
 						configmap["layers"] = val["Layers"].(string)
-						configmap["id"] = val["id"].(string)
-						configmap["image"] = val["image"].(string)
+						configmap["id"] = val["Id"].(string)
+						configmap["image"] = val["Image"].(string)
+						configmap["baselayerpath"] = val["BaseLayerPath"].(string)
 					}
 					err := Run(&configmap)
 					if err != nil {
@@ -343,6 +345,7 @@ func Run(configmap *map[string]interface{}) *Error {
 			con.DockerBase = true
 			con.ImageBase = (*configmap)["image"].(string)
 			con.Layers = (*configmap)["layers"].(string)
+			con.BaseLayerPath = (*configmap)["baselayerpath"].(string)
 		}
 	} else {
 		con.DockerBase = false
@@ -726,6 +729,7 @@ func DockerCreate(name string) *Error {
 				}).Debug("layers sha256 list")
 				reverse_keys := ReverseStrArray(keys)
 				configmap["layers"] = strings.Join(reverse_keys, ":")
+				configmap["baselayerpath"] = base
 				err = Run(&configmap)
 				if err != nil {
 					return err
@@ -849,6 +853,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["TERM"] = "xterm"
 	env["SHELL"] = con.UserShell
 	env["ContainerLayers"] = con.Layers
+	env["ContainerBasePath"] = con.BaseLayerPath
 	//env["FAKECHROOT_BASE"] = con.RootPath
 	if con.DockerBase {
 		env["DockerBase"] = "TRUE"
@@ -1200,8 +1205,9 @@ func (con *Container) appendToSys() *Error {
 			cmap["DockerBase"] = strconv.FormatBool(con.DockerBase)
 			cmap["ImageBase"] = con.ImageBase
 			cmap["Layers"] = con.Layers
-			cmap["id"] = con.Id
-			cmap["image"] = con.ImageBase
+			cmap["Id"] = con.Id
+			cmap["Image"] = con.ImageBase
+			cmap["BaseLayerPath"] = con.BaseLayerPath
 			sys.Containers[con.Id] = cmap
 		}
 		sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", currdir)
