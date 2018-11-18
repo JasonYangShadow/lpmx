@@ -854,7 +854,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["SHELL"] = con.UserShell
 	env["ContainerLayers"] = con.Layers
 	env["ContainerBasePath"] = con.BaseLayerPath
-	//env["FAKECHROOT_BASE"] = con.RootPath
 	if con.DockerBase {
 		env["DockerBase"] = "TRUE"
 	} else {
@@ -979,6 +978,12 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		case "FATAL":
 			env["__LOG_LEVEL"] = "4"
 		}
+	}
+	if _, priv_switch_ok := con.SettingConf["__priv_switch"]; priv_switch_ok {
+		env["__PRIV_SWITCH"] = "TRUE"
+	}
+	if _, fakechroot_debug_ok := con.SettingConf["FAKCHROOT_DEBUG"]; fakechroot_debug_ok {
+		env["FAKCHROOT_DEBUG"] = "TRUE"
 	}
 	return env, nil
 }
