@@ -982,8 +982,8 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	if _, priv_switch_ok := con.SettingConf["__priv_switch"]; priv_switch_ok {
 		env["__PRIV_SWITCH"] = "TRUE"
 	}
-	if _, fakechroot_debug_ok := con.SettingConf["FAKCHROOT_DEBUG"]; fakechroot_debug_ok {
-		env["FAKCHROOT_DEBUG"] = "TRUE"
+	if _, fakechroot_debug_ok := con.SettingConf["fakechroot_debug"]; fakechroot_debug_ok {
+		env["FAKECHROOT_DEBUG"] = "TRUE"
 	}
 	return env, nil
 }
