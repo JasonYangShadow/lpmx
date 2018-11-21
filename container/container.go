@@ -991,8 +991,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 			return nil, err
 		}
 		env["FAKECHROOT_ELFLOADER"] = elfloader_path
-	} else {
-		LOGGER.Warn("No var 'fakechroot_elfloader' is set, the container may not work properly")
 	}
 	return env, nil
 }
