@@ -985,6 +985,15 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	if _, fakechroot_debug_ok := con.SettingConf["fakechroot_debug"]; fakechroot_debug_ok {
 		env["FAKECHROOT_DEBUG"] = "TRUE"
 	}
+	if ldso_path, ldso_ok := con.SettingConf["fakechroot_elfloader"]; ldso_ok {
+		elfloader_path, err := GuessPathContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), ldso_path.(string), true)
+		if err != nil {
+			return nil, err
+		}
+		env["FAKECHROOT_ELFLOADER"] = elfloader_path
+	} else {
+		LOGGER.Warn("No var 'fakechroot_elfloader' is set, the container may not work properly")
+	}
 	return env, nil
 }
 
