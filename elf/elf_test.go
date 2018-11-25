@@ -1,19 +1,21 @@
 package elf
 
 import (
-	"bytes"
-	"io/ioutil"
+	"flag"
 	"testing"
 )
 
+var name string
+
+func init() {
+	flag.StringVar(&name, "name", "", "the name for ld.so")
+	flag.Parse()
+}
+
 func TestELF1(t *testing.T) {
-	err := Patchldso("/tmp/ld-2.23.so")
+	t.Log(name)
+	err := Patchldso(name)
 	if err != nil {
 		t.Error(err)
-	}
-	content, _ := ioutil.ReadFile("/tmp/ld-2.23.so.patch")
-	etc := []byte("\x00/etc")
-	if bytes.Contains(content, etc) {
-		t.Error("patch failed")
 	}
 }
