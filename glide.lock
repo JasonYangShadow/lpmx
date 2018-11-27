@@ -1,5 +1,5 @@
 hash: 13a2cfaf7f65615ad7e6ad99bbc17a512cd4e2af1de311bd922f0d6531d583c6
-updated: 2018-11-15T14:50:56.213192046Z
+updated: 2018-11-26T10:09:32.394078949Z
 imports:
 - name: github.com/bradfitz/gomemcache
   version: bc664df9673713a0ccf26e3b55a673ec7301088b
@@ -50,13 +50,13 @@ imports:
 - name: github.com/inconshreveable/mousetrap
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/magiconair/properties
-  version: c2353362d570a7bfa228149c62842019201cfb71
+  version: 7c38529aac7222391b7a2661365177a97e21b998
 - name: github.com/mitchellh/mapstructure
   version: 3536a929edddb9a5b34bd6861dc4a9647cb459fe
 - name: github.com/opencontainers/go-digest
   version: c9281466c8b2f606084ac71339773efd177436e7
 - name: github.com/pelletier/go-toml
-  version: aa79e12a973495d00b01f2353330e5275d084731
+  version: 27c6b39a135b7dc87a14afb068809132fb7a9a8f
 - name: github.com/phayes/permbits
   version: 59f2482cd4603d9795e7b2385448d5d7f42fdeee
 - name: github.com/sergi/go-diff
@@ -82,13 +82,13 @@ imports:
 - name: github.com/spf13/pflag
   version: aea12ed6721610dc6ed40141676d7ab0a1dac9e9
 - name: github.com/spf13/viper
-  version: ae103d7e593e371c69e832d5eb3347e2b80cbbc9
+  version: 06c7c0d9b3c7cfca13deff6e353a052e08828ad4
 - name: github.com/vmihailenco/msgpack
   version: a053f3dac71df214bfe8b367f34220f0029c9c02
   subpackages:
   - codes
 - name: golang.org/x/crypto
-  version: 3d3f9f413869b949e48070b5bc593aa22cc2b8f2
+  version: 9eb0be3963eaeb646c9a9b6d11f3da2b249bb2ca
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -101,7 +101,7 @@ imports:
   - internal/timeseries
   - trace
 - name: golang.org/x/sys
-  version: 66b7b1311ac80bbafcd2daeef9a5e6e2cd1e2399
+  version: 62eef0e2fa9b2c385f7b2778e763486da6880d37
   subpackages:
   - unix
   - windows

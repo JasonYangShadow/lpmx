@@ -103,18 +103,18 @@ func Patchldso(elfpath string) *Error {
 	}
 	nul_etc := []byte("\x00/\x00\x00\x00\x00\x00\x00\x00\x00\x00")
 	nul_lib := []byte("\x00/\x00\x00\x00")
-	nul_usr := []byte("\x00/\x00\x00\x00")
+	nul_usr := []byte("\x00/\x00\x00\x00\x00\x00\x00\x00")
 
 	etc := []byte("\x00/etc/ld.so")
 	lib := []byte("\x00/lib")
-	usr := []byte("\x00/usr")
+	usr := []byte("\x00/usr/lib")
 
-	ld_path_orig := []byte("\x00LD_LIBRARY_PATH\x00")
-	ld_path_new := []byte("\x00LD_LIBRARY_LPMX\x00")
+	//ld_path_orig := []byte("\x00LD_LIBRARY_PATH\x00")
+	//ld_path_new := []byte("\x00LD_LIBRARY_LPMX\x00")
 	content = bytes.Replace(content, etc, nul_etc, -1)
 	content = bytes.Replace(content, lib, nul_lib, -1)
 	content = bytes.Replace(content, usr, nul_usr, -1)
-	content = bytes.Replace(content, ld_path_orig, ld_path_new, -1)
+	//content = bytes.Replace(content, ld_path_orig, ld_path_new, -1)
 	elfpath_new := fmt.Sprintf("%s.patch", elfpath)
 	err = ioutil.WriteFile(elfpath_new, content, os.FileMode(permissions))
 	if err != nil {
