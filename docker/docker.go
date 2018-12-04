@@ -2,9 +2,6 @@ package docker
 
 import (
 	"fmt"
-	"github.com/heroku/docker-registry-client/registry"
-	. "github.com/jasonyangshadow/lpmx/error"
-	. "github.com/jasonyangshadow/lpmx/utils"
 	"io"
 	"io/ioutil"
 	"log"
@@ -12,6 +9,10 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/heroku/docker-registry-client/registry"
+	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/utils"
 )
 
 const (
@@ -192,6 +193,27 @@ func DownloadSetting(name string, tag string, folder string) *Error {
 		return cerr
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		http_req := fmt.Sprintf("%sdefault.yml", SETTING_URL)
+		resp, err := http.Get(http_req)
+		if err != nil {
+			cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
+			return cerr
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == 404 {
+			cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
+			return cerr
+		}
+		_, err = io.Copy(out, resp.Body)
+		if err != nil {
+			cerr := ErrNew(ErrFileIO, fmt.Sprintf("io copy from %s to %s encounters error", http_req, filepath))
+			return cerr
+		}
+		return nil
+	}
 
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {

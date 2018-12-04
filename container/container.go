@@ -34,8 +34,10 @@ const (
 )
 
 var (
-	ELFOP  = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath", "change_user", "add_allow_priv", "remove_allow_priv", "add_deny_priv", "remove_deny_priv", "add_map", "remove_map"}
-	STATUS = []string{"RUNNING", "STOPPED"}
+	ELFOP                   = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath", "change_user", "add_allow_priv", "remove_allow_priv", "add_deny_priv", "remove_deny_priv", "add_map", "remove_map"}
+	STATUS                  = []string{"RUNNING", "STOPPED"}
+	LD                      = []string{"/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2", "/lib/ld.so", "/lib64/ld-linux-x86-64.so.2", "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.1", "/lib64/ld-linux-x86-64.so.1", "/lib/ld-linux.so.2", "/lib/ld-linux.so.1"}
+	LD_LIBRARY_PATH_DEFAULT = []string{"lib", "lib/x86_64-linux-gnu", "usr/lib/x86_64-linux-gnu", "usr/lib", "usr/local/lib"}
 )
 
 type Sys struct {
@@ -57,6 +59,7 @@ type Container struct {
 	Status              int
 	LogPath             string
 	ElfPatcherPath      string
+	PatchedELFLoader    string
 	FakechrootPath      string
 	SettingConf         map[string]interface{}
 	SettingPath         string
@@ -132,7 +135,7 @@ func (server *RPC) RPCDelete(req Request, res *Response) error {
 }
 
 func Init() *Error {
-	currdir, _ := filepath.Abs(filepath.Dir("."))
+	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	var sys Sys
 	config := fmt.Sprintf("%s/.lpmxsys", currdir)
 	sys.RootDir = config
@@ -164,12 +167,12 @@ func Init() *Error {
 }
 
 func List() *Error {
-	currdir, _ := filepath.Abs(filepath.Dir("."))
+	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
 	if err == nil {
-		fmt.Println(fmt.Sprintf("%-s%-15s%-15s%-15s%-15s%-15s", "ContainerID", "RootPath", "Status", "RPC", "DockerBased", "Image"))
+		fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s", "ContainerID", "Status", "RPC", "DockerBased", "Image"))
 		for k, v := range sys.Containers {
 			if cmap, ok := v.(map[string]interface{}); ok {
 				port := strings.TrimSpace(cmap["RPCPort"].(string))
@@ -177,10 +180,10 @@ func List() *Error {
 					conn, err := net.DialTimeout("tcp", net.JoinHostPort("", port), time.Millisecond*200)
 					if err == nil && conn != nil {
 						conn.Close()
-						fmt.Println(fmt.Sprintf("%-s%-15s%-15s%-15s%-15s%-15s%", k, cmap["RootPath"].(string), cmap["Status"].(string), cmap["RPCPort"].(string), cmap["DockerBase"].(string), cmap["ImageBase"].(string)))
+						fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%", k, cmap["Status"].(string), cmap["RPCPort"].(string), cmap["DockerBase"].(string), cmap["ImageBase"].(string)))
 					}
 				} else {
-					fmt.Println(fmt.Sprintf("%-s%-15s%-15s%-15s%-15s%-15s", k, cmap["RootPath"].(string), cmap["Status"].(string), "NA", cmap["DockerBase"].(string), cmap["ImageBase"].(string)))
+					fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s", k, cmap["Status"].(string), "NA", cmap["DockerBase"].(string), cmap["ImageBase"].(string)))
 				}
 			} else {
 				cerr := ErrNew(ErrType, "sys.Containers type error")
@@ -249,7 +252,7 @@ func RPCDelete(ip string, port string, pid int) (*Response, *Error) {
 }
 
 func Resume(id string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir("."))
+	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
@@ -288,7 +291,7 @@ func Resume(id string) *Error {
 }
 
 func Destroy(id string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir("."))
+	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
@@ -346,6 +349,7 @@ func Run(configmap *map[string]interface{}) *Error {
 			con.ImageBase = (*configmap)["image"].(string)
 			con.Layers = (*configmap)["layers"].(string)
 			con.BaseLayerPath = (*configmap)["baselayerpath"].(string)
+			con.PatchedELFLoader = (*configmap)["elf_loader"].(string)
 		}
 	} else {
 		con.DockerBase = false
@@ -429,7 +433,7 @@ func Run(configmap *map[string]interface{}) *Error {
 }
 
 func Get(id string, name string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir("."))
+	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
@@ -450,7 +454,7 @@ func Get(id string, name string) *Error {
 }
 
 func Set(id string, tp string, name string, value string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir("."))
+	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
@@ -561,7 +565,7 @@ func DockerSearch(name string) ([]string, *Error) {
 }
 
 func DockerDownload(name string, user string, pass string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir("."))
+	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
 	err := readDocker(rootdir, &doc)
@@ -650,21 +654,14 @@ func DockerDownload(name string, user string, pass string) *Error {
 }
 
 func DockerList() *Error {
-	currdir, _ := filepath.Abs(filepath.Dir("."))
+	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
 	err := readDocker(rootdir, &doc)
-	fmt.Println(fmt.Sprintf("%s%50s", "Name", "Dir"))
+	fmt.Println(fmt.Sprintf("%s", "Name"))
 	if err == nil {
-		for k, v := range doc.Images {
-			if cmap, ok := v.(map[string]interface{}); ok {
-				dir, _ := cmap["rootdir"].(string)
-				dir = strings.TrimSpace(dir)
-				fmt.Println(fmt.Sprintf("%s%50s", k, dir))
-			} else {
-				cerr := ErrNew(ErrType, "doc.Images type error")
-				return cerr
-			}
+		for k, _ := range doc.Images {
+			fmt.Println(fmt.Sprintf("%s", k))
 		}
 		return nil
 	}
@@ -675,7 +672,7 @@ func DockerList() *Error {
 }
 
 func DockerCreate(name string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir("."))
+	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
 	err := readDocker(rootdir, &doc)
@@ -718,6 +715,7 @@ func DockerCreate(name string) *Error {
 						return err
 					}
 				}
+
 				configmap["config"] = config
 				configmap["passive"] = false
 				configmap["id"] = id
@@ -730,6 +728,38 @@ func DockerCreate(name string) *Error {
 				reverse_keys := ReverseStrArray(keys)
 				configmap["layers"] = strings.Join(reverse_keys, ":")
 				configmap["baselayerpath"] = base
+
+				//patch ld.so
+				ld_new_path := fmt.Sprintf("%s/ld.so.patch", rootfolder)
+				LOGGER.WithFields(logrus.Fields{
+					"ld_patched_path": ld_new_path,
+				}).Debug("layers sha256 list")
+				if !FileExist(ld_new_path) {
+					for _, v := range LD {
+						for _, l := range strings.Split(configmap["layers"].(string), ":") {
+							ld_orig_path := fmt.Sprintf("%s/%s%s", configmap["baselayerpath"].(string), l, v)
+
+							LOGGER.WithFields(logrus.Fields{
+								"ld_path": ld_orig_path,
+							}).Debug("layers sha256 list")
+							if _, err := os.Stat(ld_orig_path); err == nil {
+								err := Patchldso(ld_orig_path, ld_new_path)
+								if err != nil {
+									return err
+								}
+								configmap["elf_loader"] = ld_new_path
+								break
+							}
+						}
+						if _, ok := configmap["elf_loader"]; ok {
+							break
+						}
+					}
+				} else {
+					configmap["elf_loader"] = ld_new_path
+				}
+
+				//run container
 				err = Run(&configmap)
 				if err != nil {
 					return err
@@ -744,7 +774,7 @@ func DockerCreate(name string) *Error {
 }
 
 func DockerDelete(name string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir("."))
+	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
 	err := readDocker(rootdir, &doc)
@@ -854,11 +884,38 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["SHELL"] = con.UserShell
 	env["ContainerLayers"] = con.Layers
 	env["ContainerBasePath"] = con.BaseLayerPath
+	env["FAKECHROOT_ELFLOADER"] = con.PatchedELFLoader
 	if con.DockerBase {
 		env["DockerBase"] = "TRUE"
 	} else {
 		env["DockerBase"] = "FALSE"
 	}
+
+	//set default LD_LIBRARY_LPMX
+	var libs []string
+	//add libmemcached and other libs
+	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	libs = append(libs, currdir)
+
+	for _, v := range LD_LIBRARY_PATH_DEFAULT {
+		lib_path, err := GuessPathContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), v, false)
+		if err != nil {
+			continue
+		} else {
+			libs = append(libs, lib_path)
+		}
+	}
+	if len(libs) > 0 {
+		env["LD_LIBRARY_LPMX"] = strings.Join(libs, ":")
+	}
+
+	//set default FAKECHROOT_EXCLUDE_PATH
+	env["FAKECHROOT_EXCLUDE_PATH"] = "/dev:/proc:/sys"
+
+	//set default FAKECHROOT_CMD_SUBSET
+	env["FAKECHROOT_CMD_SUBSET"] = "/sbin/ldconfig=/bin/true:/usr/bin/ldd=/usr/bin/ldd:/dev/null=/bin/true"
+
+	env["HOME"], _ = GuessPathContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), "home", false)
 
 	//export env
 	if data, data_ok := con.SettingConf["export_env"]; data_ok {
@@ -964,7 +1021,10 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 
 	if _, l_switch_ok := con.SettingConf["__log_switch"]; l_switch_ok {
 		env["__LOG_SWITCH"] = "TRUE"
+	} else {
+		env["__LOG_SWITCH"] = "FALSE"
 	}
+
 	if l_level, l_level_ok := con.SettingConf["__log_level"]; l_level_ok {
 		switch l_level {
 		case "DEBUG":
@@ -977,14 +1037,20 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 			env["__LOG_LEVEL"] = "3"
 		case "FATAL":
 			env["__LOG_LEVEL"] = "4"
+		default:
+			env["__LOG_LEVEL"] = "3"
 		}
 	}
 	if _, priv_switch_ok := con.SettingConf["__priv_switch"]; priv_switch_ok {
 		env["__PRIV_SWITCH"] = "TRUE"
+	} else {
+		env["__PRIV_SWITCH"] = "TRUE"
 	}
+
 	if _, fakechroot_debug_ok := con.SettingConf["fakechroot_debug"]; fakechroot_debug_ok {
 		env["FAKECHROOT_DEBUG"] = "TRUE"
 	}
+
 	if ldso_path, ldso_ok := con.SettingConf["fakechroot_elfloader"]; ldso_ok {
 		elfloader_path, err := GuessPathContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), ldso_path.(string), true)
 		if err != nil {
@@ -1194,7 +1260,7 @@ func (con *Container) patchBineries() *Error {
 }
 
 func (con *Container) appendToSys() *Error {
-	currdir, _ := filepath.Abs(filepath.Dir("."))
+	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)

@@ -14,7 +14,7 @@ func init() {
 
 func TestELF1(t *testing.T) {
 	t.Log(name)
-	err := Patchldso(name)
+	err := Patchldso(name, fmt.Sprintf("%s.patch", name))
 	if err != nil {
 		t.Error(err)
 	}

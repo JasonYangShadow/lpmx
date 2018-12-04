@@ -426,6 +426,22 @@ func Untar(target string, folder string) *Error {
 			}
 
 			f.Close()
+
+		case tar.TypeSymlink:
+			//won't link to absolute path
+			real_path := header.Linkname
+			if strings.HasPrefix(real_path, "/") {
+				real_path = fmt.Sprintf("%s%s", folder, strings.TrimPrefix(header.Linkname, "/"))
+			}
+			os.Symlink(real_path, target)
+
+		case tar.TypeLink:
+			//won't link to absolute path
+			real_path := header.Linkname
+			if strings.HasPrefix(real_path, "/") {
+				real_path = fmt.Sprintf("%s%s", folder, strings.TrimPrefix(header.Linkname, "/"))
+			}
+			os.Link(real_path, target)
 		}
 	}
 }
