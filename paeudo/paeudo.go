@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/log"
+	"github.com/sirupsen/logrus"
 	"os"
 	"os/exec"
 	"strings"
@@ -69,6 +71,10 @@ func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Erro
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
+
+		LOGGER.WithFields(logrus.Fields{
+			"cmd": cmd,
+		}).Debug("shell env debug")
 		err := cmd.Run()
 		if err != nil {
 			cerr := ErrNew(err, "cmd running error")

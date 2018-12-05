@@ -6,6 +6,7 @@ import (
 	"net/rpc"
 	"os"
 	"os/signal"
+	"os/user"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -38,6 +39,7 @@ var (
 	STATUS                  = []string{"RUNNING", "STOPPED"}
 	LD                      = []string{"/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2", "/lib/ld.so", "/lib64/ld-linux-x86-64.so.2", "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.1", "/lib64/ld-linux-x86-64.so.1", "/lib/ld-linux.so.2", "/lib/ld-linux.so.1"}
 	LD_LIBRARY_PATH_DEFAULT = []string{"lib", "lib/x86_64-linux-gnu", "usr/lib/x86_64-linux-gnu", "usr/lib", "usr/local/lib"}
+	FOLDER_MODE             = 0755
 )
 
 type Sys struct {
@@ -270,6 +272,7 @@ func Resume(id string) *Error {
 						configmap["id"] = val["Id"].(string)
 						configmap["image"] = val["Image"].(string)
 						configmap["baselayerpath"] = val["BaseLayerPath"].(string)
+						configmap["elf_loader"] = val["PatchedELFLoader"].(string)
 					}
 					err := Run(&configmap)
 					if err != nil {
@@ -759,10 +762,66 @@ func DockerCreate(name string) *Error {
 					configmap["elf_loader"] = ld_new_path
 				}
 
-				//run container
-				err = Run(&configmap)
+				//add current user to /etc/passwd user gid to /etc/group
+				user, err := user.Current()
 				if err != nil {
-					return err
+					cerr := ErrNew(err, "can't get current user info")
+					return cerr
+				}
+
+				uname := user.Username
+				uid := user.Uid
+				gid := user.Gid
+				for _, l := range strings.Split(configmap["layers"].(string), ":") {
+					passwd_path := fmt.Sprintf("%s/%s/etc/passwd", configmap["baselayerpath"].(string), l)
+					if _, err := os.Stat(passwd_path); err == nil {
+						new_passwd_path := fmt.Sprintf("%s/etc", configmap["dir"].(string))
+						os.MkdirAll(new_passwd_path, os.FileMode(FOLDER_MODE))
+						ret, c_err := CopyFile(passwd_path, fmt.Sprintf("%s/passwd", new_passwd_path))
+						if ret && c_err == nil {
+							f, err := os.OpenFile(fmt.Sprintf("%s/passwd", new_passwd_path), os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+							if err != nil {
+								cerr := ErrNew(err, fmt.Sprintf("%s/passwd", new_passwd_path))
+								return cerr
+							}
+							defer f.Close()
+							_, err = f.WriteString(fmt.Sprintf("%s:x:%s:%s:%s:/home/%s:/bin/bash\n", uname, uid, uid, uname, uname))
+							if err != nil {
+								cerr := ErrNew(err, fmt.Sprintf("%s/passwd", new_passwd_path))
+								return cerr
+							}
+						} else {
+							return c_err
+						}
+					}
+
+					group_path := fmt.Sprintf("%s/%s/etc/group", configmap["baselayerpath"].(string), l)
+					if _, err := os.Stat(group_path); err == nil {
+						new_group_path := fmt.Sprintf("%s/etc", configmap["dir"].(string))
+						os.MkdirAll(new_group_path, os.FileMode(FOLDER_MODE))
+						ret, c_err := CopyFile(group_path, fmt.Sprintf("%s/group", new_group_path))
+						if ret && c_err == nil {
+							f, err := os.OpenFile(fmt.Sprintf("%s/group", new_group_path), os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+							if err != nil {
+								cerr := ErrNew(err, fmt.Sprintf("%s/group", new_group_path))
+								return cerr
+							}
+							defer f.Close()
+							_, err = f.WriteString(fmt.Sprintf("%s:x:%s\n", uname, gid))
+							if err != nil {
+								cerr := ErrNew(err, fmt.Sprintf("%s/group", new_group_path))
+								return cerr
+							}
+						} else {
+							return c_err
+						}
+					}
+				}
+
+				//run container
+				r_err := Run(&configmap)
+				if r_err != nil {
+					return r_err
 				}
 				return nil
 			}
@@ -1073,26 +1132,12 @@ func (con *Container) bashShell() *Error {
 	}
 
 	if FolderExist(con.RootPath) {
-		if con.CurrentUser == "root" {
-			LOGGER.WithFields(logrus.Fields{
-				"env":   env,
-				"shell": con.UserShell,
-			}).Debug("root mode debug")
-			err = ShellEnv("fakeroot", env, con.RootPath, con.UserShell)
-		} else if con.CurrentUser == "chroot" {
-			env["ContainerMode"] = "chroot"
-			LOGGER.WithFields(logrus.Fields{
-				"env": env,
-			}).Debug("chroot mode debug")
-			err = ShellEnv("fakeroot", env, con.RootPath, "chroot", con.RootPath, con.UserShell)
-		} else {
-			LOGGER.WithFields(logrus.Fields{
-				"con.userShell": con.UserShell,
-				"env":           env,
-				"con.RootPath":  con.RootPath,
-			}).Debug("shell env paramters")
-			err = ShellEnv(con.UserShell, env, con.RootPath)
-		}
+		LOGGER.WithFields(logrus.Fields{
+			"con.userShell": con.UserShell,
+			"env":           env,
+			"con.RootPath":  con.RootPath,
+		}).Debug("shell env paramters")
+		err = ShellEnv(con.UserShell, env, con.RootPath)
 		if err != nil {
 			return err
 		}
@@ -1137,11 +1182,9 @@ func (con *Container) createContainer() *Error {
 	} else {
 		con.UserShell = "/bin/bash"
 	}
-	if c_user, c_ok := con.SettingConf["default_user"]; c_ok {
-		con.CurrentUser = c_user.(string)
-	} else {
-		con.CurrentUser = con.CreateUser
-	}
+
+	con.CurrentUser = con.CreateUser
+
 	if mem, mok := con.SettingConf["memcache_list"]; mok {
 		if mems, mems_ok := mem.([]interface{}); mems_ok {
 			for _, memc := range mems {
@@ -1286,6 +1329,7 @@ func (con *Container) appendToSys() *Error {
 			cmap["Id"] = con.Id
 			cmap["Image"] = con.ImageBase
 			cmap["BaseLayerPath"] = con.BaseLayerPath
+			cmap["PatchedELFLoader"] = con.PatchedELFLoader
 			sys.Containers[con.Id] = cmap
 		}
 		sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", currdir)
