@@ -73,7 +73,7 @@ func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Erro
 		cmd.Stdout = os.Stdout
 
 		LOGGER.WithFields(logrus.Fields{
-			"cmd": cmd,
+			"env": envstrs,
 		}).Debug("shell env debug")
 		err := cmd.Run()
 		if err != nil {

@@ -937,7 +937,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env := make(map[string]string)
 	env["ContainerId"] = con.Id
 	env["ContainerRoot"] = con.RootPath
-	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
+	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so %s/libfakeroot-sysv.so", con.FakechrootPath, con.FakechrootPath)
 	env["MEMCACHED_PID"] = con.MemcachedServerList[0]
 	env["TERM"] = "xterm"
 	env["SHELL"] = con.UserShell
@@ -964,12 +964,13 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 			libs = append(libs, lib_path)
 		}
 	}
+
 	if len(libs) > 0 {
 		env["LD_LIBRARY_LPMX"] = strings.Join(libs, ":")
 	}
 
 	//set default FAKECHROOT_EXCLUDE_PATH
-	env["FAKECHROOT_EXCLUDE_PATH"] = "/tmp:/dev:/proc:/sys"
+	env["FAKECHROOT_EXCLUDE_PATH"] = "/dev:/proc"
 
 	//set default FAKECHROOT_CMD_SUBSET
 	env["FAKECHROOT_CMD_SUBSET"] = "/sbin/ldconfig=/bin/true:/usr/bin/ldd=/usr/bin/ldd:/dev/null=/bin/true"
@@ -1183,7 +1184,7 @@ func (con *Container) createContainer() *Error {
 		con.UserShell = "/bin/bash"
 	}
 
-	con.CurrentUser = con.CreateUser
+	con.CurrentUser = "root"
 
 	if mem, mok := con.SettingConf["memcache_list"]; mok {
 		if mems, mems_ok := mem.([]interface{}); mems_ok {
@@ -1212,6 +1213,12 @@ func (con *Container) createContainer() *Error {
 	}
 	if FileExist("./libfakechroot.so") {
 		_, err = CopyFile("./libfakechroot.so", fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath))
+		if err != nil {
+			return err
+		}
+	}
+	if FileExist("./libfakeroot-sysv.so") {
+		_, err = CopyFile("./libfakeroot-sysv.so", fmt.Sprintf("%s/libfakeroot-sysv.so", con.FakechrootPath))
 		if err != nil {
 			return err
 		}
