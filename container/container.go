@@ -944,6 +944,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["ContainerLayers"] = con.Layers
 	env["ContainerBasePath"] = con.BaseLayerPath
 	env["FAKECHROOT_ELFLOADER"] = con.PatchedELFLoader
+	env["PWD"] = "/"
 	if con.DockerBase {
 		env["DockerBase"] = "TRUE"
 	} else {
@@ -970,7 +971,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	}
 
 	//set default FAKECHROOT_EXCLUDE_PATH
-	env["FAKECHROOT_EXCLUDE_PATH"] = "/dev:/proc"
+	env["FAKECHROOT_EXCLUDE_PATH"] = "/tmp:/dev:/proc:/sys"
 
 	//set default FAKECHROOT_CMD_SUBSET
 	env["FAKECHROOT_CMD_SUBSET"] = "/sbin/ldconfig=/bin/true:/usr/bin/ldd=/usr/bin/ldd:/dev/null=/bin/true"
