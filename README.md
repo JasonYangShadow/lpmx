@@ -28,6 +28,7 @@ If there are any dependencies issues, try to install gilde and execute 'glide up
 > lpmx docker search NAME  
 > lpmx docker download NAME:TAG  
 > lpmx docker create NAME:TAG  
+
 For creating containers based on cutomized content:  
 1. lpmx run -c config_file_path -s target_container_root_folder -> creates and starts running container based on configuration file and target folder via terminal. 
 2. lpmx run -c config_file_path -s target_container_root_folder -p -> creates and starts running container in passive mode, which will result in opening rpc port to receive commands and no interaction terminal is triggered. 
