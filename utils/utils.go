@@ -309,6 +309,44 @@ func GuessPathContainer(base string, layers []string, in string, file bool) (str
 	return "", cerr
 }
 
+//get all existed paths rather than only one
+func GuessPathsContainer(base string, layers []string, in string, file bool) ([]string, *Error) {
+	var ret []string
+	if strings.HasPrefix(in, "$") {
+		ret = append(ret, strings.Replace(in, "$", "", -1))
+		return ret, nil
+	}
+	//file marked with ^
+	if strings.HasPrefix(in, "^") {
+		in = strings.Replace(in, "^", "", -1)
+		file = true
+	}
+	if strings.TrimSpace(in) == "all" {
+		ret = append(ret, in)
+		return ret, nil
+	}
+	if filepath.IsAbs(in) {
+		if (file && FileExist(in)) || (!file && FolderExist(in)) {
+			ret = append(ret, in)
+		}
+	} else {
+		for _, layer := range layers {
+			tpath := fmt.Sprintf("%s/%s/%s", base, layer, in)
+			LOGGER.WithFields(logrus.Fields{
+				"tpath": tpath,
+			}).Debug("guess paths container debug")
+			if (file && FileExist(tpath)) || (!file && FolderExist(tpath)) {
+				ret = append(ret, tpath)
+			}
+		}
+	}
+	if len(ret) > 0 {
+		return ret, nil
+	}
+	cerr := ErrNew(ErrNil, fmt.Sprintf("%s doesn't exist both in abs path and relative path", in))
+	return ret, cerr
+}
+
 func AddConPath(base string, in string) string {
 	if strings.HasPrefix(in, "$") {
 		return strings.Replace(in, "$", "", -1)

@@ -818,6 +818,12 @@ func DockerCreate(name string) *Error {
 					}
 				}
 
+				//create rw/proc/self/cwd to fake cwd
+				proc_self_path := fmt.Sprintf("%s/proc/self", configmap["dir"].(string))
+				os.MkdirAll(proc_self_path, os.FileMode(FOLDER_MODE))
+				os.Symlink("/", fmt.Sprintf("%s/cwd", proc_self_path))
+				os.Symlink("/", fmt.Sprintf("%s/exe", proc_self_path))
+
 				//run container
 				r_err := Run(&configmap)
 				if r_err != nil {
@@ -945,6 +951,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["ContainerBasePath"] = con.BaseLayerPath
 	env["FAKECHROOT_ELFLOADER"] = con.PatchedELFLoader
 	env["PWD"] = "/"
+	env["FAKECHROOT_EXCLUDE_EXCEPTION_PATH"] = "/proc/self/cwd:/proc/self/exe"
 	if con.DockerBase {
 		env["DockerBase"] = "TRUE"
 	} else {
@@ -958,11 +965,11 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	libs = append(libs, currdir)
 
 	for _, v := range LD_LIBRARY_PATH_DEFAULT {
-		lib_path, err := GuessPathContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), v, false)
+		lib_paths, err := GuessPathsContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), v, false)
 		if err != nil {
 			continue
 		} else {
-			libs = append(libs, lib_path)
+			libs = append(libs, lib_paths...)
 		}
 	}
 
@@ -1206,24 +1213,62 @@ func (con *Container) createContainer() *Error {
 	if err != nil {
 		return err
 	}
-	if FileExist("./patchelf") {
-		_, err = CopyFile("./patchelf", fmt.Sprintf("%s/patchelf", con.ElfPatcherPath))
-		if err != nil {
-			return err
+
+	//find these follwing libraries and binaries in current
+	lpmxdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	searchPaths := []string{lpmxdir, "."}
+
+	elf_copied := false
+	for _, path := range searchPaths {
+		elf_tmp := fmt.Sprintf("%s/patchelf", path)
+		if FileExist(elf_tmp) {
+			_, err = CopyFile(elf_tmp, fmt.Sprintf("%s/patchelf", con.ElfPatcherPath))
+			if err != nil {
+				return err
+			}
+			elf_copied = true
+			break
 		}
 	}
-	if FileExist("./libfakechroot.so") {
-		_, err = CopyFile("./libfakechroot.so", fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath))
-		if err != nil {
-			return err
+	if !elf_copied {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("can not copy patchelf binary, please put it inside the same foler of lpmx or current folder"))
+		return cerr
+	}
+
+	libfakechroot_copied := false
+	for _, path := range searchPaths {
+		libfakechroot_tmp := fmt.Sprintf("%s/libfakechroot.so", path)
+		if FileExist(libfakechroot_tmp) {
+			_, err = CopyFile(libfakechroot_tmp, fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath))
+			if err != nil {
+				return err
+			}
+			libfakechroot_copied = true
+			break
 		}
 	}
-	if FileExist("./libfakeroot-sysv.so") {
-		_, err = CopyFile("./libfakeroot-sysv.so", fmt.Sprintf("%s/libfakeroot-sysv.so", con.FakechrootPath))
-		if err != nil {
-			return err
+	if !libfakechroot_copied {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("can not copy libfakechroot.so library, please put it inside the same foler of lpmx or current folder"))
+		return cerr
+	}
+
+	libfakeroot_copied := false
+	for _, path := range searchPaths {
+		libfakeroot_tmp := fmt.Sprintf("%s/libfakeroot-sysv.so", path)
+		if FileExist(libfakeroot_tmp) {
+			_, err = CopyFile(libfakeroot_tmp, fmt.Sprintf("%s/libfakeroot-sysv.so", con.FakechrootPath))
+			if err != nil {
+				return err
+			}
+			libfakeroot_copied = true
+			break
 		}
 	}
+	if !libfakeroot_copied {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("can not copy libfakeroot-sysv.so library, please put it inside the same foler of lpmx or current folder"))
+		return cerr
+	}
+
 	return nil
 }
 
