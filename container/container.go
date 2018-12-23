@@ -952,7 +952,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["FAKECHROOT_ELFLOADER"] = con.PatchedELFLoader
 	env["PWD"] = "/"
 	//used for faking proc file
-	env["FAKECHROOT_EXCLUDE_PROC_PATH"] = "cwd:exe"
+	env["FAKECHROOT_EXCLUDE_PROC_PATH"] = "/proc/self/cwd:/proc/self/exe"
 	if con.DockerBase {
 		env["DockerBase"] = "TRUE"
 	} else {
@@ -982,7 +982,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["FAKECHROOT_EXCLUDE_PATH"] = "/tmp:/dev:/proc:/sys"
 
 	//set default FAKECHROOT_CMD_SUBSET
-	env["FAKECHROOT_CMD_SUBSET"] = "/sbin/ldconfig=/bin/true:/usr/bin/ldd=/usr/bin/ldd:/dev/null=/bin/true"
+	env["FAKECHROOT_CMD_SUBSET"] = "/sbin/ldconfig.real=/bin/true:/sbin/insserv=/bin/true:/sbin/ldconfig=/bin/ldconfig:/usr/bin/ischroot=/bin/true:/usr/bin/mkfifo=/bin/true"
 
 	env["HOME"], _ = GuessPathContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), "home", false)
 
