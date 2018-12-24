@@ -982,7 +982,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["FAKECHROOT_EXCLUDE_PATH"] = "/tmp:/dev:/proc:/sys"
 
 	//set default FAKECHROOT_CMD_SUBSET
-	env["FAKECHROOT_CMD_SUBSET"] = "/sbin/ldconfig.real=/bin/true:/sbin/insserv=/bin/true:/sbin/ldconfig=/bin/ldconfig:/usr/bin/ischroot=/bin/true:/usr/bin/mkfifo=/bin/true"
+	env["FAKECHROOT_CMD_SUBST"] = "/sbin/ldconfig.real=/bin/true:/sbin/insserv=/bin/true:/sbin/ldconfig=/bin/ldconfig:/usr/bin/ischroot=/bin/true:/usr/bin/mkfifo=/bin/true"
 
 	env["HOME"], _ = GuessPathContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), "home", false)
 
