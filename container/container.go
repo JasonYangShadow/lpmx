@@ -71,6 +71,7 @@ type Container struct {
 	CreateUser          string
 	CurrentUser         string
 	MemcachedServerList []string
+	ExposeExe           string
 	ShmFiles            string
 	IpcFiles            string
 	UserShell           string
@@ -908,6 +909,69 @@ func DockerDelete(name string) *Error {
 	return err
 }
 
+func DockerExpose(id string, name string) *Error {
+	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	var sys Sys
+	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	err := readSys(rootdir, &sys)
+
+	if err == nil {
+		if v, ok := sys.Containers[id]; ok {
+			if val, vok := v.(map[string]interface{}); vok {
+				var con Container
+				info := fmt.Sprintf("%s/.lpmx/.info", val["RootPath"].(string))
+				if FileExist(info) {
+					data, err := ReadFromFile(info)
+					if err == nil {
+						err := StructUnmarshal(data, &con)
+						if err != nil {
+							return err
+						}
+						if !strings.Contains(con.ExposeExe, name) {
+							if con.ExposeExe == "" {
+								con.ExposeExe = name
+							} else {
+								con.ExposeExe = fmt.Sprintf("%s:%s", con.ExposeExe, name)
+							}
+						}
+
+						bindir := fmt.Sprintf("%s/bin", currdir)
+						if !FolderExist(bindir) {
+							_, err := MakeDir(bindir)
+							if err != nil {
+								return err
+							}
+						}
+
+						bname := filepath.Base(name)
+						bdir := fmt.Sprintf("%s/%s", bindir, bname)
+						if !FileExist(bdir) {
+							f, err := os.OpenFile(bdir, os.O_RDWR|os.O_CREATE, 0755)
+							if err != nil {
+								cerr := ErrNew(err, fmt.Sprintf("can not create exposed file %s", bdir))
+								return cerr
+							}
+							defer f.Close()
+						}
+
+						//write back
+						data, _ := StructMarshal(&con)
+						WriteToFile(data, fmt.Sprintf("%s/.info", con.ConfigPath))
+					}
+				} else {
+					cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist", val["RootPath"].(string)))
+					return cerr
+				}
+			}
+		} else {
+			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
+			return cerr
+		}
+		return nil
+	}
+	return err
+}
+
 /**
 container methods
 **/
@@ -1024,8 +1088,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 
 	//set default FAKECHROOT_CMD_SUBSET
 	env["FAKECHROOT_CMD_SUBST"] = "/sbin/ldconfig.real=/bin/true:/sbin/insserv=/bin/true:/sbin/ldconfig=/bin/true:/usr/bin/ischroot=/bin/true:/usr/bin/mkfifo=/bin/true"
-
-	env["HOME"], _ = GuessPathContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), "home", false)
 
 	//export env
 	if data, data_ok := con.SettingConf["export_env"]; data_ok {
@@ -1540,7 +1602,7 @@ func (con *Container) setProgPrivileges() *Error {
 										"value": v.(string),
 										"err":   v_err,
 										"type":  "string",
-									}).Error("allow list parse error")
+									}).Error("deny list parse error")
 									continue
 								}
 								mem_err := mem.MUpdateStrValue(fmt.Sprintf("deny:%s:%s", con.Id, k), v_path)
@@ -1558,7 +1620,7 @@ func (con *Container) setProgPrivileges() *Error {
 												"value": acl.(string),
 												"err":   v_err,
 												"type":  "interface",
-											}).Error("allow list parse error")
+											}).Error("deny list parse error")
 											continue
 										}
 										value = fmt.Sprintf("%s;%s", v_path, value)
@@ -1574,7 +1636,7 @@ func (con *Container) setProgPrivileges() *Error {
 							}
 						}
 					} else {
-						acm_err := ErrNew(ErrType, fmt.Sprintf("allow_list: type is not right, assume: map[string]interface{}, real: %v", ac))
+						acm_err := ErrNew(ErrType, fmt.Sprintf("deny_list: type is not right, assume: map[string]interface{}, real: %v", ac))
 						return acm_err
 					}
 				}
@@ -1603,7 +1665,7 @@ func (con *Container) setProgPrivileges() *Error {
 										"value": v.(string),
 										"err":   v_err,
 										"type":  "string",
-									}).Error("allow list parse error")
+									}).Error("add map parse error")
 									continue
 								}
 								mem_err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), v_path)
@@ -1621,7 +1683,7 @@ func (con *Container) setProgPrivileges() *Error {
 												"value": acl.(string),
 												"err":   v_err,
 												"type":  "interface",
-											}).Error("allow list parse error")
+											}).Error("add map parse error")
 											continue
 										}
 										value = fmt.Sprintf("%s;%s", v_path, value)
@@ -1637,7 +1699,7 @@ func (con *Container) setProgPrivileges() *Error {
 							}
 						}
 					} else {
-						acm_err := ErrNew(ErrType, fmt.Sprintf("allow_list: type is not right, assume: map[string]interface{}, real: %v", ac))
+						acm_err := ErrNew(ErrType, fmt.Sprintf("add_map: type is not right, assume: map[string]interface{}, real: %v", ac))
 						return acm_err
 					}
 				}

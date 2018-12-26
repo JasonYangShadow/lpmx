@@ -266,12 +266,33 @@ func main() {
 		},
 	}
 
+	var DockerExposeId string
+	var DockerExposeName string
+	var dockerExposeCmd = &cobra.Command{
+		Use:   "expose",
+		Short: "expose program inside container",
+		Long:  "docker expose sub-command is the advanced command of lpmx, which is used for exposing binaries inside containers to host",
+		Args:  cobra.ExactArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			err := DockerExpose(DockerExposeId, DockerExposeName)
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			} else {
+				LOGGER.Info("DONE")
+			}
+		},
+	}
+	dockerExposeCmd.Flags().StringVarP(&DockerExposeId, "id", "i", "", "required")
+	runCmd.MarkFlagRequired("id")
+	dockerExposeCmd.Flags().StringVarP(&DockerExposeName, "name", "n", "", "required")
+	runCmd.MarkFlagRequired("name")
+
 	var dockerCmd = &cobra.Command{
 		Use:   "docker",
 		Short: "docker command",
 		Long:  "docker command is the advanced comand of lpmx, which is used for executing docker related commands",
 	}
-	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd)
+	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd, dockerExposeCmd)
 
 	var resumeCmd = &cobra.Command{
 		Use:   "resume",
