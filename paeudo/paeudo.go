@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	. "github.com/jasonyangshadow/lpmx/error"
-	. "github.com/jasonyangshadow/lpmx/log"
-	"github.com/sirupsen/logrus"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/log"
+	"github.com/sirupsen/logrus"
 )
 
 func Command(cmdStr string, arg ...string) (string, *Error) {
@@ -60,7 +61,15 @@ func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Erro
 		cerr := ErrNew(ErrNil, fmt.Sprintf("shell: %s doesn't exist", sh))
 		return cerr
 	} else {
-		cmd := exec.Command(shpath, arg...)
+		var args []string
+		if arg != nil {
+			args = append(args, "-c")
+			for _, ar := range arg {
+				args = append(args, ar)
+			}
+		}
+
+		cmd := exec.Command(shpath, args...)
 		var envstrs []string
 		for key, value := range env {
 			envstr := fmt.Sprintf("%s=%s", key, value)

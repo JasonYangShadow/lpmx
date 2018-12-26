@@ -7,7 +7,7 @@ import (
 func TestPaeudo1(t *testing.T) {
 	env := make(map[string]string)
 	dir := "/tmp"
-	err := ShellEnv("/usr/bin/fakeroot", env, dir, "/usr/bin/bash")
+	err := ShellEnv("/bin/bash", env, dir, "ls -al")
 	if err != nil {
 		t.Error(err)
 	}

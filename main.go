@@ -266,15 +266,22 @@ func main() {
 		},
 	}
 
-	var DockerExposeId string
-	var DockerExposeName string
-	var dockerExposeCmd = &cobra.Command{
+	var dockerCmd = &cobra.Command{
+		Use:   "docker",
+		Short: "docker command",
+		Long:  "docker command is the advanced comand of lpmx, which is used for executing docker related commands",
+	}
+	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd)
+
+	var ExposeId string
+	var ExposeName string
+	var exposeCmd = &cobra.Command{
 		Use:   "expose",
 		Short: "expose program inside container",
-		Long:  "docker expose sub-command is the advanced command of lpmx, which is used for exposing binaries inside containers to host",
+		Long:  "expose command is the advanced command of lpmx, which is used for exposing binaries inside containers to host",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := DockerExpose(DockerExposeId, DockerExposeName)
+			err := Expose(ExposeId, ExposeName)
 			if err != nil {
 				LOGGER.Panic(err.Error())
 			} else {
@@ -282,25 +289,18 @@ func main() {
 			}
 		},
 	}
-	dockerExposeCmd.Flags().StringVarP(&DockerExposeId, "id", "i", "", "required")
-	runCmd.MarkFlagRequired("id")
-	dockerExposeCmd.Flags().StringVarP(&DockerExposeName, "name", "n", "", "required")
-	runCmd.MarkFlagRequired("name")
-
-	var dockerCmd = &cobra.Command{
-		Use:   "docker",
-		Short: "docker command",
-		Long:  "docker command is the advanced comand of lpmx, which is used for executing docker related commands",
-	}
-	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd, dockerExposeCmd)
+	exposeCmd.Flags().StringVarP(&ExposeId, "id", "i", "", "required")
+	exposeCmd.MarkFlagRequired("id")
+	exposeCmd.Flags().StringVarP(&ExposeName, "name", "n", "", "required")
+	exposeCmd.MarkFlagRequired("name")
 
 	var resumeCmd = &cobra.Command{
 		Use:   "resume",
 		Short: "resume the registered container",
 		Long:  "resume command is the basic command of lpmx, which is used for resuming the registered container via id",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Resume(args[0])
+			err := Resume(args[0], args[1:]...)
 			if err != nil {
 				LOGGER.Panic(err.Error())
 			}
@@ -356,6 +356,6 @@ func main() {
 		Use:   "lpmx",
 		Short: "lpmx rootless container",
 	}
-	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, runCmd, setCmd, resumeCmd, rpcCmd, getCmd, dockerCmd)
+	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, runCmd, setCmd, resumeCmd, rpcCmd, getCmd, dockerCmd, exposeCmd)
 	rootCmd.Execute()
 }

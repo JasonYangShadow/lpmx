@@ -254,7 +254,7 @@ func RPCDelete(ip string, port string, pid int) (*Response, *Error) {
 	return &res, nil
 }
 
-func Resume(id string) *Error {
+func Resume(id string, args ...string) *Error {
 	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
@@ -275,7 +275,8 @@ func Resume(id string) *Error {
 						configmap["baselayerpath"] = val["BaseLayerPath"].(string)
 						configmap["elf_loader"] = val["PatchedELFLoader"].(string)
 					}
-					err := Run(&configmap)
+
+					err := Run(&configmap, args...)
 					if err != nil {
 						return err
 					}
@@ -336,7 +337,7 @@ func Destroy(id string) *Error {
 
 }
 
-func Run(configmap *map[string]interface{}) *Error {
+func Run(configmap *map[string]interface{}, args ...string) *Error {
 	dir, _ := (*configmap)["dir"].(string)
 	config, _ := (*configmap)["config"].(string)
 	passive, _ := (*configmap)["passive"].(bool)
@@ -416,7 +417,7 @@ func Run(configmap *map[string]interface{}) *Error {
 			err.AddMsg("append to sys info error")
 			return err
 		}
-		err = con.bashShell()
+		err = con.bashShell(args...)
 		if err != nil {
 			err.AddMsg("starting bash shell encounters error")
 			return err
@@ -909,7 +910,7 @@ func DockerDelete(name string) *Error {
 	return err
 }
 
-func DockerExpose(id string, name string) *Error {
+func Expose(id string, name string) *Error {
 	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
@@ -945,14 +946,19 @@ func DockerExpose(id string, name string) *Error {
 
 						bname := filepath.Base(name)
 						bdir := fmt.Sprintf("%s/%s", bindir, bname)
-						if !FileExist(bdir) {
-							f, err := os.OpenFile(bdir, os.O_RDWR|os.O_CREATE, 0755)
-							if err != nil {
-								cerr := ErrNew(err, fmt.Sprintf("can not create exposed file %s", bdir))
-								return cerr
-							}
-							defer f.Close()
+						if FileExist(bdir) {
+							RemoveFile(bdir)
 						}
+						f, ferr := os.OpenFile(bdir, os.O_RDWR|os.O_CREATE, 0755)
+						if ferr != nil {
+							cerr := ErrNew(ferr, fmt.Sprintf("can not create exposed file %s", bdir))
+							return cerr
+						}
+						code := "#!/bin/bash\n" +
+							"../lpmx resume " + id + " " + name + "\n"
+
+						fmt.Fprintf(f, code)
+						defer f.Close()
 
 						//write back
 						data, _ := StructMarshal(&con)
@@ -1233,7 +1239,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	return env, nil
 }
 
-func (con *Container) bashShell() *Error {
+func (con *Container) bashShell(args ...string) *Error {
 	env, err := con.genEnv()
 	LOGGER.WithFields(logrus.Fields{
 		"env": env,
@@ -1250,7 +1256,7 @@ func (con *Container) bashShell() *Error {
 			"env":           env,
 			"con.RootPath":  con.RootPath,
 		}).Debug("shell env paramters")
-		err = ShellEnv(con.UserShell, env, con.RootPath)
+		err = ShellEnv(con.UserShell, env, con.RootPath, args...)
 		if err != nil {
 			return err
 		}
