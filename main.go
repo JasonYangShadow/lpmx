@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
+	"strconv"
+
 	. "github.com/jasonyangshadow/lpmx/container"
 	. "github.com/jasonyangshadow/lpmx/log"
 	. "github.com/jasonyangshadow/lpmx/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"path/filepath"
-	"strconv"
 )
 
 func main() {
@@ -250,12 +251,27 @@ func main() {
 		},
 	}
 
+	var dockerResetCmd = &cobra.Command{
+		Use:   "reset",
+		Short: "reset local docker base layers",
+		Long:  "docker reset sub-command is the advanced command of lpmx, which is used for clearing current extacted base layers and reextracting them.(Only for Advanced Use)",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			err := DockerReset(args[0])
+			if err != nil {
+				LOGGER.Error(err.Error())
+			} else {
+				LOGGER.Info("DONE")
+			}
+		},
+	}
+
 	var dockerCmd = &cobra.Command{
 		Use:   "docker",
 		Short: "docker command",
 		Long:  "docker command is the advanced comand of lpmx, which is used for executing docker related commands",
 	}
-	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd)
+	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd)
 
 	var resumeCmd = &cobra.Command{
 		Use:   "resume",

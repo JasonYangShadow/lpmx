@@ -674,6 +674,47 @@ func DockerList() *Error {
 	return nil
 }
 
+func DockerReset(name string) *Error {
+	if !strings.Contains(name, ":") {
+		name = name + ":latest"
+	}
+	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	rootdir := fmt.Sprintf("%s/.docker", currdir)
+	var doc Docker
+	err := readDocker(rootdir, &doc)
+	if err == nil {
+		if name_data, name_ok := doc.Images[name].(map[string]interface{}); name_ok {
+			image_dir, _ := name_data["image"].(string)
+			layer_order := name_data["layer_order"].(string)
+			for _, k := range strings.Split(layer_order, ":") {
+				k = path.Base(k)
+				tar_path := fmt.Sprintf("%s/%s", image_dir, k)
+				layerfolder := fmt.Sprintf("%s/%s", name_data["base"].(string), k)
+				LOGGER.WithFields(logrus.Fields{
+					"tar_path":     tar_path,
+					"layer_folder": layerfolder,
+				}).Debug("docker reset images, reextract tar ball")
+				if FolderExist(layerfolder) {
+					RemoveAll(layerfolder)
+				}
+
+				if !FolderExist(layerfolder) {
+					MakeDir(layerfolder)
+				}
+
+				err := Untar(tar_path, layerfolder)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("name: %s is not found", name))
+		return cerr
+	}
+	return err
+}
+
 func DockerCreate(name string) *Error {
 	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
