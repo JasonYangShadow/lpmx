@@ -2,6 +2,7 @@ package utils
 
 import (
 	"archive/tar"
+	"bufio"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -490,4 +491,46 @@ func ReverseStrArray(input []string) []string {
 		input[i], input[j] = input[j], input[i]
 	}
 	return input
+}
+
+func GetCurrDir() (string, *Error) {
+	arg_path, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	searchPaths := []string{arg_path, "."}
+	searchPaths = append(searchPaths, strings.Split(os.Getenv("PATH"), ":")...)
+	for _, path := range searchPaths {
+		p := fmt.Sprintf("%s/lpmx", path)
+		if FileExist(p) {
+			return path, nil
+		}
+	}
+	cerr := ErrNew(ErrNExist, fmt.Sprintf("can't locate lpmx among PATH, caller directory and current directroy"))
+	return "", cerr
+}
+
+func AddVartoFile(env string, file string) *Error {
+	perm, err := GetFilePermission(file)
+	if err != nil {
+		return err
+	}
+	f, er := os.OpenFile(file, os.O_APPEND|os.O_RDWR, os.FileMode(perm))
+	if er != nil {
+		cerr := ErrNew(er, fmt.Sprintf("can't open file %s", file))
+		return cerr
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, fmt.Sprintf("export %s", env)) {
+			return nil
+		}
+	}
+
+	_, er = f.WriteString(fmt.Sprintf("export %s\n", env))
+	if er != nil {
+		cerr := ErrNew(er, fmt.Sprintf("can't write file %s", file))
+		return cerr
+	}
+	return nil
 }

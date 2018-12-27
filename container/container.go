@@ -138,7 +138,7 @@ func (server *RPC) RPCDelete(req Request, res *Response) error {
 }
 
 func Init() *Error {
-	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	currdir, _ := GetCurrDir()
 	var sys Sys
 	config := fmt.Sprintf("%s/.lpmxsys", currdir)
 	sys.RootDir = config
@@ -164,13 +164,42 @@ func Init() *Error {
 		if err != nil {
 			return err
 		}
+		_, err = MakeDir(fmt.Sprintf("%s/bin", currdir))
+		if err != nil {
+			return err
+		}
 		sys.Containers = make(map[string]interface{})
+	}
+
+	path := os.Getenv("PATH")
+
+	if !strings.Contains(path, currdir) {
+		path = fmt.Sprintf("%s:%s", path, currdir)
+	}
+
+	exposed_bin := fmt.Sprintf("%s/bin", currdir)
+	if !strings.Contains(path, exposed_bin) {
+		path = fmt.Sprintf("%s:%s", exposed_bin, path)
+	}
+
+	os.Unsetenv("PATH")
+	err := os.Setenv("PATH", path)
+	if err != nil {
+		cerr := ErrNew(err, "lpmx could not set PATH env")
+		return cerr
+	}
+
+	path_var := fmt.Sprintf("PATH=%s", path)
+	bashrc := fmt.Sprintf("%s/.bashrc", os.Getenv("HOME"))
+	ferr := AddVartoFile(path_var, bashrc)
+	if ferr != nil {
+		return ferr
 	}
 	return nil
 }
 
 func List() *Error {
-	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	currdir, _ := GetCurrDir()
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
@@ -255,7 +284,7 @@ func RPCDelete(ip string, port string, pid int) (*Response, *Error) {
 }
 
 func Resume(id string, args ...string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	currdir, _ := GetCurrDir()
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
@@ -296,7 +325,7 @@ func Resume(id string, args ...string) *Error {
 }
 
 func Destroy(id string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	currdir, _ := GetCurrDir()
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
@@ -438,7 +467,7 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 }
 
 func Get(id string, name string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	currdir, _ := GetCurrDir()
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
@@ -459,7 +488,7 @@ func Get(id string, name string) *Error {
 }
 
 func Set(id string, tp string, name string, value string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	currdir, _ := GetCurrDir()
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
@@ -570,7 +599,7 @@ func DockerSearch(name string) ([]string, *Error) {
 }
 
 func DockerDownload(name string, user string, pass string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
 	err := readDocker(rootdir, &doc)
@@ -659,7 +688,7 @@ func DockerDownload(name string, user string, pass string) *Error {
 }
 
 func DockerList() *Error {
-	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
 	err := readDocker(rootdir, &doc)
@@ -680,7 +709,7 @@ func DockerReset(name string) *Error {
 	if !strings.Contains(name, ":") {
 		name = name + ":latest"
 	}
-	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
 	err := readDocker(rootdir, &doc)
@@ -718,7 +747,7 @@ func DockerReset(name string) *Error {
 }
 
 func DockerCreate(name string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
 	err := readDocker(rootdir, &doc)
@@ -882,7 +911,7 @@ func DockerCreate(name string) *Error {
 }
 
 func DockerDelete(name string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
 	err := readDocker(rootdir, &doc)
@@ -911,7 +940,7 @@ func DockerDelete(name string) *Error {
 }
 
 func Expose(id string, name string) *Error {
-	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	currdir, _ := GetCurrDir()
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
@@ -955,7 +984,8 @@ func Expose(id string, name string) *Error {
 							return cerr
 						}
 						code := "#!/bin/bash\n" +
-							"../lpmx resume " + id + " " + name + "\n"
+							"lpmx resume " + id + " \"" + name + " " + "\"$@\"\"" +
+							"\n"
 
 						fmt.Fprintf(f, code)
 						defer f.Close()
@@ -1073,7 +1103,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	//set default LD_LIBRARY_LPMX
 	var libs []string
 	//add libmemcached and other libs
-	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	currdir, _ := GetCurrDir()
 	libs = append(libs, currdir)
 
 	for _, v := range LD_LIBRARY_PATH_DEFAULT {
@@ -1325,8 +1355,8 @@ func (con *Container) createContainer() *Error {
 	}
 
 	//find these follwing libraries and binaries in current
-	lpmxdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
-	searchPaths := []string{lpmxdir, "."}
+	lpmxdir, _ := GetCurrDir()
+	searchPaths := []string{lpmxdir}
 
 	elf_copied := false
 	for _, path := range searchPaths {
@@ -1466,7 +1496,7 @@ func (con *Container) patchBineries() *Error {
 }
 
 func (con *Container) appendToSys() *Error {
-	currdir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	currdir, _ := GetCurrDir()
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
