@@ -62,7 +62,7 @@ func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Erro
 		return cerr
 	} else {
 		var args []string
-		if arg != nil {
+		if len(arg) > 0 {
 			args = append(args, "-c")
 			for _, ar := range arg {
 				args = append(args, ar)
