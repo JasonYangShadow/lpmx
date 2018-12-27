@@ -182,7 +182,6 @@ func Init() *Error {
 		path = fmt.Sprintf("%s:%s", exposed_bin, path)
 	}
 
-	os.Unsetenv("PATH")
 	err := os.Setenv("PATH", path)
 	if err != nil {
 		cerr := ErrNew(err, "lpmx could not set PATH env")
