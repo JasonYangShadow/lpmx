@@ -1091,6 +1091,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["ContainerBasePath"] = con.BaseLayerPath
 	env["FAKECHROOT_ELFLOADER"] = con.PatchedELFLoader
 	env["PWD"] = "/"
+	env["HOME"] = "/root"
 	//used for faking proc file
 	env["FAKECHROOT_EXCLUDE_PROC_PATH"] = "/proc/self/cwd:/proc/self/exe"
 	if con.DockerBase {
