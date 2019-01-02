@@ -48,6 +48,12 @@ func main() {
 		Short: "run container based on specific directory",
 		Long:  "run command is the basic command of lpmx, which is used for initializing, creating and running container based on specific directory",
 		Args:  cobra.ExactArgs(0),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
 		Run: func(cmd *cobra.Command, args []string) {
 			RunSource, _ = filepath.Abs(RunSource)
 			if RunConfig != "" {
@@ -82,6 +88,12 @@ func main() {
 		Short: "get settings from memcache server",
 		Long:  "get command is the basic command of lpmx, which is used for getting settings from cache server",
 		Args:  cobra.ExactArgs(0),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Get(GetId, GetName)
 			if err != nil {
@@ -102,6 +114,13 @@ func main() {
 		Short: "exec command remotely",
 		Long:  "rpc exec sub-command is the advanced comand of lpmx, which is used for executing command remotely through rpc",
 		Args:  cobra.MinimumNArgs(1),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
+
 		Run: func(cmd *cobra.Command, args []string) {
 			_, err := RPCExec(RExecIp, RExecPort, RExecTimeout, args[0], args[1:]...)
 			if err != nil {
@@ -124,6 +143,13 @@ func main() {
 		Short: "query the information of commands executed remotely",
 		Long:  "rpc query sub-command is the advanced comand of lpmx, which is used for querying the information of commands executed remotely through rpc",
 		Args:  cobra.ExactArgs(0),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
+
 		Run: func(cmd *cobra.Command, args []string) {
 			res, err := RPCQuery(RQueryIp, RQueryPort)
 			if err != nil {
@@ -149,6 +175,13 @@ func main() {
 		Short: "kill the commands executed remotely via pid",
 		Long:  "rpc delete sub-command is the advanced comand of lpmx, which is used for killing the commands executed remotely through rpc via pid",
 		Args:  cobra.ExactArgs(0),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
+
 		Run: func(cmd *cobra.Command, args []string) {
 			i, aerr := strconv.Atoi(RDeletePid)
 			if aerr != nil {
@@ -201,6 +234,13 @@ func main() {
 		Short: "initialize the local docker images",
 		Long:  "docker create sub-command is the advanced command of lpmx, which is used for initializing and running the images downloaded from docker hub",
 		Args:  cobra.ExactArgs(1),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
+
 		Run: func(cmd *cobra.Command, args []string) {
 			err := DockerCreate(args[0])
 			if err != nil {
@@ -299,6 +339,13 @@ func main() {
 		Short: "resume the registered container",
 		Long:  "resume command is the basic command of lpmx, which is used for resuming the registered container via id",
 		Args:  cobra.MinimumNArgs(1),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
+
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Resume(args[0], args[1:]...)
 			if err != nil {
@@ -333,6 +380,13 @@ func main() {
 		Short: "set environment variables for container",
 		Long:  "set command is an additional comand of lpmx, which is used for setting environment variables of running containers",
 		Args:  cobra.ExactArgs(0),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
+
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Set(SetId, SetType, SetProg, SetVal)
 			if err != nil {

@@ -169,6 +169,46 @@ func Init() *Error {
 			return err
 		}
 		sys.Containers = make(map[string]interface{})
+
+		//download memcached related files based on host os info
+		dist, release, cerr := GetHostOSInfo()
+		if cerr != nil {
+			dist = "default"
+			release = "default"
+		}
+
+		if dist == "" {
+			dist = "default"
+		}
+
+		if release == "" {
+			release = "default"
+		}
+
+		err = DownloadFilefromGithub(dist, release, "memcached.tar.gz", SETTING_URL, sys.RootDir)
+		if err != nil {
+			return err
+		}
+
+		//untar memcache.tar.gz
+		mempath := fmt.Sprintf("%s/memcached.tar.gz", sys.RootDir)
+		if FileExist(mempath) {
+			merr := Untar(mempath, currdir)
+			if merr != nil {
+				return merr
+			}
+		} else {
+			cerr := ErrNew(ErrNExist, fmt.Sprintf("could not untar %s", mempath))
+			return cerr
+		}
+
+		if ok, _, _ := GetProcessIdByName("memcached"); !ok {
+			_, cerr := CommandBash(fmt.Sprintf("LD_PRELOAD=%s/libevent.so %s/memcached -s %s/.memcached.pid -a 600 -d", currdir, currdir, currdir))
+			if cerr != nil {
+				cerr.AddMsg(fmt.Sprintf("can not start memcached process from %s", currdir))
+				return cerr
+			}
+		}
 	}
 
 	path := os.Getenv("PATH")
@@ -194,6 +234,7 @@ func Init() *Error {
 	if ferr != nil {
 		return ferr
 	}
+
 	return nil
 }
 
@@ -666,12 +707,33 @@ func DockerDownload(name string, user string, pass string) *Error {
 
 		//download setting from github
 		rdir, _ := mdata["rootdir"].(string)
-		err = DownloadSetting(tname, ttag, rdir)
+		err = DownloadFilefromGithub(tname, ttag, "setting.yml", SETTING_URL, rdir)
 		if err != nil {
 			LOGGER.WithFields(logrus.Fields{
 				"err":    err,
 				"toPath": rdir,
-			}).Error("Download setting failure, you may need to manually put setting.yml to 'toPath'")
+			}).Error("Download setting from github failure and could not rollback to default one")
+			return err
+		}
+
+		//download libfakechroot.so
+		err = DownloadFilefromGithub(tname, ttag, "libfakechroot.so", SETTING_URL, rdir)
+		if err != nil {
+			LOGGER.WithFields(logrus.Fields{
+				"err":    err,
+				"toPath": rdir,
+			}).Error("Download libfakechroot.so from github failure and could not rollback to default one")
+			return err
+		}
+
+		//download libfakeroot.so
+		err = DownloadFilefromGithub(tname, ttag, "libfakeroot.so", SETTING_URL, rdir)
+		if err != nil {
+			LOGGER.WithFields(logrus.Fields{
+				"err":    err,
+				"toPath": rdir,
+			}).Error("Download libfakeroot.so from github failure and could not rollback to default one")
+			return err
 		}
 
 		//add map to this image
@@ -1083,7 +1145,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env := make(map[string]string)
 	env["ContainerId"] = con.Id
 	env["ContainerRoot"] = con.RootPath
-	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so %s/libfakeroot-sysv.so", con.FakechrootPath, con.FakechrootPath)
+	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so %s/libfakeroot.so", con.FakechrootPath, con.FakechrootPath)
 	env["MEMCACHED_PID"] = con.MemcachedServerList[0]
 	env["TERM"] = "xterm"
 	env["SHELL"] = con.UserShell
@@ -1305,8 +1367,8 @@ func (con *Container) createContainer() *Error {
 		con.Id = RandomString(IDLENGTH)
 	}
 	con.LogPath = fmt.Sprintf("%s/log", con.ConfigPath)
-	con.ElfPatcherPath = fmt.Sprintf("%s/elf", con.ConfigPath)
-	con.FakechrootPath = fmt.Sprintf("%s/fakechroot", con.ConfigPath)
+	con.FakechrootPath = filepath.Dir(con.RootPath)
+	con.ElfPatcherPath = filepath.Dir(con.RootPath)
 	user, err := Command("whoami")
 	if err != nil {
 		return err
@@ -1348,69 +1410,6 @@ func (con *Container) createContainer() *Error {
 	_, err = MakeDir(con.LogPath)
 	if err != nil {
 		return err
-	}
-	_, err = MakeDir(con.ElfPatcherPath)
-	if err != nil {
-		return err
-	}
-	_, err = MakeDir(con.FakechrootPath)
-	if err != nil {
-		return err
-	}
-
-	//find these follwing libraries and binaries in current
-	lpmxdir, _ := GetCurrDir()
-	searchPaths := []string{lpmxdir}
-
-	elf_copied := false
-	for _, path := range searchPaths {
-		elf_tmp := fmt.Sprintf("%s/patchelf", path)
-		if FileExist(elf_tmp) {
-			_, err = CopyFile(elf_tmp, fmt.Sprintf("%s/patchelf", con.ElfPatcherPath))
-			if err != nil {
-				return err
-			}
-			elf_copied = true
-			break
-		}
-	}
-	if !elf_copied {
-		cerr := ErrNew(ErrNExist, fmt.Sprintf("can not copy patchelf binary, please put it inside the same foler of lpmx or current folder"))
-		return cerr
-	}
-
-	libfakechroot_copied := false
-	for _, path := range searchPaths {
-		libfakechroot_tmp := fmt.Sprintf("%s/libfakechroot.so", path)
-		if FileExist(libfakechroot_tmp) {
-			_, err = CopyFile(libfakechroot_tmp, fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath))
-			if err != nil {
-				return err
-			}
-			libfakechroot_copied = true
-			break
-		}
-	}
-	if !libfakechroot_copied {
-		cerr := ErrNew(ErrNExist, fmt.Sprintf("can not copy libfakechroot.so library, please put it inside the same foler of lpmx or current folder"))
-		return cerr
-	}
-
-	libfakeroot_copied := false
-	for _, path := range searchPaths {
-		libfakeroot_tmp := fmt.Sprintf("%s/libfakeroot-sysv.so", path)
-		if FileExist(libfakeroot_tmp) {
-			_, err = CopyFile(libfakeroot_tmp, fmt.Sprintf("%s/libfakeroot-sysv.so", con.FakechrootPath))
-			if err != nil {
-				return err
-			}
-			libfakeroot_copied = true
-			break
-		}
-	}
-	if !libfakeroot_copied {
-		cerr := ErrNew(ErrNExist, fmt.Sprintf("can not copy libfakeroot-sysv.so library, please put it inside the same foler of lpmx or current folder"))
-		return cerr
 	}
 
 	return nil

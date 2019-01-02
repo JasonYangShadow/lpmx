@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	DOCKER_URL  = "https://registry-1.docker.io"
-	SETTING_URL = "https://raw.githubusercontent.com/JasonYangShadow/LPMXSettingRepository/master/"
+	DOCKER_URL     = "https://registry-1.docker.io"
+	SETTING_URL    = "https://raw.githubusercontent.com/JasonYangShadow/LPMXSettingRepository/master"
+	DEPENDENCY_URL = "https://raw.githubusercontent.com/JasonYangShadow/LPMXDependencyRepository/master"
 )
 
 func ListRepositories(username string, pass string) ([]string, *Error) {
@@ -195,7 +196,7 @@ func DownloadSetting(name string, tag string, folder string) *Error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		http_req := fmt.Sprintf("%sdefault.yml", SETTING_URL)
+		http_req := fmt.Sprintf("%s/default.yml", SETTING_URL)
 		resp, err := http.Get(http_req)
 		if err != nil {
 			cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
@@ -221,4 +222,58 @@ func DownloadSetting(name string, tag string, folder string) *Error {
 		return cerr
 	}
 	return nil
+}
+
+func DownloadFilefromGithub(name string, tag string, filename string, url string, folder string) *Error {
+	filepath := fmt.Sprintf("%s/%s", folder, filename)
+	if !FolderExist(folder) {
+		_, err := MakeDir(folder)
+		if err != nil {
+			return err
+		}
+	}
+
+	out, err := os.Create(filepath)
+	if err != nil {
+		cerr := ErrNew(ErrFileStat, fmt.Sprintf("%s file create error", filepath))
+		return cerr
+	}
+	defer out.Close()
+
+	http_req := fmt.Sprintf("%s/%s/%s/%s", url, name, tag, filename)
+	resp, err := http.Get(http_req)
+	if err != nil {
+		cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
+		return cerr
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		http_req := fmt.Sprintf("%s/default.%s", url, filename)
+		resp, err := http.Get(http_req)
+		if err != nil {
+			cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
+			return cerr
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == 404 {
+			cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
+			return cerr
+		}
+		_, err = io.Copy(out, resp.Body)
+		if err != nil {
+			cerr := ErrNew(ErrFileIO, fmt.Sprintf("io copy from %s to %s encounters error", http_req, filepath))
+			return cerr
+		}
+		return nil
+	}
+
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		cerr := ErrNew(ErrFileIO, fmt.Sprintf("io copy from %s to %s encounters error", http_req, filepath))
+		return cerr
+	}
+	return nil
+
 }

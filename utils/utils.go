@@ -15,6 +15,7 @@ import (
 
 	. "github.com/jasonyangshadow/lpmx/error"
 	. "github.com/jasonyangshadow/lpmx/log"
+	. "github.com/jasonyangshadow/lpmx/paeudo"
 	"github.com/phayes/permbits"
 	"github.com/sirupsen/logrus"
 )
@@ -531,6 +532,54 @@ func AddVartoFile(env string, file string) *Error {
 	if er != nil {
 		cerr := ErrNew(er, fmt.Sprintf("can't write file %s", file))
 		return cerr
+	}
+	return nil
+}
+
+func GetHostOSInfo() (string, string, *Error) {
+	output, err := Command("lsb_release", "-a")
+	if err != nil {
+		return "", "", err
+	}
+
+	distributor := ""
+	release := ""
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "Distributor ID:") {
+			distributor = strings.TrimSpace(strings.TrimPrefix(line, "Distributor ID:"))
+		}
+
+		if strings.HasPrefix(line, "Release:") {
+			release = strings.TrimSpace(strings.TrimPrefix(line, "Release:"))
+		}
+	}
+
+	return distributor, release, nil
+}
+
+func GetProcessIdByName(name string) (bool, string, *Error) {
+	cmd_context := fmt.Sprintf("ps -ef|grep %s|grep -v grep|awk '{print $2}'", name)
+	out, err := CommandBash(cmd_context)
+	if err != nil {
+		return false, "", err
+	}
+
+	if out == "" {
+		return false, out, nil
+	} else {
+		return true, out, nil
+	}
+}
+
+func CheckAndStartMemcache() *Error {
+	if ok, _, _ := GetProcessIdByName("memcached"); !ok {
+		currdir, _ := GetCurrDir()
+		_, cerr := CommandBash(fmt.Sprintf("LD_PRELOAD=%s/libevent.so %s/memcached -s %s/.memcached.pid -a 600 -d", currdir, currdir, currdir))
+		if cerr != nil {
+			cerr.AddMsg(fmt.Sprintf("can not start memcached process from %s", currdir))
+			return cerr
+		}
 	}
 	return nil
 }

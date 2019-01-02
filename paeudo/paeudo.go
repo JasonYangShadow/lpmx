@@ -26,6 +26,17 @@ func Command(cmdStr string, arg ...string) (string, *Error) {
 	return out.String(), nil
 }
 
+func CommandBash(cmdStr string) (string, *Error) {
+	cmd := exec.Command("sh", "-c", cmdStr)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		cerr := ErrNew(err, string(out))
+		return "", cerr
+	} else {
+		return string(out), nil
+	}
+}
+
 func CommandEnv(cmdStr string, env map[string]string, dir string, arg ...string) (string, *Error) {
 	path, err := exec.LookPath(cmdStr)
 	var cmd *exec.Cmd
