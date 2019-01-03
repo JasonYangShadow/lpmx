@@ -1,6 +1,7 @@
 package container
 
 import (
+	"bufio"
 	"fmt"
 	"net"
 	"net/rpc"
@@ -185,11 +186,13 @@ func Init() *Error {
 			release = "default"
 		}
 
+		fmt.Println("Downloading memcached.tar.gz from github...")
 		err = DownloadFilefromGithub(dist, release, "memcached.tar.gz", SETTING_URL, sys.RootDir)
 		if err != nil {
 			return err
 		}
 
+		fmt.Println("Uncompressing downloaded memcached.tar.gz...")
 		//untar memcache.tar.gz
 		mempath := fmt.Sprintf("%s/memcached.tar.gz", sys.RootDir)
 		if FileExist(mempath) {
@@ -202,6 +205,7 @@ func Init() *Error {
 			return cerr
 		}
 
+		fmt.Println("Starting memcached process...")
 		if ok, _, _ := GetProcessIdByName("memcached"); !ok {
 			_, cerr := CommandBash(fmt.Sprintf("LD_PRELOAD=%s/libevent.so %s/memcached -s %s/.memcached.pid -a 600 -d", currdir, currdir, currdir))
 			if cerr != nil {
@@ -945,6 +949,18 @@ func DockerCreate(name string) *Error {
 								cerr := ErrNew(err, fmt.Sprintf("%s/group", new_group_path))
 								return cerr
 							}
+
+							host_f, err := os.OpenFile("/etc/group", os.O_RDONLY, 0400)
+							if err == nil {
+								scanner := bufio.NewScanner(host_f)
+								for scanner.Scan() {
+									content := scanner.Text()
+									if strings.HasSuffix(content, fmt.Sprintf(":%s", uname)) {
+										f.WriteString(fmt.Sprintf("%s\n", content))
+									}
+								}
+								host_f.Close()
+							}
 						} else {
 							return c_err
 						}
@@ -1367,8 +1383,8 @@ func (con *Container) createContainer() *Error {
 		con.Id = RandomString(IDLENGTH)
 	}
 	con.LogPath = fmt.Sprintf("%s/log", con.ConfigPath)
-	con.FakechrootPath = filepath.Dir(con.RootPath)
-	con.ElfPatcherPath = filepath.Dir(con.RootPath)
+	con.FakechrootPath = filepath.Dir(con.BaseLayerPath)
+	con.ElfPatcherPath = filepath.Dir(con.BaseLayerPath)
 	user, err := Command("whoami")
 	if err != nil {
 		return err

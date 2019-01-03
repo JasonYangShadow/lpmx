@@ -138,7 +138,7 @@ func DownloadLayers(username string, pass string, name string, tag string, folde
 			return nil, nil, cerr
 		}
 		defer to.Close()
-		fmt.Println(fmt.Sprintf("Downloading file with type: %s, size: %d, destination: %s", element.MediaType, element.Size, filename))
+		fmt.Println(fmt.Sprintf("Downloading file with type: %s, size: %d", element.MediaType, element.Size))
 
 		//printing download percentage using anonymous functions
 		go func(filename string, size int64) {
