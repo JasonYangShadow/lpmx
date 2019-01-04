@@ -186,27 +186,24 @@ func Init() *Error {
 			release = "default"
 		}
 
-		fmt.Println("Downloading memcached.tar.gz from github...")
-		err = DownloadFilefromGithub(dist, release, "memcached.tar.gz", SETTING_URL, sys.RootDir)
-		if err != nil {
-			return err
-		}
-
-		fmt.Println("Uncompressing downloaded memcached.tar.gz...")
-		//untar memcache.tar.gz
 		mempath := fmt.Sprintf("%s/memcached.tar.gz", sys.RootDir)
-		if FileExist(mempath) {
+		if !FileExist(mempath) {
+			fmt.Println("Downloading memcached.tar.gz from github...")
+			err = DownloadFilefromGithub(dist, release, "memcached.tar.gz", SETTING_URL, sys.RootDir)
+			if err != nil {
+				return err
+			}
+
+			fmt.Println("Uncompressing downloaded memcached.tar.gz...")
+			//untar memcache.tar.gz
 			merr := Untar(mempath, currdir)
 			if merr != nil {
 				return merr
 			}
-		} else {
-			cerr := ErrNew(ErrNExist, fmt.Sprintf("could not untar %s", mempath))
-			return cerr
 		}
 
-		fmt.Println("Starting memcached process...")
 		if ok, _, _ := GetProcessIdByName("memcached"); !ok {
+			fmt.Println("Starting memcached process...")
 			_, cerr := CommandBash(fmt.Sprintf("LD_PRELOAD=%s/libevent.so %s/memcached -s %s/.memcached.pid -a 600 -d", currdir, currdir, currdir))
 			if cerr != nil {
 				cerr.AddMsg(fmt.Sprintf("can not start memcached process from %s", currdir))

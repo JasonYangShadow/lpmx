@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -469,19 +470,18 @@ func Untar(target string, folder string) *Error {
 
 		case tar.TypeSymlink:
 			//won't link to absolute path
-			real_path := header.Linkname
-			if strings.HasPrefix(real_path, "/") {
-				real_path = fmt.Sprintf("%s%s", folder, strings.TrimPrefix(header.Linkname, "/"))
-			}
-			os.Symlink(real_path, target)
+			os.Symlink(header.Linkname, target)
 
 		case tar.TypeLink:
 			//won't link to absolute path
-			real_path := header.Linkname
-			if strings.HasPrefix(real_path, "/") {
-				real_path = fmt.Sprintf("%s%s", folder, strings.TrimPrefix(header.Linkname, "/"))
+			real_path := fmt.Sprintf("%s/%s", folder, header.Linkname)
+			real_dir := path.Dir(real_path)
+			target_dir := path.Dir(target)
+			if real_dir == target_dir {
+				os.Symlink(path.Base(real_path), target)
+			} else {
+				os.Symlink(header.Linkname, target)
 			}
-			os.Link(real_path, target)
 		}
 	}
 }
