@@ -101,7 +101,8 @@ func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Erro
 			"env": envstrs,
 		}).Debug("shell env debug")
 		err := cmd.Run()
-		if err != nil {
+		switch err.(type) {
+		case *exec.ExitError:
 			cerr := ErrNew(err, "cmd running error")
 			return cerr
 		}
