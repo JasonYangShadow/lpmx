@@ -16,9 +16,8 @@ import (
 )
 
 const (
-	DOCKER_URL     = "https://registry-1.docker.io"
-	SETTING_URL    = "https://raw.githubusercontent.com/JasonYangShadow/LPMXSettingRepository/master"
-	DEPENDENCY_URL = "https://raw.githubusercontent.com/JasonYangShadow/LPMXDependencyRepository/master"
+	DOCKER_URL  = "https://registry-1.docker.io"
+	SETTING_URL = "https://raw.githubusercontent.com/JasonYangShadow/LPMXSettingRepository/master"
 )
 
 func ListRepositories(username string, pass string) ([]string, *Error) {
@@ -187,6 +186,9 @@ func DownloadSetting(name string, tag string, folder string) *Error {
 	}
 	defer out.Close()
 
+	name = strings.ToLower(name)
+	tag = strings.ToLower(tag)
+
 	http_req := fmt.Sprintf("%s/%s/%s/setting.yml", SETTING_URL, name, tag)
 	resp, err := http.Get(http_req)
 	if err != nil {
@@ -240,6 +242,8 @@ func DownloadFilefromGithub(name string, tag string, filename string, url string
 	}
 	defer out.Close()
 
+	name = strings.ToLower(name)
+	tag = strings.ToLower(tag)
 	http_req := fmt.Sprintf("%s/%s/%s/%s", url, name, tag, filename)
 	resp, err := http.Get(http_req)
 	if err != nil {

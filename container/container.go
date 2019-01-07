@@ -63,7 +63,6 @@ type Container struct {
 	LogPath             string
 	ElfPatcherPath      string
 	PatchedELFLoader    string
-	FakechrootPath      string
 	SettingConf         map[string]interface{}
 	SettingPath         string
 	SysDir              string //dir of lpmx set by appendToSys function
@@ -210,6 +209,20 @@ func Init() *Error {
 				return cerr
 			}
 		}
+
+		//download libfakechroot.so
+		fmt.Printf("Downloading %s:%s libfakechroot.so\n", dist, release)
+		err = DownloadFilefromGithub(dist, release, "libfakechroot.so", SETTING_URL, currdir)
+		if err != nil {
+			return err
+		}
+
+		//download libfakeroot.so
+		fmt.Printf("Downloading %s:%s libfakeroot.so\n", dist, release)
+		err = DownloadFilefromGithub(dist, release, "libfakeroot.so", SETTING_URL, currdir)
+		if err != nil {
+			return err
+		}
 	}
 
 	path := os.Getenv("PATH")
@@ -344,6 +357,7 @@ func Resume(id string, args ...string) *Error {
 						configmap["image"] = val["Image"].(string)
 						configmap["baselayerpath"] = val["BaseLayerPath"].(string)
 						configmap["elf_loader"] = val["PatchedELFLoader"].(string)
+						configmap["parent_dir"] = filepath.Dir(val["RootPath"].(string))
 					}
 
 					err := Run(&configmap, args...)
@@ -408,11 +422,14 @@ func Destroy(id string) *Error {
 }
 
 func Run(configmap *map[string]interface{}, args ...string) *Error {
+	//dir is rw folder of container
 	dir, _ := (*configmap)["dir"].(string)
 	config, _ := (*configmap)["config"].(string)
 	passive, _ := (*configmap)["passive"].(bool)
 
-	rootdir := fmt.Sprintf("%s/.lpmx", dir)
+	//parent dir is the folder containing rw, base layers and ld.so.patch
+	parent_dir, _ := (*configmap)["parent_dir"].(string)
+	rootdir := fmt.Sprintf("%s/.lpmx", parent_dir)
 
 	var con Container
 	//used for distinguishing the docker based and non-docker based container
@@ -717,26 +734,6 @@ func DockerDownload(name string, user string, pass string) *Error {
 			return err
 		}
 
-		//download libfakechroot.so
-		err = DownloadFilefromGithub(tname, ttag, "libfakechroot.so", SETTING_URL, rdir)
-		if err != nil {
-			LOGGER.WithFields(logrus.Fields{
-				"err":    err,
-				"toPath": rdir,
-			}).Error("Download libfakechroot.so from github failure and could not rollback to default one")
-			return err
-		}
-
-		//download libfakeroot.so
-		err = DownloadFilefromGithub(tname, ttag, "libfakeroot.so", SETTING_URL, rdir)
-		if err != nil {
-			LOGGER.WithFields(logrus.Fields{
-				"err":    err,
-				"toPath": rdir,
-			}).Error("Download libfakeroot.so from github failure and could not rollback to default one")
-			return err
-		}
-
 		//add map to this image
 		doc.Images[name] = mdata
 
@@ -822,6 +819,7 @@ func DockerCreate(name string) *Error {
 				layers, _ := vval["layer_order"].(string)
 				//randomly generate id
 				id := RandomString(IDLENGTH)
+				//rootfolder is the folder containing ld.so.path, rw and other layers symlinks
 				rootfolder := fmt.Sprintf("%s/%s", workspace, id)
 				if !FolderExist(rootfolder) {
 					_, err := MakeDir(rootfolder)
@@ -852,6 +850,7 @@ func DockerCreate(name string) *Error {
 						return err
 					}
 				}
+				configmap["parent_dir"] = rootfolder
 
 				configmap["config"] = config
 				configmap["passive"] = false
@@ -1158,7 +1157,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env := make(map[string]string)
 	env["ContainerId"] = con.Id
 	env["ContainerRoot"] = con.RootPath
-	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so %s/libfakeroot.so", con.FakechrootPath, con.FakechrootPath)
+	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so %s/libfakeroot.so", con.SysDir, con.SysDir)
 	env["MEMCACHED_PID"] = con.MemcachedServerList[0]
 	env["TERM"] = "xterm"
 	env["SHELL"] = con.UserShell
@@ -1380,8 +1379,7 @@ func (con *Container) createContainer() *Error {
 		con.Id = RandomString(IDLENGTH)
 	}
 	con.LogPath = fmt.Sprintf("%s/log", con.ConfigPath)
-	con.FakechrootPath = filepath.Dir(con.BaseLayerPath)
-	con.ElfPatcherPath = filepath.Dir(con.BaseLayerPath)
+	con.ElfPatcherPath = con.SysDir
 	user, err := Command("whoami")
 	if err != nil {
 		return err
@@ -1777,7 +1775,7 @@ func (con *Container) startRPCService(port int) *Error {
 		return cerr
 	}
 	env := make(map[string]string)
-	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.FakechrootPath)
+	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so", con.SysDir)
 	env["ContainerId"] = con.Id
 	env["ContainerRoot"] = con.RootPath
 	r := new(RPC)
