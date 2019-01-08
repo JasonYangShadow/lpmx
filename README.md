@@ -5,6 +5,8 @@ It employs the LD_PRELOAD mechanism and ELF header patch to implement both elf m
 
 Therefore, this project contains customized [fakechroot](https://github.com/JasonYangShadow/fakechroot) and [elfpatcher](https://github.com/JasonYangShadow/patchelf). 
 
+## Attention: Current LPMX is not in release channel.
+
 # Compile from source code 
 1. Make sure golang is installed on your os
 2. go get -v github.com/jasonyangshadow/lpmx
@@ -15,12 +17,8 @@ Therefore, this project contains customized [fakechroot](https://github.com/Jaso
 If there are any dependencies issues, try to install gilde and execute 'glide update' inside project folder
 
 # Quick run
-1. make sure that you have wget installed on your os
-2. wget https://raw.githubusercontent.com/JasonYangShadow/lpmx/master/install.sh; chmod +x install.sh; ./install.sh
-3. you will find a folder named lpmx in your current directory containing
-   necessary files and dependencies, also examples are included
-4. if you run examples, target folder will be created under tmp folder
-
+1. Download binary from [https://github.com/JasonYangShadow/lpmx/blob/master/build/linux/x86_64/lpmx](https://github.com/JasonYangShadow/lpmx/blob/master/build/linux/x86_64/lpmx) to local folder
+2. chmod a+x lpmx && ./lpmx init
 
 # How to use it
 1. lpmx init  -> initialize the basic system folder for lpmx ( otherwize, any commands executed following will report error and notify you should execute initialize command firstly)
