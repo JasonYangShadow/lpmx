@@ -572,6 +572,29 @@ func GetProcessIdByName(name string) (bool, string, *Error) {
 	}
 }
 
+func CheckProcessByPid(pid string) (bool, *Error) {
+	cmd_context := fmt.Sprintf("ps -p %s --no-headers", pid)
+	out, err := CommandBash(cmd_context)
+	if err != nil {
+		return false, err
+	}
+
+	if out == "" {
+		return false, nil
+	} else {
+		return true, nil
+	}
+}
+
+func KillProcessByPid(pid string) *Error {
+	cmd_context := fmt.Sprintf("kill -9 %s", pid)
+	_, err := CommandBash(cmd_context)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func CheckAndStartMemcache() *Error {
 	if ok, _, _ := GetProcessIdByName("memcached"); !ok {
 		currdir, _ := GetCurrDir()

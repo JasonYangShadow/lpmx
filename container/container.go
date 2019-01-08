@@ -187,13 +187,13 @@ func Init() *Error {
 
 		mempath := fmt.Sprintf("%s/memcached.tar.gz", sys.RootDir)
 		if !FileExist(mempath) {
-			fmt.Println("Downloading memcached.tar.gz from github...")
+			fmt.Println("Downloading memcached.tar.gz from github")
 			err = DownloadFilefromGithub(dist, release, "memcached.tar.gz", SETTING_URL, sys.RootDir)
 			if err != nil {
 				return err
 			}
 
-			fmt.Println("Uncompressing downloaded memcached.tar.gz...")
+			fmt.Println("Uncompressing downloaded memcached.tar.gz")
 			//untar memcache.tar.gz
 			merr := Untar(mempath, currdir)
 			if merr != nil {
@@ -202,7 +202,7 @@ func Init() *Error {
 		}
 
 		if ok, _, _ := GetProcessIdByName("memcached"); !ok {
-			fmt.Println("Starting memcached process...")
+			fmt.Println("Starting memcached process")
 			_, cerr := CommandBash(fmt.Sprintf("LD_PRELOAD=%s/libevent.so %s/memcached -s %s/.memcached.pid -a 600 -d", currdir, currdir, currdir))
 			if cerr != nil {
 				cerr.AddMsg(fmt.Sprintf("can not start memcached process from %s", currdir))
@@ -220,6 +220,13 @@ func Init() *Error {
 		//download libfakeroot.so
 		fmt.Printf("Downloading %s:%s libfakeroot.so\n", dist, release)
 		err = DownloadFilefromGithub(dist, release, "libfakeroot.so", SETTING_URL, currdir)
+		if err != nil {
+			return err
+		}
+
+		//download faked-sysv
+		fmt.Println("Downloading faked-sysv")
+		err = DownloadFilefromGithub(dist, release, "faked-sysv", SETTING_URL, currdir)
 		if err != nil {
 			return err
 		}
@@ -1166,6 +1173,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["FAKECHROOT_ELFLOADER"] = con.PatchedELFLoader
 	env["PWD"] = "/"
 	env["HOME"] = "/root"
+	env["FAKED_MODE"] = "unknown-is-root"
 	//used for faking proc file
 	env["FAKECHROOT_EXCLUDE_PROC_PATH"] = "/proc/self/cwd:/proc/self/exe"
 	if con.DockerBase {
@@ -1364,6 +1372,20 @@ func (con *Container) bashShell(args ...string) *Error {
 			"env":           env,
 			"con.RootPath":  con.RootPath,
 		}).Debug("shell env paramters")
+		//we need to start faked-sysv firstly
+		faked_sysv := fmt.Sprintf("%s/faked-sysv", con.SysDir)
+		foutput, ferr := Command(faked_sysv)
+		if ferr != nil {
+			return ferr
+		}
+		faked_str := strings.Split(foutput, ":")
+		env["FAKEROOTKEY"] = faked_str[0]
+
+		defer func() {
+			fmt.Sprintf("cleanning up faked-sysv with pid: %s\n", faked_str[1])
+			KillProcessByPid(faked_str[1])
+		}()
+
 		err = ShellEnv(con.UserShell, env, con.RootPath, args...)
 		if err != nil {
 			return err

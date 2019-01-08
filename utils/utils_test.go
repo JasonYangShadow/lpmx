@@ -5,8 +5,17 @@ import (
 	"testing"
 )
 
+func TestGetPid(t *testing.T) {
+	b, err := CheckProcessByPid("30742")
+	if err != nil {
+		t.Error(err)
+	} else {
+		t.Log(b)
+	}
+}
+
 func TestUtilsUntar(t *testing.T) {
-	//t.Skip("skip test")
+	t.Skip("skip test")
 	err := Untar("/tmp/8e3ba11ec2a2b39ab372c60c16b421536e50e5ce64a0bc81765c2e38381bcff6", "/tmp/alpine")
 	if err != nil {
 		t.Error(err)
