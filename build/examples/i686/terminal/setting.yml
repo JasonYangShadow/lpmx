@@ -1,9 +1,0 @@
-allow_list:
-  - bash: all 
-
-add_needed:
-  - /tmp/x86_64/terminal/bin/pid:
-    - /tmp/x86_64/terminal/lib/getpid.so
-
-user_shell: /bin/bash
-__log_switch: true
