@@ -91,7 +91,7 @@ func ElfReplaceNeeded(elfpath string, lib_old string, lib_new string, prog strin
 	return true, nil
 }
 
-func Patchldso(elfpath string) *Error {
+func Patchldso(elfpath string, newpath string) *Error {
 	content, err := ioutil.ReadFile(elfpath)
 	if err != nil {
 		cerr := ErrNew(err, fmt.Sprintf("elf file doesn't exist %s", elfpath))
@@ -101,20 +101,28 @@ func Patchldso(elfpath string) *Error {
 	if p_err != nil {
 		return p_err
 	}
-	nul := []byte("\x00/\x00\x00\x00")
-	etc := []byte("\x00/etc")
+
+	nul_etc := []byte("\x00/\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
+	nul_etc1 := []byte("\x00/\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00")
+	nul_lib := []byte("\x00/\x00\x00\x00")
+	nul_usr := []byte("\x00/\x00\x00\x00\x00\x00\x00\x00")
+
+	etc := []byte("\x00/etc/ld.so.preload\x00")
+	etc1 := []byte("\x00/etc/ld.so.cache\x00")
 	lib := []byte("\x00/lib")
-	usr := []byte("\x00/usr")
+	usr := []byte("\x00/usr/lib")
+
 	ld_path_orig := []byte("\x00LD_LIBRARY_PATH\x00")
 	ld_path_new := []byte("\x00LD_LIBRARY_LPMX\x00")
-	content = bytes.Replace(content, etc, nul, -1)
-	content = bytes.Replace(content, lib, nul, -1)
-	content = bytes.Replace(content, usr, nul, -1)
+	content = bytes.Replace(content, etc, nul_etc, -1)
+	content = bytes.Replace(content, etc1, nul_etc1, -1)
+	content = bytes.Replace(content, lib, nul_lib, -1)
+	content = bytes.Replace(content, usr, nul_usr, -1)
 	content = bytes.Replace(content, ld_path_orig, ld_path_new, -1)
-	elfpath_new := fmt.Sprintf("%s.patch", elfpath)
-	err = ioutil.WriteFile(elfpath_new, content, os.FileMode(permissions))
+
+	err = ioutil.WriteFile(newpath, content, os.FileMode(permissions))
 	if err != nil {
-		cerr := ErrNew(err, fmt.Sprintf("ld.so patch failed %s", elfpath_new))
+		cerr := ErrNew(err, fmt.Sprintf("ld.so patch failed %s", newpath))
 		return cerr
 	}
 	return nil

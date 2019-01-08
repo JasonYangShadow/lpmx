@@ -1,56 +1,283 @@
 package docker
 
 import (
-	"bufio"
-	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
+	"net/http"
 	"os"
+	"strings"
+	"time"
 
-	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
+	"github.com/heroku/docker-registry-client/registry"
 	. "github.com/jasonyangshadow/lpmx/error"
-	. "github.com/jasonyangshadow/lpmx/log"
+	. "github.com/jasonyangshadow/lpmx/utils"
 )
 
-//private funcs
-func pullImage(name string, output string, auth bool) *Error {
-	ctx := context.Background()
-	cli, err := client.NewEnvClient()
-	if err != nil {
-		cerr := ErrNew(err, "pullImage create env client encounters error")
-		return cerr
-	}
-	if auth {
-		scanner := bufio.NewScanner(os.Stdin)
-		fmt.Println("Enter your username")
-		user := scanner.Text()
-		fmt.Println("Enter your password")
-		pwd := scanner.Text()
-		authConfig := types.AuthConfig{
-			Username: user,
-			Password: pwd,
-		}
-		encodedJSON, err := json.Marshal(authConfig)
-		if err != nil {
-			cerr := ErrNew(err, "pullImage json.Marshal encounters error")
-			return cerr
-		}
-		authStr := base64.URLEncoding.EncodeToString(encodedJSON)
-		out, err := cli.ImagePull(ctx, name, types.ImagePullOptions{RegistryAuth: authStr})
-	} else {
-		out, err := cli.ImagePull(ctx, name, types.ImagePullOptions{})
-	}
-	if err != nil {
-		cerr := ErrNew(err, "pullImage image pull encounters error")
-		return cerr
-	}
-	defer out.close()
+const (
+	DOCKER_URL  = "https://registry-1.docker.io"
+	SETTING_URL = "https://raw.githubusercontent.com/JasonYangShadow/LPMXSettingRepository/master"
+)
 
-	io.copy(output, out)
+func ListRepositories(username string, pass string) ([]string, *Error) {
+	log.SetOutput(ioutil.Discard)
+	hub, err := registry.New(DOCKER_URL, username, pass)
+	if err != nil {
+		cerr := ErrNew(err, "create docker registry instance failure")
+		return nil, cerr
+	}
+	repo, err := hub.Repositories()
+	if err != nil {
+		cerr := ErrNew(err, "query docker repositories failure")
+		return nil, cerr
+	}
+	return repo, nil
 }
 
-func PullImage(name string) *Error {
+func ListTags(username string, pass string, name string) ([]string, *Error) {
+	log.SetOutput(ioutil.Discard)
+	if !strings.Contains(name, "library/") {
+		name = "library/" + name
+	}
+	hub, err := registry.New(DOCKER_URL, username, pass)
+	if err != nil {
+		cerr := ErrNew(err, "create docker registry instance failure")
+		return nil, cerr
+	}
+	tags, err := hub.Tags(name)
+	if err != nil {
+		cerr := ErrNew(err, "query docker tags failure")
+		return nil, cerr
+	}
+	return tags, nil
+}
+
+func GetDigest(username string, pass string, name string, tag string) (string, *Error) {
+	log.SetOutput(ioutil.Discard)
+	if !strings.Contains(name, "library/") {
+		name = "library/" + name
+	}
+	hub, err := registry.New(DOCKER_URL, username, pass)
+	if err != nil {
+		cerr := ErrNew(err, "create docker registry instance failure")
+		return "", cerr
+	}
+	digest, err := hub.ManifestDigest(name, tag)
+	if err != nil {
+		cerr := ErrNew(err, "query docker digest failure")
+		return "", cerr
+	}
+	return digest.String(), nil
+}
+
+func DeleteManifest(username string, pass string, name string, tag string) *Error {
+	log.SetOutput(ioutil.Discard)
+	if !strings.Contains(name, "library/") {
+		name = "library/" + name
+	}
+	hub, err := registry.New(DOCKER_URL, username, pass)
+	if err != nil {
+		cerr := ErrNew(err, "create docker registry instance failure")
+		return cerr
+	}
+	digest, err := hub.ManifestDigest(name, tag)
+	if err != nil {
+		cerr := ErrNew(err, "query docker digest failure")
+		return cerr
+	}
+	err = hub.DeleteManifest(name, digest)
+	if err != nil {
+		cerr := ErrNew(err, "delete docker manifest failure")
+		return cerr
+	}
+	return nil
+}
+
+func DownloadLayers(username string, pass string, name string, tag string, folder string) (map[string]int64, []string, *Error) {
+	log.SetOutput(ioutil.Discard)
+	if !strings.Contains(name, "library/") && !strings.Contains(name, "/") {
+		name = "library/" + name
+	}
+	if !FolderExist(folder) {
+		_, err := MakeDir(folder)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	hub, err := registry.New(DOCKER_URL, username, pass)
+	if err != nil {
+		cerr := ErrNew(err, "create docker registry instance failure")
+		return nil, nil, cerr
+	}
+	man, err := hub.ManifestV2(name, tag)
+	if err != nil {
+		cerr := ErrNew(err, "query docker manifest failure")
+		return nil, nil, cerr
+	}
+	data := make(map[string]int64)
+	var layer_order []string
+	for _, element := range man.Layers {
+		dig := element.Digest
+		//reader, err := hub.DownloadLayer(name, dig)
+		//function name is changed
+		reader, err := hub.DownloadBlob(name, dig)
+		if err != nil {
+			cerr := ErrNew(err, "download docker layers failure")
+			return nil, nil, cerr
+		}
+		defer reader.Close()
+		if strings.HasSuffix(folder, "/") {
+			folder = strings.TrimSuffix(folder, "/")
+		}
+		filename := folder + "/" + strings.TrimPrefix(dig.String(), "sha256:")
+		to, err := os.Create(filename)
+		if err != nil {
+			cerr := ErrNew(err, fmt.Sprintf("create file %s failure", filename))
+			return nil, nil, cerr
+		}
+		defer to.Close()
+		fmt.Println(fmt.Sprintf("Downloading file with type: %s, size: %d", element.MediaType, element.Size))
+
+		//printing download percentage using anonymous functions
+		go func(filename string, size int64) {
+			f, err := os.Open(filename)
+			if err != nil {
+				return
+			}
+			defer f.Close()
+			fi, err := f.Stat()
+			if err != nil {
+				return
+			}
+			curr_size := fi.Size()
+			for curr_size < size {
+				percentage := int(float64(curr_size) / float64(size) * 100)
+				fmt.Printf("Downloading... %d/%d [%d/100 complete]", curr_size, size, percentage)
+				time.Sleep(time.Second)
+				fi, err = f.Stat()
+				curr_size = fi.Size()
+				fmt.Printf("\r")
+			}
+		}(filename, element.Size)
+
+		if _, err := io.Copy(to, reader); err != nil {
+			cerr := ErrNew(err, fmt.Sprintf("copy file %s content failure", filename))
+			return nil, nil, cerr
+		}
+		data[filename] = element.Size
+		layer_order = append(layer_order, filename)
+	}
+	return data, layer_order, nil
+}
+
+func DownloadSetting(name string, tag string, folder string) *Error {
+	filepath := fmt.Sprintf("%s/setting.yml", folder)
+	if !FolderExist(folder) {
+		_, err := MakeDir(folder)
+		if err != nil {
+			return err
+		}
+	}
+	out, err := os.Create(filepath)
+	if err != nil {
+		cerr := ErrNew(ErrFileStat, fmt.Sprintf("%s file create error", filepath))
+		return cerr
+	}
+	defer out.Close()
+
+	name = strings.ToLower(name)
+	tag = strings.ToLower(tag)
+
+	http_req := fmt.Sprintf("%s/%s/%s/setting.yml", SETTING_URL, name, tag)
+	resp, err := http.Get(http_req)
+	if err != nil {
+		cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
+		return cerr
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		http_req := fmt.Sprintf("%s/default.yml", SETTING_URL)
+		resp, err := http.Get(http_req)
+		if err != nil {
+			cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
+			return cerr
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == 404 {
+			cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
+			return cerr
+		}
+		_, err = io.Copy(out, resp.Body)
+		if err != nil {
+			cerr := ErrNew(ErrFileIO, fmt.Sprintf("io copy from %s to %s encounters error", http_req, filepath))
+			return cerr
+		}
+		return nil
+	}
+
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		cerr := ErrNew(ErrFileIO, fmt.Sprintf("io copy from %s to %s encounters error", http_req, filepath))
+		return cerr
+	}
+	return nil
+}
+
+func DownloadFilefromGithub(name string, tag string, filename string, url string, folder string) *Error {
+	filepath := fmt.Sprintf("%s/%s", folder, filename)
+	if !FolderExist(folder) {
+		_, err := MakeDir(folder)
+		if err != nil {
+			return err
+		}
+	}
+
+	out, err := os.Create(filepath)
+	if err != nil {
+		cerr := ErrNew(ErrFileStat, fmt.Sprintf("%s file create error", filepath))
+		return cerr
+	}
+	defer out.Close()
+
+	name = strings.ToLower(name)
+	tag = strings.ToLower(tag)
+	http_req := fmt.Sprintf("%s/%s/%s/%s", url, name, tag, filename)
+	resp, err := http.Get(http_req)
+	if err != nil {
+		cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
+		return cerr
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		http_req := fmt.Sprintf("%s/default.%s", url, filename)
+		resp, err := http.Get(http_req)
+		if err != nil {
+			cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
+			return cerr
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == 404 {
+			cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
+			return cerr
+		}
+		_, err = io.Copy(out, resp.Body)
+		if err != nil {
+			cerr := ErrNew(ErrFileIO, fmt.Sprintf("io copy from %s to %s encounters error", http_req, filepath))
+			return cerr
+		}
+		return nil
+	}
+
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		cerr := ErrNew(ErrFileIO, fmt.Sprintf("io copy from %s to %s encounters error", http_req, filepath))
+		return cerr
+	}
+	return nil
+
 }

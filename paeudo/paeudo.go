@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	. "github.com/jasonyangshadow/lpmx/error"
 	"os"
 	"os/exec"
 	"strings"
 	"time"
+
+	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/log"
+	"github.com/sirupsen/logrus"
 )
 
 func Command(cmdStr string, arg ...string) (string, *Error) {
@@ -21,6 +24,17 @@ func Command(cmdStr string, arg ...string) (string, *Error) {
 		return "", cerr
 	}
 	return out.String(), nil
+}
+
+func CommandBash(cmdStr string) (string, *Error) {
+	cmd := exec.Command("sh", "-c", cmdStr)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		cerr := ErrNew(err, string(out))
+		return "", cerr
+	} else {
+		return string(out), nil
+	}
 }
 
 func CommandEnv(cmdStr string, env map[string]string, dir string, arg ...string) (string, *Error) {
@@ -58,9 +72,22 @@ func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Erro
 		cerr := ErrNew(ErrNil, fmt.Sprintf("shell: %s doesn't exist", sh))
 		return cerr
 	} else {
-		cmd := exec.Command(shpath, arg...)
+		var args []string
+		if len(arg) > 0 {
+			args = append(args, "-c")
+			for _, ar := range arg {
+				args = append(args, ar)
+			}
+		}
+
+		cmd := exec.Command(shpath, args...)
 		var envstrs []string
 		for key, value := range env {
+			if len(arg) > 0 {
+				if key == "FAKECHROOT_EXCLUDE_PATH" {
+					value = value + ":/home"
+				}
+			}
 			envstr := fmt.Sprintf("%s=%s", key, value)
 			envstrs = append(envstrs, envstr)
 		}
@@ -69,8 +96,13 @@ func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Erro
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
+
+		LOGGER.WithFields(logrus.Fields{
+			"env": envstrs,
+		}).Debug("shell env debug")
 		err := cmd.Run()
-		if err != nil {
+		switch err.(type) {
+		case *exec.ExitError:
 			cerr := ErrNew(err, "cmd running error")
 			return cerr
 		}

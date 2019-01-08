@@ -27,3 +27,8 @@ import:
   version: v17.05.0-ce-rc3
   subpackages:
   - client
+- package: github.com/docker/distribution
+  version: v2.6.2
+- package: github.com/heroku/docker-registry-client
+  subpackages:
+  - registry

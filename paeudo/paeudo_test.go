@@ -5,10 +5,10 @@ import (
 )
 
 func TestPaeudo1(t *testing.T) {
-	env := make(map[string]string)
-	dir := "/tmp"
-	err := ShellEnv("/usr/bin/fakeroot", env, dir, "/usr/bin/bash")
+	str, err := CommandBash("ps -ef|grep memcached|grep -v grep|awk '{print $2}'")
 	if err != nil {
 		t.Error(err)
+	} else {
+		t.Log(str)
 	}
 }

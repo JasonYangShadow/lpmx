@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
+	"strconv"
+
 	. "github.com/jasonyangshadow/lpmx/container"
 	. "github.com/jasonyangshadow/lpmx/log"
 	. "github.com/jasonyangshadow/lpmx/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-	"path/filepath"
-	"strconv"
 )
 
 func main() {
@@ -47,6 +48,12 @@ func main() {
 		Short: "run container based on specific directory",
 		Long:  "run command is the basic command of lpmx, which is used for initializing, creating and running container based on specific directory",
 		Args:  cobra.ExactArgs(0),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
 		Run: func(cmd *cobra.Command, args []string) {
 			RunSource, _ = filepath.Abs(RunSource)
 			if RunConfig != "" {
@@ -59,7 +66,11 @@ func main() {
 					LOGGER.Panic("can't locate the setting.yml in source folder")
 				}
 			}
-			err := Run(RunSource, RunConfig, RunPassive)
+			configmap := make(map[string]interface{})
+			configmap["dir"] = RunSource
+			configmap["config"] = RunConfig
+			configmap["passive"] = RunPassive
+			err := Run(&configmap)
 			if err != nil {
 				LOGGER.Panic(err.Error())
 			}
@@ -77,6 +88,12 @@ func main() {
 		Short: "get settings from memcache server",
 		Long:  "get command is the basic command of lpmx, which is used for getting settings from cache server",
 		Args:  cobra.ExactArgs(0),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Get(GetId, GetName)
 			if err != nil {
@@ -97,6 +114,13 @@ func main() {
 		Short: "exec command remotely",
 		Long:  "rpc exec sub-command is the advanced comand of lpmx, which is used for executing command remotely through rpc",
 		Args:  cobra.MinimumNArgs(1),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
+
 		Run: func(cmd *cobra.Command, args []string) {
 			_, err := RPCExec(RExecIp, RExecPort, RExecTimeout, args[0], args[1:]...)
 			if err != nil {
@@ -119,6 +143,13 @@ func main() {
 		Short: "query the information of commands executed remotely",
 		Long:  "rpc query sub-command is the advanced comand of lpmx, which is used for querying the information of commands executed remotely through rpc",
 		Args:  cobra.ExactArgs(0),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
+
 		Run: func(cmd *cobra.Command, args []string) {
 			res, err := RPCQuery(RQueryIp, RQueryPort)
 			if err != nil {
@@ -144,6 +175,13 @@ func main() {
 		Short: "kill the commands executed remotely via pid",
 		Long:  "rpc delete sub-command is the advanced comand of lpmx, which is used for killing the commands executed remotely through rpc via pid",
 		Args:  cobra.ExactArgs(0),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
+
 		Run: func(cmd *cobra.Command, args []string) {
 			i, aerr := strconv.Atoi(RDeletePid)
 			if aerr != nil {
@@ -171,13 +209,145 @@ func main() {
 	}
 	rpcCmd.AddCommand(rpcExecCmd, rpcQueryCmd, rpcDeleteCmd)
 
+	//docker cmd
+	var DockerDownloadUser string
+	var DockerDownloadPass string
+	var dockerDownloadCmd = &cobra.Command{
+		Use:   "download",
+		Short: "download the docker images from docker hub",
+		Long:  "docker download sub-command is the advanced command of lpmx, which is used for downloading the images from docker hub",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			err := DockerDownload(args[0], DockerDownloadUser, DockerDownloadPass)
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			} else {
+				LOGGER.Info("DONE")
+			}
+		},
+	}
+	dockerDownloadCmd.Flags().StringVarP(&DockerDownloadUser, "user", "u", "", "optional")
+	dockerDownloadCmd.Flags().StringVarP(&DockerDownloadPass, "pass", "p", "", "optional")
+
+	var dockerCreateCmd = &cobra.Command{
+		Use:   "create",
+		Short: "initialize the local docker images",
+		Long:  "docker create sub-command is the advanced command of lpmx, which is used for initializing and running the images downloaded from docker hub",
+		Args:  cobra.ExactArgs(1),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
+
+		Run: func(cmd *cobra.Command, args []string) {
+			err := DockerCreate(args[0])
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
+	}
+
+	var dockerDeleteCmd = &cobra.Command{
+		Use:   "delete",
+		Short: "delete the local docker images",
+		Long:  "docker delete sub-command is the advanced command of lpmx, which is used for deleting the images downloaded from docker hub",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			err := DockerDelete(args[0])
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			} else {
+				LOGGER.Info("DONE")
+			}
+		},
+	}
+
+	var dockerSearchCmd = &cobra.Command{
+		Use:   "search",
+		Short: "search the docker images from docker hub",
+		Long:  "docker search sub-command is the advanced command of lpmx, which is used for searching the images from docker hub",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			tags, err := DockerSearch(args[0])
+			if err != nil {
+				LOGGER.Error(err.Error())
+			}
+			fmt.Println(fmt.Sprintf("Name: %s, Available Tags: %s", args[0], tags))
+		},
+	}
+
+	var dockerListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "list local docker images",
+		Long:  "docker list sub-command is the advanced command of lpmx, which is used for listing local images downloaded from docker hub",
+		Args:  cobra.ExactArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			err := DockerList()
+			if err != nil {
+				LOGGER.Error(err.Error())
+			}
+		},
+	}
+
+	var dockerResetCmd = &cobra.Command{
+		Use:   "reset",
+		Short: "reset local docker base layers",
+		Long:  "docker reset sub-command is the advanced command of lpmx, which is used for clearing current extacted base layers and reextracting them.(Only for Advanced Use)",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			err := DockerReset(args[0])
+			if err != nil {
+				LOGGER.Error(err.Error())
+			} else {
+				LOGGER.Info("DONE")
+			}
+		},
+	}
+
+	var dockerCmd = &cobra.Command{
+		Use:   "docker",
+		Short: "docker command",
+		Long:  "docker command is the advanced comand of lpmx, which is used for executing docker related commands",
+	}
+	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd)
+
+	var ExposeId string
+	var ExposeName string
+	var exposeCmd = &cobra.Command{
+		Use:   "expose",
+		Short: "expose program inside container",
+		Long:  "expose command is the advanced command of lpmx, which is used for exposing binaries inside containers to host",
+		Args:  cobra.ExactArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			err := Expose(ExposeId, ExposeName)
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			} else {
+				LOGGER.Info("DONE")
+			}
+		},
+	}
+	exposeCmd.Flags().StringVarP(&ExposeId, "id", "i", "", "required")
+	exposeCmd.MarkFlagRequired("id")
+	exposeCmd.Flags().StringVarP(&ExposeName, "name", "n", "", "required")
+	exposeCmd.MarkFlagRequired("name")
+
 	var resumeCmd = &cobra.Command{
 		Use:   "resume",
 		Short: "resume the registered container",
 		Long:  "resume command is the basic command of lpmx, which is used for resuming the registered container via id",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MinimumNArgs(1),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
+
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Resume(args[0])
+			err := Resume(args[0], args[1:]...)
 			if err != nil {
 				LOGGER.Panic(err.Error())
 			}
@@ -210,6 +380,13 @@ func main() {
 		Short: "set environment variables for container",
 		Long:  "set command is an additional comand of lpmx, which is used for setting environment variables of running containers",
 		Args:  cobra.ExactArgs(0),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := CheckAndStartMemcache()
+			if err != nil {
+				LOGGER.Panic(err.Error())
+			}
+		},
+
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Set(SetId, SetType, SetProg, SetVal)
 			if err != nil {
@@ -233,6 +410,6 @@ func main() {
 		Use:   "lpmx",
 		Short: "lpmx rootless container",
 	}
-	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, runCmd, setCmd, resumeCmd, rpcCmd, getCmd)
+	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, runCmd, setCmd, resumeCmd, rpcCmd, getCmd, dockerCmd, exposeCmd)
 	rootCmd.Execute()
 }

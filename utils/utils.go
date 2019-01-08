@@ -1,16 +1,24 @@
 package utils
 
 import (
+	"archive/tar"
+	"bufio"
+	"compress/gzip"
 	"fmt"
-	. "github.com/jasonyangshadow/lpmx/error"
-	"github.com/phayes/permbits"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
+
+	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/jasonyangshadow/lpmx/log"
+	. "github.com/jasonyangshadow/lpmx/paeudo"
+	"github.com/phayes/permbits"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -274,9 +282,327 @@ func GuessPath(base string, in string, file bool) (string, *Error) {
 	return "", cerr
 }
 
+func GuessPathContainer(base string, layers []string, in string, file bool) (string, *Error) {
+	if strings.HasPrefix(in, "$") {
+		return strings.Replace(in, "$", "", -1), nil
+	}
+	if strings.HasPrefix(in, "^") {
+		in = strings.Replace(in, "^", "", -1)
+		file = true
+	}
+	if strings.TrimSpace(in) == "all" {
+		return in, nil
+	}
+	if filepath.IsAbs(in) {
+		if (file && FileExist(in)) || (!file && FolderExist(in)) {
+			return in, nil
+		}
+	} else {
+		for _, layer := range layers {
+			tpath := fmt.Sprintf("%s/%s/%s", base, layer, in)
+			LOGGER.WithFields(logrus.Fields{
+				"tpath": tpath,
+			}).Debug("guess path container debug")
+			if (file && FileExist(tpath)) || (!file && FolderExist(tpath)) {
+				return tpath, nil
+			}
+		}
+	}
+	cerr := ErrNew(ErrNil, fmt.Sprintf("%s doesn't exist both in abs path and relative path", in))
+	return "", cerr
+}
+
+//get all existed paths rather than only one
+func GuessPathsContainer(base string, layers []string, in string, file bool) ([]string, *Error) {
+	var ret []string
+	if strings.HasPrefix(in, "$") {
+		ret = append(ret, strings.Replace(in, "$", "", -1))
+		return ret, nil
+	}
+	//file marked with ^
+	if strings.HasPrefix(in, "^") {
+		in = strings.Replace(in, "^", "", -1)
+		file = true
+	}
+	if strings.TrimSpace(in) == "all" {
+		ret = append(ret, in)
+		return ret, nil
+	}
+	if filepath.IsAbs(in) {
+		if (file && FileExist(in)) || (!file && FolderExist(in)) {
+			ret = append(ret, in)
+		}
+	} else {
+		for _, layer := range layers {
+			tpath := fmt.Sprintf("%s/%s/%s", base, layer, in)
+			LOGGER.WithFields(logrus.Fields{
+				"tpath": tpath,
+			}).Debug("guess paths container debug")
+			if (file && FileExist(tpath)) || (!file && FolderExist(tpath)) {
+				ret = append(ret, tpath)
+			}
+		}
+	}
+	if len(ret) > 0 {
+		return ret, nil
+	}
+	cerr := ErrNew(ErrNil, fmt.Sprintf("%s doesn't exist both in abs path and relative path", in))
+	return ret, cerr
+}
+
 func AddConPath(base string, in string) string {
 	if strings.HasPrefix(in, "$") {
 		return strings.Replace(in, "$", "", -1)
 	}
 	return filepath.Join(base, in)
+}
+
+func Tar(src string, writers ...io.Writer) *Error {
+	// ensure the src actually exists before trying to tar it
+	if !FolderExist(src) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s folder not exist", src))
+		return cerr
+	}
+
+	mw := io.MultiWriter(writers...)
+	gzw := gzip.NewWriter(mw)
+	defer gzw.Close()
+
+	tw := tar.NewWriter(gzw)
+	defer tw.Close()
+
+	err := filepath.Walk(src, func(file string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		header, err := tar.FileInfoHeader(fi, fi.Name())
+		if err != nil {
+			return err
+		}
+		// update the name to correctly reflect the desired destination when untaring
+		header.Name = strings.TrimPrefix(strings.Replace(file, src, "", -1), string(filepath.Separator))
+
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+		f, err := os.Open(file)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(tw, f); err != nil {
+			return err
+		}
+		f.Close()
+		return nil
+	})
+	if err != nil {
+		cerr := ErrNew(err, "tar file error")
+		return cerr
+	}
+	return nil
+}
+
+func Untar(target string, folder string) *Error {
+	if !FileExist(target) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("file %s does not exist", target))
+		return cerr
+	}
+	r, err := os.Open(target)
+	if err != nil {
+		cerr := ErrNew(ErrFileIO, fmt.Sprintf("open file %s failure", target))
+		return cerr
+	}
+	defer r.Close()
+	gzr, err := gzip.NewReader(r)
+	if err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("gzip open file %s failure", target))
+		return cerr
+	}
+	defer gzr.Close()
+
+	tr := tar.NewReader(gzr)
+
+	for {
+		header, err := tr.Next()
+
+		switch {
+		case err == io.EOF:
+			return nil
+
+		case err != nil:
+			cerr := ErrNew(err, "reading tar header errors")
+			return cerr
+
+		case header == nil:
+			continue
+		}
+
+		if !strings.HasSuffix(folder, "/") {
+			folder = folder + "/"
+		}
+		target := filepath.Join(folder, header.Name)
+
+		switch header.Typeflag {
+
+		// if its a dir and it doesn't exist create it
+		case tar.TypeDir:
+			if _, err := os.Stat(target); err != nil {
+				if err := os.MkdirAll(target, 0755); err != nil {
+					cerr := ErrNew(err, "untar making dir error")
+					return cerr
+				}
+			}
+
+		case tar.TypeReg:
+			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			if err != nil {
+				cerr := ErrNew(err, fmt.Sprintf("untar create file %s error", target))
+				return cerr
+			}
+
+			// copy over contents
+			if _, err := io.Copy(f, tr); err != nil {
+				cerr := ErrNew(err, "untar copying file content error")
+				return cerr
+			}
+
+			f.Close()
+
+		case tar.TypeSymlink:
+			//won't link to absolute path
+			os.Symlink(header.Linkname, target)
+
+		case tar.TypeLink:
+			//won't link to absolute path
+			real_path := fmt.Sprintf("%s/%s", folder, header.Linkname)
+			real_dir := path.Dir(real_path)
+			target_dir := path.Dir(target)
+			if real_dir == target_dir {
+				os.Symlink(path.Base(real_path), target)
+			} else {
+				os.Symlink(header.Linkname, target)
+			}
+		}
+	}
+}
+
+func ReverseStrArray(input []string) []string {
+	for i := 0; i < len(input)/2; i++ {
+		j := len(input) - i - 1
+		input[i], input[j] = input[j], input[i]
+	}
+	return input
+}
+
+func GetCurrDir() (string, *Error) {
+	arg_path, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	searchPaths := []string{arg_path, "."}
+	searchPaths = append(searchPaths, strings.Split(os.Getenv("PATH"), ":")...)
+	for _, path := range searchPaths {
+		p := fmt.Sprintf("%s/lpmx", path)
+		if FileExist(p) {
+			return path, nil
+		}
+	}
+	cerr := ErrNew(ErrNExist, fmt.Sprintf("can't locate lpmx among PATH, caller directory and current directroy"))
+	return "", cerr
+}
+
+func AddVartoFile(env string, file string) *Error {
+	perm, err := GetFilePermission(file)
+	if err != nil {
+		return err
+	}
+	f, er := os.OpenFile(file, os.O_APPEND|os.O_RDWR, os.FileMode(perm))
+	if er != nil {
+		cerr := ErrNew(er, fmt.Sprintf("can't open file %s", file))
+		return cerr
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, fmt.Sprintf("export %s", env)) {
+			return nil
+		}
+	}
+
+	_, er = f.WriteString(fmt.Sprintf("export %s\n", env))
+	if er != nil {
+		cerr := ErrNew(er, fmt.Sprintf("can't write file %s", file))
+		return cerr
+	}
+	return nil
+}
+
+func GetHostOSInfo() (string, string, *Error) {
+	output, err := Command("lsb_release", "-a")
+	if err != nil {
+		return "", "", err
+	}
+
+	distributor := ""
+	release := ""
+	lines := strings.Split(output, "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "Distributor ID:") {
+			distributor = strings.TrimSpace(strings.TrimPrefix(line, "Distributor ID:"))
+		}
+
+		if strings.HasPrefix(line, "Release:") {
+			release = strings.TrimSpace(strings.TrimPrefix(line, "Release:"))
+		}
+	}
+
+	return distributor, release, nil
+}
+
+func GetProcessIdByName(name string) (bool, string, *Error) {
+	cmd_context := fmt.Sprintf("ps -ef|grep %s|grep -v grep|awk '{print $2}'", name)
+	out, err := CommandBash(cmd_context)
+	if err != nil {
+		return false, "", err
+	}
+
+	if out == "" {
+		return false, out, nil
+	} else {
+		return true, out, nil
+	}
+}
+
+func CheckProcessByPid(pid string) (bool, *Error) {
+	cmd_context := fmt.Sprintf("ps -p %s --no-headers", pid)
+	out, err := CommandBash(cmd_context)
+	if err != nil {
+		return false, err
+	}
+
+	if out == "" {
+		return false, nil
+	} else {
+		return true, nil
+	}
+}
+
+func KillProcessByPid(pid string) *Error {
+	cmd_context := fmt.Sprintf("kill -9 %s", pid)
+	_, err := CommandBash(cmd_context)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func CheckAndStartMemcache() *Error {
+	if ok, _, _ := GetProcessIdByName("memcached"); !ok {
+		currdir, _ := GetCurrDir()
+		_, cerr := CommandBash(fmt.Sprintf("LD_PRELOAD=%s/libevent.so %s/memcached -s %s/.memcached.pid -a 600 -d", currdir, currdir, currdir))
+		if cerr != nil {
+			cerr.AddMsg(fmt.Sprintf("can not start memcached process from %s", currdir))
+			return cerr
+		}
+	}
+	return nil
 }
