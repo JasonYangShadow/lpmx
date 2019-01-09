@@ -1029,7 +1029,7 @@ func Expose(id string, name string) *Error {
 		if v, ok := sys.Containers[id]; ok {
 			if val, vok := v.(map[string]interface{}); vok {
 				var con Container
-				info := fmt.Sprintf("%s/.lpmx/.info", val["RootPath"].(string))
+				info := fmt.Sprintf("%s/.lpmx/.info", filepath.Dir(val["RootPath"].(string)))
 				if FileExist(info) {
 					data, err := ReadFromFile(info)
 					if err == nil {
@@ -1386,10 +1386,7 @@ func (con *Container) bashShell(args ...string) *Error {
 			KillProcessByPid(faked_str[1])
 		}()
 
-		err = ShellEnv(con.UserShell, env, con.RootPath, args...)
-		if err != nil {
-			return err
-		}
+		ShellEnv(con.UserShell, env, con.RootPath, args...)
 		return nil
 	}
 	cerr := ErrNew(ErrNExist, fmt.Sprintf("can't locate container root folder %s", con.RootPath))
