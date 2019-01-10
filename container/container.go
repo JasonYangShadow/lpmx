@@ -976,6 +976,11 @@ func DockerCreate(name string) *Error {
 				os.Symlink("/", fmt.Sprintf("%s/cwd", proc_self_path))
 				os.Symlink("/", fmt.Sprintf("%s/exe", proc_self_path))
 
+				//create tmp folder and create whiteout file for tmp
+				os.MkdirAll(fmt.Sprintf("%s/tmp", configmap["dir"].(string)), os.FileMode(FOLDER_MODE))
+				f, _ := os.Create(fmt.Sprintf("%s/.wh.tmp", configmap["dir"].(string)))
+				f.Close()
+
 				//run container
 				r_err := Run(&configmap)
 				if r_err != nil {
