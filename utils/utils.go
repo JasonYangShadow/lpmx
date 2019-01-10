@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -469,19 +468,21 @@ func Untar(target string, folder string) *Error {
 			f.Close()
 
 		case tar.TypeSymlink:
-			//won't link to absolute path
-			os.Symlink(header.Linkname, target)
-
-		case tar.TypeLink:
-			//won't link to absolute path
-			real_path := fmt.Sprintf("%s/%s", folder, header.Linkname)
-			real_dir := path.Dir(real_path)
-			target_dir := path.Dir(target)
-			if real_dir == target_dir {
-				os.Symlink(path.Base(real_path), target)
+			//if linkname is absolute path should be linked to the same layer
+			if strings.HasPrefix(header.Linkname, "/") {
+				os.Symlink(fmt.Sprintf("%s%s", strings.TrimSuffix(folder, "/"), header.Linkname), target)
 			} else {
 				os.Symlink(header.Linkname, target)
 			}
+
+		case tar.TypeLink:
+			var real_path string
+			if strings.HasPrefix(header.Linkname, "/") {
+				real_path = fmt.Sprintf("%s%s", strings.TrimSuffix(folder, "/"), header.Linkname)
+			} else {
+				real_path = fmt.Sprintf("%s%s", folder, header.Linkname)
+			}
+			os.Link(real_path, target)
 		}
 	}
 }
