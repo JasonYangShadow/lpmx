@@ -265,7 +265,7 @@ func List() *Error {
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := readSys(rootdir, &sys)
 	if err == nil {
-		fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s", "ContainerID", "Status", "RPC", "DockerBased", "Image"))
+		fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s", "ContainerID", "ContainerName", "Status", "RPC", "DockerBased", "Image"))
 		for k, v := range sys.Containers {
 			if cmap, ok := v.(map[string]interface{}); ok {
 				port := strings.TrimSpace(cmap["RPCPort"].(string))
@@ -273,10 +273,10 @@ func List() *Error {
 					conn, err := net.DialTimeout("tcp", net.JoinHostPort("", port), time.Millisecond*200)
 					if err == nil && conn != nil {
 						conn.Close()
-						fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%", k, cmap["Status"].(string), cmap["RPCPort"].(string), cmap["DockerBase"].(string), cmap["ImageBase"].(string)))
+						fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), cmap["Status"].(string), cmap["RPCPort"].(string), cmap["DockerBase"].(string), cmap["ImageBase"].(string)))
 					}
 				} else {
-					fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s", k, cmap["Status"].(string), "NA", cmap["DockerBase"].(string), cmap["ImageBase"].(string)))
+					fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), cmap["Status"].(string), "NA", cmap["DockerBase"].(string), cmap["ImageBase"].(string)))
 				}
 			} else {
 				cerr := ErrNew(ErrType, "sys.Containers type error")
@@ -456,6 +456,10 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 	con.RootPath = dir
 	con.ConfigPath = rootdir
 	con.SettingPath = config
+	if (*configmap)["container_name"] == nil {
+		(*configmap)["container_name"] = ""
+	}
+	con.ContainerName = (*configmap)["container_name"].(string)
 
 	defer func() {
 		data, _ := StructMarshal(&con)
@@ -812,7 +816,7 @@ func DockerReset(name string) *Error {
 	return err
 }
 
-func DockerCreate(name string) *Error {
+func DockerCreate(name string, container_name string) *Error {
 	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
@@ -871,6 +875,7 @@ func DockerCreate(name string) *Error {
 				reverse_keys := ReverseStrArray(keys)
 				configmap["layers"] = strings.Join(reverse_keys, ":")
 				configmap["baselayerpath"] = base
+				configmap["container_name"] = container_name
 
 				//patch ld.so
 				ld_new_path := fmt.Sprintf("%s/ld.so.patch", rootfolder)
@@ -1357,6 +1362,13 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		}
 		env["FAKECHROOT_ELFLOADER"] = elfloader_path
 	}
+
+	//set language
+	env["LANG"] = ""
+	env["LANGUAGE"] = ""
+	env["LC_ALL"] = ""
+	env["LC_CTYPE"] = "POSIX"
+
 	return env, nil
 }
 
@@ -1561,6 +1573,7 @@ func (con *Container) appendToSys() *Error {
 			cmap["Image"] = con.ImageBase
 			cmap["BaseLayerPath"] = con.BaseLayerPath
 			cmap["PatchedELFLoader"] = con.PatchedELFLoader
+			cmap["ContainerName"] = con.ContainerName
 			sys.Containers[con.Id] = cmap
 		}
 		sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", currdir)

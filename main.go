@@ -229,6 +229,7 @@ func main() {
 	dockerDownloadCmd.Flags().StringVarP(&DockerDownloadUser, "user", "u", "", "optional")
 	dockerDownloadCmd.Flags().StringVarP(&DockerDownloadPass, "pass", "p", "", "optional")
 
+	var DockerCreateName string
 	var dockerCreateCmd = &cobra.Command{
 		Use:   "create",
 		Short: "initialize the local docker images",
@@ -242,12 +243,13 @@ func main() {
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
-			err := DockerCreate(args[0])
+			err := DockerCreate(args[0], DockerCreateName)
 			if err != nil {
 				LOGGER.Panic(err.Error())
 			}
 		},
 	}
+	dockerCreateCmd.Flags().StringVarP(&DockerCreateName, "name", "n", "", "optional")
 
 	var dockerDeleteCmd = &cobra.Command{
 		Use:   "delete",
