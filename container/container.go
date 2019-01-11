@@ -1191,6 +1191,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	} else {
 		env["DockerBase"] = "FALSE"
 	}
+	env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 	//set default LD_LIBRARY_LPMX
 	var libs []string
@@ -1364,10 +1365,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	}
 
 	//set language
-	env["LANG"] = ""
-	env["LANGUAGE"] = ""
-	env["LC_ALL"] = ""
-	env["LC_CTYPE"] = "POSIX"
 
 	return env, nil
 }
