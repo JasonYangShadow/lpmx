@@ -22,7 +22,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Init()
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			}
 		},
 	}
@@ -35,7 +35,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := List()
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			}
 		},
 	}
@@ -51,7 +51,7 @@ func main() {
 		PreRun: func(cmd *cobra.Command, args []string) {
 			err := CheckAndStartMemcache()
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
@@ -63,7 +63,7 @@ func main() {
 				if FileExist(config_path) {
 					RunConfig = config_path
 				} else {
-					LOGGER.Panic("can't locate the setting.yml in source folder")
+					LOGGER.Fatal("can't locate the setting.yml in source folder")
 				}
 			}
 			configmap := make(map[string]interface{})
@@ -72,7 +72,7 @@ func main() {
 			configmap["passive"] = RunPassive
 			err := Run(&configmap)
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			}
 		},
 	}
@@ -91,13 +91,13 @@ func main() {
 		PreRun: func(cmd *cobra.Command, args []string) {
 			err := CheckAndStartMemcache()
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Get(GetId, GetName)
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			}
 		},
 	}
@@ -117,14 +117,14 @@ func main() {
 		PreRun: func(cmd *cobra.Command, args []string) {
 			err := CheckAndStartMemcache()
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			}
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
 			_, err := RPCExec(RExecIp, RExecPort, RExecTimeout, args[0], args[1:]...)
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			} else {
 				LOGGER.Info("DONE")
 			}
@@ -146,14 +146,14 @@ func main() {
 		PreRun: func(cmd *cobra.Command, args []string) {
 			err := CheckAndStartMemcache()
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			}
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
 			res, err := RPCQuery(RQueryIp, RQueryPort)
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			} else {
 				fmt.Println("PID", "CMD")
 				for k, v := range res.RPCMap {
@@ -178,18 +178,18 @@ func main() {
 		PreRun: func(cmd *cobra.Command, args []string) {
 			err := CheckAndStartMemcache()
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			}
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
 			i, aerr := strconv.Atoi(RDeletePid)
 			if aerr != nil {
-				LOGGER.Panic(aerr.Error())
+				LOGGER.Fatal(aerr.Error())
 			}
 			_, err := RPCDelete(RDeleteIp, RDeletePort, i)
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			} else {
 				LOGGER.Info("DONE")
 			}
@@ -220,7 +220,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := DockerDownload(args[0], DockerDownloadUser, DockerDownloadPass)
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			} else {
 				LOGGER.Info("DONE")
 			}
@@ -238,14 +238,14 @@ func main() {
 		PreRun: func(cmd *cobra.Command, args []string) {
 			err := CheckAndStartMemcache()
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			}
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
 			err := DockerCreate(args[0], DockerCreateName)
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			}
 		},
 	}
@@ -259,7 +259,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := DockerDelete(args[0])
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			} else {
 				LOGGER.Info("DONE")
 			}
@@ -325,7 +325,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Expose(ExposeId, ExposeName)
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			} else {
 				LOGGER.Info("DONE")
 			}
@@ -344,14 +344,14 @@ func main() {
 		PreRun: func(cmd *cobra.Command, args []string) {
 			err := CheckAndStartMemcache()
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			}
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Resume(args[0], args[1:]...)
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			}
 		},
 	}
@@ -364,7 +364,7 @@ func main() {
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Destroy(args[0])
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			} else {
 				LOGGER.WithFields(logrus.Fields{
 					"container id": args[0],
@@ -385,14 +385,14 @@ func main() {
 		PreRun: func(cmd *cobra.Command, args []string) {
 			err := CheckAndStartMemcache()
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			}
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Set(SetId, SetType, SetProg, SetVal)
 			if err != nil {
-				LOGGER.Panic(err.Error())
+				LOGGER.Fatal(err.Error())
 			} else {
 				LOGGER.WithFields(logrus.Fields{
 					"container id": SetId,

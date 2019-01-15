@@ -25,6 +25,7 @@ var (
 	ErrHttpUnauthorized = errors.New("http 401 error, unauthorized")
 	ErrHttpNotFound     = errors.New("http 404 error, not found")
 	ErrZero             = errors.New("size 0 error")
+	ErrPidLive          = errors.New("pid file still lives")
 )
 
 type Error struct {
@@ -46,7 +47,7 @@ func (e *Error) Error() string {
 		buffer.WriteString(m.Value.(string))
 		buffer.WriteString("\n")
 	}
-	return fmt.Sprintf("[ErrType: %s], [ErrMsg: \n%s]", e.Err.Error(), buffer.String())
+	return fmt.Sprintf("\n**%s** \n%s", e.Err.Error(), buffer.String())
 }
 
 func (e *Error) AddMsg(str string) {

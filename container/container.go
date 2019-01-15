@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/rpc"
 	"os"
-	"os/signal"
 	"os/user"
 	"path"
 	"path/filepath"
@@ -21,23 +20,19 @@ import (
 	. "github.com/jasonyangshadow/lpmx/memcache"
 	. "github.com/jasonyangshadow/lpmx/msgpack"
 	. "github.com/jasonyangshadow/lpmx/paeudo"
+	. "github.com/jasonyangshadow/lpmx/pid"
 	. "github.com/jasonyangshadow/lpmx/rpc"
 	. "github.com/jasonyangshadow/lpmx/utils"
 	. "github.com/jasonyangshadow/lpmx/yaml"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 )
 
 const (
-	RUNNING = iota
-	STOPPED
-
 	IDLENGTH = 10
 )
 
 var (
-	ELFOP                   = []string{"add_needed", "remove_needed", "add_rpath", "remove_rpath", "change_user", "add_allow_priv", "remove_allow_priv", "add_deny_priv", "remove_deny_priv", "add_map", "remove_map"}
-	STATUS                  = []string{"RUNNING", "STOPPED"}
+	ELFOP                   = []string{"add_allow_priv", "remove_allow_priv", "add_deny_priv", "remove_deny_priv", "add_map", "remove_map"}
 	LD                      = []string{"/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2", "/lib/ld.so", "/lib64/ld-linux-x86-64.so.2", "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.1", "/lib64/ld-linux-x86-64.so.1", "/lib/ld-linux.so.2", "/lib/ld-linux.so.1"}
 	LD_LIBRARY_PATH_DEFAULT = []string{"lib", "lib/x86_64-linux-gnu", "usr/lib/x86_64-linux-gnu", "usr/lib", "usr/local/lib"}
 	FOLDER_MODE             = 0755
@@ -59,7 +54,6 @@ type Container struct {
 	DockerBase          bool
 	Layers              string
 	BaseLayerPath       string
-	Status              int
 	LogPath             string
 	ElfPatcherPath      string
 	PatchedELFLoader    string
@@ -72,12 +66,11 @@ type Container struct {
 	CurrentUser         string
 	MemcachedServerList []string
 	ExposeExe           string
-	ShmFiles            string
-	IpcFiles            string
 	UserShell           string
 	RPCPort             int
 	RPCMap              map[int]string
-	V                   *viper.Viper
+	PidFile             string
+	Pid                 int
 }
 
 type RPC struct {
@@ -151,7 +144,7 @@ func Init() *Error {
 	}()
 
 	if FolderExist(config) {
-		err := readSys(sys.RootDir, &sys)
+		err := unmarshalObj(sys.RootDir, &sys)
 		if err != nil {
 			return err
 		}
@@ -230,6 +223,9 @@ func Init() *Error {
 		if err != nil {
 			return err
 		}
+		if _, err = CheckFilePermission(fmt.Sprintf("%s/faked-sysv", currdir), 0755, true); err != nil {
+			return err
+		}
 	}
 
 	path := os.Getenv("PATH")
@@ -263,20 +259,37 @@ func List() *Error {
 	currdir, _ := GetCurrDir()
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := readSys(rootdir, &sys)
+	err := unmarshalObj(rootdir, &sys)
 	if err == nil {
-		fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s", "ContainerID", "ContainerName", "Status", "RPC", "DockerBased", "Image"))
+		fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", "ContainerID", "ContainerName", "Status", "PID", "RPC", "DockerBased", "Image"))
 		for k, v := range sys.Containers {
 			if cmap, ok := v.(map[string]interface{}); ok {
-				port := strings.TrimSpace(cmap["RPCPort"].(string))
-				if port != "0" {
-					conn, err := net.DialTimeout("tcp", net.JoinHostPort("", port), time.Millisecond*200)
+				//get each container location
+				root := path.Dir(cmap["RootPath"].(string))
+
+				pid := -1
+				//check if container is running
+				if pok, _ := PidIsActive(fmt.Sprintf("%s/container.pid", root)); pok {
+					pid, _ = PidValue(fmt.Sprintf("%s/container.pid", root))
+				}
+
+				//RPC MODE
+				if cmap["RPC"] != nil && cmap["RPC"].(string) != "0" {
+					conn, err := net.DialTimeout("tcp", net.JoinHostPort("", cmap["RPC"].(string)), time.Millisecond*200)
 					if err == nil && conn != nil {
 						conn.Close()
-						fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), cmap["Status"].(string), cmap["RPCPort"].(string), cmap["DockerBase"].(string), cmap["ImageBase"].(string)))
+						if pid != -1 {
+							fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "RUNNING", strconv.Itoa(pid), cmap["RPC"].(string), cmap["DockerBased"].(string), cmap["Image"].(string)))
+						} else {
+							fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "STOPPED", "NA", cmap["RPC"].(string), cmap["DockerBased"].(string), cmap["Image"].(string)))
+						}
 					}
 				} else {
-					fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), cmap["Status"].(string), "NA", cmap["DockerBase"].(string), cmap["ImageBase"].(string)))
+					if pid != -1 {
+						fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "RUNNING", strconv.Itoa(pid), "NA", cmap["DockerBased"].(string), cmap["Image"].(string)))
+					} else {
+						fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "STOPPED", "NA", "NA", cmap["DockerBased"].(string), cmap["Image"].(string)))
+					}
 				}
 			} else {
 				cerr := ErrNew(ErrType, "sys.Containers type error")
@@ -284,6 +297,10 @@ func List() *Error {
 			}
 		}
 		return nil
+	}
+
+	if err == ErrNExist {
+		err.AddMsg(fmt.Sprintf("%s does not exist, you may need to use 'lpmx init' firstly", rootdir))
 	}
 	return err
 }
@@ -348,23 +365,32 @@ func Resume(id string, args ...string) *Error {
 	currdir, _ := GetCurrDir()
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := readSys(rootdir, &sys)
+	err := unmarshalObj(rootdir, &sys)
 	if err == nil {
 		if v, ok := sys.Containers[id]; ok {
 			if val, vok := v.(map[string]interface{}); vok {
-				if val["Status"].(string) == STATUS[1] {
+				config_path := val["ConfigPath"].(string)
+
+				var con Container
+				err = unmarshalObj(config_path, &con)
+				if err != nil {
+					return err
+				}
+				pidfile := fmt.Sprintf("%s/container.pid", path.Dir(con.RootPath))
+
+				if pok, _ := PidIsActive(pidfile); !pok {
 					configmap := make(map[string]interface{})
-					configmap["dir"] = val["RootPath"].(string)
-					configmap["config"] = val["SettingPath"].(string)
+					configmap["dir"] = con.RootPath
+					configmap["config"] = con.SettingPath
 					configmap["passive"] = false
-					if b, _ := strconv.ParseBool(val["DockerBase"].(string)); b {
+					if con.DockerBase {
 						configmap["docker"] = true
-						configmap["layers"] = val["Layers"].(string)
-						configmap["id"] = val["Id"].(string)
-						configmap["image"] = val["Image"].(string)
-						configmap["baselayerpath"] = val["BaseLayerPath"].(string)
-						configmap["elf_loader"] = val["PatchedELFLoader"].(string)
-						configmap["parent_dir"] = filepath.Dir(val["RootPath"].(string))
+						configmap["layers"] = con.Layers
+						configmap["id"] = con.Id
+						configmap["image"] = con.ImageBase
+						configmap["baselayerpath"] = con.BaseLayerPath
+						configmap["elf_loader"] = con.PatchedELFLoader
+						configmap["parent_dir"] = filepath.Dir(con.RootPath)
 					}
 
 					err := Run(&configmap, args...)
@@ -372,7 +398,8 @@ func Resume(id string, args ...string) *Error {
 						return err
 					}
 				} else {
-					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner with id: %s is running, can't resume", id))
+					pid, _ := PidValue(pidfile)
+					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner with id: %s is running with pid: %d, can't resume", id, pid))
 					return cerr
 				}
 			}
@@ -382,6 +409,10 @@ func Resume(id string, args ...string) *Error {
 		}
 		return nil
 	}
+
+	if err == ErrNExist {
+		err.AddMsg(fmt.Sprintf("%s does not exist, you may need to use 'lpmx init' firstly", rootdir))
+	}
 	return err
 
 }
@@ -390,7 +421,7 @@ func Destroy(id string) *Error {
 	currdir, _ := GetCurrDir()
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := readSys(rootdir, &sys)
+	err := unmarshalObj(rootdir, &sys)
 
 	defer func() {
 		data, _ := StructMarshal(&sys)
@@ -400,7 +431,15 @@ func Destroy(id string) *Error {
 	if err == nil {
 		if v, ok := sys.Containers[id]; ok {
 			if val, vok := v.(map[string]interface{}); vok {
-				if val["Status"].(string) == STATUS[1] {
+				root := path.Dir(val["RootPath"].(string))
+
+				pid := -1
+				//check if container is running
+				if pok, _ := PidIsActive(fmt.Sprintf("%s/container.pid", root)); pok {
+					pid, _ = PidValue(fmt.Sprintf("%s/container.pid", root))
+				}
+
+				if pid == -1 {
 					//check if container is based on docker
 					docker, _ := val["DockerBase"].(string)
 					if dockerb, _ := strconv.ParseBool(docker); dockerb {
@@ -413,7 +452,7 @@ func Destroy(id string) *Error {
 					}
 					delete(sys.Containers, id)
 				} else {
-					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner with id: %s is running, can't destroy", id))
+					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner with id: %s is running with pid: %d, can't destroy", id, pid))
 					return cerr
 				}
 				return nil
@@ -423,6 +462,10 @@ func Destroy(id string) *Error {
 			return cerr
 		}
 		return nil
+	}
+
+	if err == ErrNExist {
+		err.AddMsg(fmt.Sprintf("%s does not exist, you may need to use 'lpmx init' firstly", rootdir))
 	}
 	return err
 
@@ -462,9 +505,9 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 	con.ContainerName = (*configmap)["container_name"].(string)
 
 	defer func() {
+		con.Pid = -1
 		data, _ := StructMarshal(&con)
 		WriteToFile(data, fmt.Sprintf("%s/.info", con.ConfigPath))
-		con.Status = STOPPED
 		con.appendToSys()
 	}()
 
@@ -497,7 +540,6 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 	}
 
 	if passive {
-		con.Status = RUNNING
 		con.RPCPort = RandomPort(MIN, MAX)
 		err := con.appendToSys()
 		if err != nil {
@@ -509,7 +551,6 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 			return err
 		}
 	} else {
-		con.Status = RUNNING
 		err := con.appendToSys()
 		if err != nil {
 			err.AddMsg("append to sys info error")
@@ -522,16 +563,6 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 		}
 	}
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		con.Status = STOPPED
-		data, _ := StructMarshal(&con)
-		WriteToFile(data, fmt.Sprintf("%s/.info", rootdir))
-		con.Status = STOPPED
-		con.appendToSys()
-	}()
 	return nil
 }
 
@@ -539,7 +570,7 @@ func Get(id string, name string) *Error {
 	currdir, _ := GetCurrDir()
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := readSys(rootdir, &sys)
+	err := unmarshalObj(rootdir, &sys)
 
 	if err == nil {
 		if _, ok := sys.Containers[id]; ok {
@@ -553,6 +584,10 @@ func Get(id string, name string) *Error {
 			return cerr
 		}
 	}
+
+	if err == ErrNExist {
+		err.AddMsg(fmt.Sprintf("%s does not exist, you may need to use 'lpmx init' firstly", rootdir))
+	}
 	return err
 }
 
@@ -560,95 +595,37 @@ func Set(id string, tp string, name string, value string) *Error {
 	currdir, _ := GetCurrDir()
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := readSys(rootdir, &sys)
+	err := unmarshalObj(rootdir, &sys)
 
 	if err == nil {
 		if v, ok := sys.Containers[id]; ok {
-			if val, vok := v.(map[string]interface{}); vok {
+			if _, vok := v.(map[string]interface{}); vok {
 				tp = strings.ToLower(strings.TrimSpace(tp))
 				switch tp {
-				case ELFOP[9], ELFOP[10]:
+				case ELFOP[4], ELFOP[5]:
 					{
 						err := setMap(id, tp, name, value, sys.MemcachedPid)
 						if err != nil {
 							return err
 						}
 					}
-				case ELFOP[5], ELFOP[6]:
+				case ELFOP[0], ELFOP[1]:
 					{
 						err := setPrivilege(id, tp, name, value, sys.MemcachedPid, true)
 						if err != nil {
 							return err
 						}
 					}
-				case ELFOP[7], ELFOP[8]:
+				case ELFOP[2], ELFOP[3]:
 					{
 						err := setPrivilege(id, tp, name, value, sys.MemcachedPid, false)
 						if err != nil {
 							return err
 						}
 					}
-				case ELFOP[0], ELFOP[1], ELFOP[2], ELFOP[3], ELFOP[4]:
-					{
-						var con Container
-						info := fmt.Sprintf("%s/.lpmx/.info", val["RootPath"].(string))
-						if FileExist(info) {
-							data, err := ReadFromFile(info)
-							if err == nil {
-								err := StructUnmarshal(data, &con)
-								if err != nil {
-									return err
-								}
-							} else {
-								return err
-							}
-						} else {
-							cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist", val["RootPath"].(string)))
-							return cerr
-						}
-						//read info ends,  get container from file
-
-						switch tp {
-						case ELFOP[0], ELFOP[1], ELFOP[2], ELFOP[3]:
-							values := strings.Split(value, ",")
-							rerr := con.refreshElf(tp, values, name)
-							if rerr != nil {
-								return rerr
-							}
-						case ELFOP[4]:
-							if val["Status"].(string) == STATUS[0] {
-								err_new := ErrNew(ErrStatus, "container is running now, can't change the user, please stop it firstly")
-								return err_new
-							}
-							if strings.TrimSpace(name) != "user" {
-								err_new := ErrNew(ErrType, "name should be 'user'")
-								return err_new
-							}
-							switch value {
-							case "root":
-								con.CurrentUser = "root"
-							case "chroot":
-								con.CurrentUser = "chroot"
-							case "default":
-								con.CurrentUser = con.CreateUser
-							default:
-								err_new := ErrNew(ErrType, "value should be either 'root','default' or 'chroot'")
-								return err_new
-							}
-						default:
-							err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user'}")
-							return err_new
-						}
-
-						//write back
-						data, _ := StructMarshal(&con)
-						WriteToFile(data, fmt.Sprintf("%s/.info", con.ConfigPath))
-
-					}
-
 					return nil
 				default:
-					err_new := ErrNew(ErrType, "tp should be one of 'add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user', 'add_allow_priv','remove_allow_priv','add_deny_priv','remove_deny_priv','add_map','remove_map'}")
+					err_new := ErrNew(ErrType, "tp should be one of 'add_allow_priv','remove_allow_priv','add_deny_priv','remove_deny_priv','add_map','remove_map'}")
 					return err_new
 				}
 
@@ -658,6 +635,10 @@ func Set(id string, tp string, name string, value string) *Error {
 			return cerr
 		}
 		return nil
+	}
+
+	if err == ErrNExist {
+		err.AddMsg(fmt.Sprintf("%s does not exist, you may need to use 'lpmx init' firstly", rootdir))
 	}
 	return err
 }
@@ -671,7 +652,7 @@ func DockerDownload(name string, user string, pass string) *Error {
 	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
-	err := readDocker(rootdir, &doc)
+	err := unmarshalObj(rootdir, &doc)
 	if err != nil && err.Err != ErrNExist {
 		return err
 	}
@@ -699,7 +680,7 @@ func DockerDownload(name string, user string, pass string) *Error {
 		mdata["image"] = fmt.Sprintf("%s/image", mdata["rootdir"])
 		image_dir, _ := mdata["image"].(string)
 
-		//download lyaers
+		//download layers
 		ret, layer_order, err := DownloadLayers(user, pass, tname, ttag, image_dir)
 		if err != nil {
 			return err
@@ -749,7 +730,7 @@ func DockerDownload(name string, user string, pass string) *Error {
 		doc.Images[name] = mdata
 
 		ddata, _ := StructMarshal(doc)
-		err = WriteToFile(ddata, fmt.Sprintf("%s/.docinfo", doc.RootDir))
+		err = WriteToFile(ddata, fmt.Sprintf("%s/.info", doc.RootDir))
 		if err != nil {
 			return err
 		}
@@ -761,7 +742,7 @@ func DockerList() *Error {
 	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
-	err := readDocker(rootdir, &doc)
+	err := unmarshalObj(rootdir, &doc)
 	fmt.Println(fmt.Sprintf("%s", "Name"))
 	if err == nil {
 		for k, _ := range doc.Images {
@@ -782,7 +763,7 @@ func DockerReset(name string) *Error {
 	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
-	err := readDocker(rootdir, &doc)
+	err := unmarshalObj(rootdir, &doc)
 	if err == nil {
 		if name_data, name_ok := doc.Images[name].(map[string]interface{}); name_ok {
 			image_dir, _ := name_data["image"].(string)
@@ -820,7 +801,7 @@ func DockerCreate(name string, container_name string) *Error {
 	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
-	err := readDocker(rootdir, &doc)
+	err := unmarshalObj(rootdir, &doc)
 	if err == nil {
 		if val, ok := doc.Images[name]; ok {
 			if vval, vok := val.(map[string]interface{}); vok {
@@ -997,6 +978,9 @@ func DockerCreate(name string, container_name string) *Error {
 		cerr := ErrNew(ErrNExist, fmt.Sprintf("image %s doesn't exist", name))
 		return cerr
 	}
+	if err.Err == ErrNExist {
+		err.AddMsg(fmt.Sprintf("image %s does not exist, you may need to download it firstly", name))
+	}
 	return err
 }
 
@@ -1004,7 +988,7 @@ func DockerDelete(name string) *Error {
 	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
-	err := readDocker(rootdir, &doc)
+	err := unmarshalObj(rootdir, &doc)
 	if err == nil {
 		if val, ok := doc.Images[name]; ok {
 			if vval, vok := val.(map[string]interface{}); vok {
@@ -1013,7 +997,7 @@ func DockerDelete(name string) *Error {
 				if rok {
 					delete(doc.Images, name)
 					ddata, _ := StructMarshal(doc)
-					err = WriteToFile(ddata, fmt.Sprintf("%s/.docinfo", doc.RootDir))
+					err = WriteToFile(ddata, fmt.Sprintf("%s/.info", doc.RootDir))
 					if err != nil {
 						return err
 					}
@@ -1033,7 +1017,7 @@ func Expose(id string, name string) *Error {
 	currdir, _ := GetCurrDir()
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := readSys(rootdir, &sys)
+	err := unmarshalObj(rootdir, &sys)
 
 	if err == nil {
 		if v, ok := sys.Containers[id]; ok {
@@ -1094,6 +1078,10 @@ func Expose(id string, name string) *Error {
 			return cerr
 		}
 		return nil
+	}
+
+	if err == ErrNExist {
+		err.AddMsg(fmt.Sprintf("%s does not exist, you may need to use 'lpmx init' firstly", rootdir))
 	}
 	return err
 }
@@ -1400,7 +1388,10 @@ func (con *Container) bashShell(args ...string) *Error {
 			KillProcessByPid(faked_str[1])
 		}()
 
-		ShellEnv(con.UserShell, env, con.RootPath, args...)
+		err := ShellEnvPid(con.UserShell, env, con.RootPath, args...)
+		if err != nil {
+			return err
+		}
 		return nil
 	}
 	cerr := ErrNew(ErrNExist, fmt.Sprintf("can't locate container root folder %s", con.RootPath))
@@ -1418,7 +1409,7 @@ func (con *Container) createContainer() *Error {
 		return err
 	}
 	con.CreateUser = strings.TrimSuffix(user, "\n")
-	con.V, con.SettingConf, err = LoadConfig(con.SettingPath)
+	_, con.SettingConf, err = LoadConfig(con.SettingPath)
 	if err != nil {
 		err.AddMsg(fmt.Sprintf("load config from %s encounters error", con.SettingPath))
 		return err
@@ -1546,31 +1537,20 @@ func (con *Container) appendToSys() *Error {
 	currdir, _ := GetCurrDir()
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := readSys(rootdir, &sys)
+	err := unmarshalObj(rootdir, &sys)
 
 	if err == nil {
-		if val, ok := sys.Containers[con.Id]; ok {
-			if cmap, cok := val.(map[string]interface{}); cok {
-				cmap["Status"] = STATUS[con.Status]
-				cmap["RPCPort"] = fmt.Sprintf("%d", con.RPCPort)
-			} else {
-				cerr := ErrNew(ErrType, "interface{} type assertation error")
-				return cerr
-			}
-		} else {
+		if _, ok := sys.Containers[con.Id]; !ok {
 			cmap := make(map[string]string)
-			cmap["Status"] = STATUS[con.Status]
 			cmap["RootPath"] = con.RootPath
 			cmap["SettingPath"] = con.SettingPath
-			cmap["RPCPort"] = fmt.Sprintf("%d", con.RPCPort)
-			cmap["DockerBase"] = strconv.FormatBool(con.DockerBase)
-			cmap["ImageBase"] = con.ImageBase
-			cmap["Layers"] = con.Layers
-			cmap["Id"] = con.Id
-			cmap["Image"] = con.ImageBase
+			cmap["ConfigPath"] = con.ConfigPath
+			cmap["ContainerID"] = con.Id
 			cmap["BaseLayerPath"] = con.BaseLayerPath
-			cmap["PatchedELFLoader"] = con.PatchedELFLoader
 			cmap["ContainerName"] = con.ContainerName
+			cmap["RPC"] = strconv.Itoa(con.RPCPort)
+			cmap["DockerBased"] = strconv.FormatBool(con.DockerBase)
+			cmap["Image"] = con.ImageBase
 			sys.Containers[con.Id] = cmap
 		}
 		sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", currdir)
@@ -1585,7 +1565,6 @@ func (con *Container) appendToSys() *Error {
 		return nil
 	}
 	return err
-
 }
 
 func (con *Container) setProgPrivileges() *Error {
@@ -1877,37 +1856,29 @@ func walkfs(dir string) ([]string, *Error) {
 	return fileList, nil
 }
 
-func readSys(rootdir string, sys *Sys) *Error {
+func unmarshalObj(rootdir string, inf interface{}) *Error {
 	info := fmt.Sprintf("%s/.info", rootdir)
 	if FileExist(info) {
 		data, err := ReadFromFile(info)
 		if err != nil {
 			return err
 		}
-		err = StructUnmarshal(data, sys)
+		switch inf.(type) {
+		case *Sys:
+			err = StructUnmarshal(data, inf.(*Sys))
+		case *Container:
+			err = StructUnmarshal(data, inf.(*Container))
+		case *Docker:
+			err = StructUnmarshal(data, inf.(*Docker))
+		default:
+			cerr := ErrNew(ErrMismatch, "interface type mismatched, should be *Sys, *Docker or *Container")
+			return cerr
+		}
 		if err != nil {
 			return err
 		}
 	} else {
-		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist, please use command 'lpmx init' firstly", rootdir))
-		return cerr
-	}
-	return nil
-}
-
-func readDocker(rootdir string, doc *Docker) *Error {
-	info := fmt.Sprintf("%s/.docinfo", rootdir)
-	if FileExist(info) {
-		data, err := ReadFromFile(info)
-		if err != nil {
-			return err
-		}
-		err = StructUnmarshal(data, doc)
-		if err != nil {
-			return err
-		}
-	} else {
-		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.docinfo doesn't exist", rootdir))
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s/.info doesn't exist", rootdir))
 		return cerr
 	}
 	return nil

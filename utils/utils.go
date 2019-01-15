@@ -27,6 +27,7 @@ const (
 	PERM_WRITE_READ
 	PERM_WRITE_EXE
 	PERM_READ_EXE
+	PERM_READ_WRITE_EXE
 
 	TYPE_REGULAR = iota
 	TYPE_DIR
@@ -71,6 +72,32 @@ func FileType(file string) (int8, *Error) {
 	}
 }
 
+func ChangeFilePermssion(file string, perm uint32) (bool, *Error) {
+	err := permbits.Chmod(file, permbits.PermissionBits(perm))
+	if err != nil {
+		cerr := ErrNew(ErrFileStat, fmt.Sprintf("os.chmod %s error: %s", file, err.Error()))
+		return false, cerr
+	}
+	return true, nil
+}
+
+func CheckFilePermission(file string, perm uint32, force bool) (bool, *Error) {
+	permissions, err := permbits.Stat(file)
+	if err != nil {
+		cerr := ErrNew(ErrFileStat, fmt.Sprintf("os.chmod %s error: %s", file, err.Error()))
+		return false, cerr
+	}
+
+	if permissions != permbits.PermissionBits(perm) {
+		if force {
+			return ChangeFilePermssion(file, perm)
+		}
+		return false, nil
+	}
+	return true, nil
+}
+
+//only check user permission
 func FilePermission(file interface{}, permType int8) (bool, *Error) {
 	switch file.(type) {
 	case string:
@@ -92,6 +119,8 @@ func FilePermission(file interface{}, permType int8) (bool, *Error) {
 			return permissions.UserRead() && permissions.UserExecute(), nil
 		case PERM_WRITE_EXE:
 			return permissions.UserWrite() && permissions.UserExecute(), nil
+		case PERM_READ_WRITE_EXE:
+			return permissions.UserRead() && permissions.UserWrite() && permissions.UserExecute(), nil
 		default:
 			cerr := ErrNew(ErrNExist, "permTyoe doesn't exist")
 			return false, cerr
@@ -112,6 +141,8 @@ func FilePermission(file interface{}, permType int8) (bool, *Error) {
 			return permissions.UserRead() && permissions.UserExecute(), nil
 		case PERM_WRITE_EXE:
 			return permissions.UserWrite() && permissions.UserExecute(), nil
+		case PERM_READ_WRITE_EXE:
+			return permissions.UserRead() && permissions.UserWrite() && permissions.UserExecute(), nil
 		default:
 			cerr := ErrNew(ErrNExist, "permTyoe doesn't exist")
 			return false, cerr
