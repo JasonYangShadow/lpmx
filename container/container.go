@@ -1388,10 +1388,7 @@ func (con *Container) bashShell(args ...string) *Error {
 			KillProcessByPid(faked_str[1])
 		}()
 
-		err := ShellEnvPid(con.UserShell, env, con.RootPath, args...)
-		if err != nil {
-			return err
-		}
+		ShellEnvPid(con.UserShell, env, con.RootPath, args...)
 		return nil
 	}
 	cerr := ErrNew(ErrNExist, fmt.Sprintf("can't locate container root folder %s", con.RootPath))
