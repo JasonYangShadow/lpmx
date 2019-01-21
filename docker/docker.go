@@ -10,9 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/heroku/docker-registry-client/registry"
+	. "github.com/docker/distribution/manifest"
+	. "github.com/docker/distribution/manifest/schema1"
+	"github.com/docker/libtrust"
 	. "github.com/jasonyangshadow/lpmx/error"
+	registry "github.com/jasonyangshadow/lpmx/registry"
 	. "github.com/jasonyangshadow/lpmx/utils"
+	digest "github.com/opencontainers/go-digest"
 )
 
 const (
@@ -69,6 +73,81 @@ func GetDigest(username string, pass string, name string, tag string) (string, *
 		return "", cerr
 	}
 	return digest.String(), nil
+}
+
+func UploadManifests(username string, pass string, name string, tag string) *Error {
+	log.SetOutput(ioutil.Discard)
+
+	hub, err := registry.New(DOCKER_URL, username, pass)
+	if err != nil {
+		cerr := ErrNew(err, "create docker registry instance failure")
+		return cerr
+	}
+
+	man := &Manifest{
+		Versioned: Versioned{
+			SchemaVersion: 1,
+		},
+		Tag: tag,
+	}
+	key, err := libtrust.GenerateECP256PrivateKey()
+	if err != nil {
+		cerr := ErrNew(err, "libtrust generates private key error")
+		return cerr
+	}
+
+	signedManifest, err := Sign(man, key)
+	if err != nil {
+		cerr := ErrNew(err, "signing manifest error")
+		return cerr
+	}
+
+	err = hub.PutManifest(name, tag, signedManifest)
+	if err != nil {
+		cerr := ErrNew(err, "putting manifest error")
+		return cerr
+	}
+	return nil
+}
+
+func UploadLayers(username string, pass string, name string, tag string, file string) (string, *Error) {
+	log.SetOutput(ioutil.Discard)
+
+	hub, err := registry.New(DOCKER_URL, username, pass)
+	if err != nil {
+		cerr := ErrNew(err, "create docker registry instance failure")
+		return "", cerr
+	}
+
+	shasum, cerr := Sha256file(file)
+	if cerr != nil {
+		return "", cerr
+	}
+
+	dig := digest.NewDigestFromHex(
+		"sha256",
+		shasum,
+	)
+	exists, err := hub.HasBlob(name, dig)
+	if err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("qury dig from repo %s error", name))
+		return shasum, cerr
+	}
+
+	if !exists {
+		data, err := os.Open(file)
+		if err != nil {
+			cerr := ErrNew(err, fmt.Sprintf("could not open %s for reading", file))
+			return shasum, cerr
+		}
+		defer data.Close()
+		herr := hub.UploadBlob(name, dig, data)
+		if herr != nil {
+			cerr := ErrNew(err, fmt.Sprintf("could not upload %s", file))
+			return shasum, cerr
+		}
+	}
+	return shasum, nil
 }
 
 func DeleteManifest(username string, pass string, name string, tag string) *Error {

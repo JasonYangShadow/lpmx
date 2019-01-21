@@ -188,10 +188,7 @@ func Init() *Error {
 
 			fmt.Println("Uncompressing downloaded memcached.tar.gz")
 			//untar memcache.tar.gz
-			merr := Untar(mempath, currdir)
-			if merr != nil {
-				return merr
-			}
+			Untar(mempath, currdir)
 		}
 
 		if ok, _, _ := GetProcessIdByName("memcached"); !ok {
@@ -261,7 +258,7 @@ func List() *Error {
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := unmarshalObj(rootdir, &sys)
 	if err == nil {
-		fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", "ContainerID", "ContainerName", "Status", "PID", "RPC", "DockerBased", "Image"))
+		fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", "ContainerID", "ContainerName", "Status", "PID", "RPC", "DockerBase", "Image"))
 		for k, v := range sys.Containers {
 			if cmap, ok := v.(map[string]interface{}); ok {
 				//get each container location
@@ -279,16 +276,16 @@ func List() *Error {
 					if err == nil && conn != nil {
 						conn.Close()
 						if pid != -1 {
-							fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "RUNNING", strconv.Itoa(pid), cmap["RPC"].(string), cmap["DockerBased"].(string), cmap["Image"].(string)))
+							fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "RUNNING", strconv.Itoa(pid), cmap["RPC"].(string), cmap["DockerBase"].(string), cmap["Image"].(string)))
 						} else {
-							fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "STOPPED", "NA", cmap["RPC"].(string), cmap["DockerBased"].(string), cmap["Image"].(string)))
+							fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "STOPPED", "NA", cmap["RPC"].(string), cmap["DockerBase"].(string), cmap["Image"].(string)))
 						}
 					}
 				} else {
 					if pid != -1 {
-						fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "RUNNING", strconv.Itoa(pid), "NA", cmap["DockerBased"].(string), cmap["Image"].(string)))
+						fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "RUNNING", strconv.Itoa(pid), "NA", cmap["DockerBase"].(string), cmap["Image"].(string)))
 					} else {
-						fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "STOPPED", "NA", "NA", cmap["DockerBased"].(string), cmap["Image"].(string)))
+						fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "STOPPED", "NA", "NA", cmap["DockerBase"].(string), cmap["Image"].(string)))
 					}
 				}
 			} else {
@@ -736,6 +733,97 @@ func DockerDownload(name string, user string, pass string) *Error {
 		}
 		return nil
 	}
+}
+
+func DockerPush(user string, pass string, name string, tag string, id string) *Error {
+	currdir, _ := GetCurrDir()
+	var sys Sys
+	//first check whether the container is running
+	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	err := unmarshalObj(rootdir, &sys)
+	if err == nil {
+		if v, ok := sys.Containers[id]; ok {
+			if val, vok := v.(map[string]interface{}); vok {
+				config_path := val["ConfigPath"].(string)
+
+				var con Container
+				err = unmarshalObj(config_path, &con)
+				if err != nil {
+					return err
+				}
+				pidfile := fmt.Sprintf("%s/container.pid", path.Dir(con.RootPath))
+
+				if pok, _ := PidIsActive(pidfile); !pok {
+					//parameters are src/target folder, target file name, and layer paths
+					//step 1: tar rw layer
+					layers := strings.Split(con.Layers, ":")
+					layers = layers[1:]
+					layers_full_path := []string{con.RootPath}
+					for _, layer := range layers {
+						layers_full_path = append(layers_full_path, fmt.Sprintf("%s/%s", con.BaseLayerPath, layer))
+					}
+					fmt.Println("taring rw layers...")
+					cerr := TarLayer(con.RootPath, "/tmp", con.Id, layers_full_path)
+					if cerr != nil {
+						return cerr
+					}
+					//step 2: upload this tar ball to docker hub and backup inside lpmx
+					fmt.Println("uploading layers...")
+					shasum, cerr := UploadLayers(user, pass, name, tag, fmt.Sprintf("/tmp/%s.tar.gz", con.Id))
+					if cerr != nil {
+						return cerr
+					}
+					image_dir := fmt.Sprintf("%s/image", filepath.Dir(con.BaseLayerPath))
+					src_tar_path := fmt.Sprintf("/tmp/%s.tar.gz", con.Id)
+					target_tar_path := fmt.Sprintf("%s/%s", image_dir, shasum)
+					err := os.Rename(src_tar_path, target_tar_path)
+					if err != nil {
+						cerr := ErrNew(err, fmt.Sprintf("could not rename(move): %s to %s", src_tar_path, target_tar_path))
+						return cerr
+					}
+
+					err = os.Rename(con.RootPath, fmt.Sprintf("%s/%s", con.BaseLayerPath, shasum))
+					if err != nil {
+						cerr := ErrNew(err, fmt.Sprintf("could not rename(move): %s to %s", con.RootPath, fmt.Sprintf("%s/%s", con.BaseLayerPath, shasum)))
+						return cerr
+					}
+					//step 3: froze rw layer and create new rw layer
+					fmt.Println("cleaning up...")
+					err = os.Mkdir(con.RootPath, os.FileMode(FOLDER_MODE))
+					if err != nil {
+						cerr := ErrNew(err, fmt.Sprintf("could not make new folder: %s", con.RootPath))
+						return cerr
+					}
+					//step 4: modify container info
+					new_layers := []string{"rw", shasum}
+					new_layers = append(new_layers, layers...)
+					con.Layers = strings.Join(new_layers, ":")
+
+					data, _ := StructMarshal(&con)
+					cerr = WriteToFile(data, fmt.Sprintf("%s/.info", con.ConfigPath))
+					if cerr != nil {
+						return cerr
+					}
+					con.ImageBase = fmt.Sprintf("%s:%s", name, tag)
+					con.appendToSys()
+					//done
+				} else {
+					pid, _ := PidValue(pidfile)
+					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner with id: %s is running with pid: %d, can't package layer, please stop it firstly", id, pid))
+					return cerr
+				}
+			}
+		} else {
+			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
+			return cerr
+		}
+		return nil
+	}
+	if err == ErrNExist {
+		err.AddMsg(fmt.Sprintf("%s does not exist, you may need to use 'lpmx init' firstly", rootdir))
+	}
+	return err
+
 }
 
 func DockerList() *Error {
@@ -1546,7 +1634,7 @@ func (con *Container) appendToSys() *Error {
 			cmap["BaseLayerPath"] = con.BaseLayerPath
 			cmap["ContainerName"] = con.ContainerName
 			cmap["RPC"] = strconv.Itoa(con.RPCPort)
-			cmap["DockerBased"] = strconv.FormatBool(con.DockerBase)
+			cmap["DockerBase"] = strconv.FormatBool(con.DockerBase)
 			cmap["Image"] = con.ImageBase
 			sys.Containers[con.Id] = cmap
 		}

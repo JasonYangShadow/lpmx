@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bufio"
 	"compress/gzip"
+	"crypto/sha256"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -387,34 +388,108 @@ func AddConPath(base string, in string) string {
 	return filepath.Join(base, in)
 }
 
-func Tar(src string, writers ...io.Writer) *Error {
-	// ensure the src actually exists before trying to tar it
-	if !FolderExist(src) {
-		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s folder not exist", src))
+//this tar function eliminate symlink
+func TarLayer(src_folder string, target_folder string, target_name string, layers []string) *Error {
+	if !FolderExist(src_folder) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s folder not exist", src_folder))
 		return cerr
 	}
 
-	mw := io.MultiWriter(writers...)
+	target_path := fmt.Sprintf("%s/%s.tar.gz", target_folder, target_name)
+	file, ferr := os.Create(target_path)
+	if ferr != nil {
+		cerr := ErrNew(ferr, fmt.Sprintf("%s creating error", target_path))
+		return cerr
+	}
+	defer file.Close()
+
+	mw := io.Writer(file)
 	gzw := gzip.NewWriter(mw)
 	defer gzw.Close()
 
 	tw := tar.NewWriter(gzw)
 	defer tw.Close()
 
-	err := filepath.Walk(src, func(file string, fi os.FileInfo, err error) error {
+	err := filepath.Walk(src_folder, func(file string, fi os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
+		if file == src_folder {
+			return nil
+		}
+
+		//if symlink
+		mode := fi.Mode()
+		if mode&os.ModeSymlink != 0 {
+			link, err := os.Readlink(file)
+			if err != nil {
+				return err
+			}
+			for _, layer_path := range layers {
+				if strings.HasPrefix(link, layer_path) {
+					//let's create another symlink instead of this real one
+					//step 1 : rename real one
+					//step 2 : create new fake one with the same name
+					//step 3 : remove new fake one and restore old.one
+					err := os.Rename(file, fmt.Sprintf("%s.tar.old", file))
+					if err != nil {
+						return err
+					}
+					relative_path, err := filepath.Rel(link, layer_path)
+					if err != nil {
+						return err
+					}
+					if relative_path == "." {
+						relative_path = "/"
+					} else {
+						relative_path = fmt.Sprintf("/%s", relative_path)
+					}
+
+					err = os.Symlink(relative_path, file)
+					new_fi, err := os.Lstat(file)
+					if err != nil {
+						return err
+					}
+					//new header
+					header, err := tar.FileInfoHeader(new_fi, fi.Name())
+					if err != nil {
+						return err
+					}
+					header.Name = strings.TrimPrefix(file, src_folder)
+					if err := tw.WriteHeader(header); err != nil {
+						return err
+					}
+
+					//remove fake file and restore original one
+					err = os.Remove(file)
+					if err != nil {
+						return err
+					}
+					err = os.Rename(fmt.Sprintf("%s.tar.old", file), file)
+					if err != nil {
+						return err
+					}
+					//done
+					return nil
+				}
+			}
+		}
+
 		header, err := tar.FileInfoHeader(fi, fi.Name())
 		if err != nil {
 			return err
 		}
-		// update the name to correctly reflect the desired destination when untaring
-		header.Name = strings.TrimPrefix(strings.Replace(file, src, "", -1), string(filepath.Separator))
-
+		//modify header's name
+		header.Name = strings.TrimPrefix(file, src_folder)
 		if err := tw.WriteHeader(header); err != nil {
 			return err
 		}
+
+		if !fi.Mode().IsRegular() {
+			//do not need copy
+			return nil
+		}
+
 		f, err := os.Open(file)
 		if err != nil {
 			return err
@@ -430,6 +505,7 @@ func Tar(src string, writers ...io.Writer) *Error {
 		return cerr
 	}
 	return nil
+
 }
 
 func Untar(target string, folder string) *Error {
@@ -637,4 +713,22 @@ func CheckAndStartMemcache() *Error {
 		}
 	}
 	return nil
+}
+
+func Sha256file(file string) (string, *Error) {
+	f, err := os.Open(file)
+	if err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("could not open file %s", file))
+		return "", cerr
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("could not calculate sha256 value of %s", file))
+		return "", cerr
+	}
+
+	value := fmt.Sprintf("%x", h.Sum(nil))
+	return value, nil
 }
