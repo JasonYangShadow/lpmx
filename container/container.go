@@ -769,7 +769,7 @@ func DockerPush(user string, pass string, name string, tag string, id string) *E
 					}
 					//step 2: upload this tar ball to docker hub and backup inside lpmx
 					fmt.Println("uploading layers...")
-					shasum, cerr := UploadLayers(user, pass, name, tag, fmt.Sprintf("/tmp/%s.tar.gz", con.Id))
+					shasum, cerr := UploadLayers(user, pass, name, tag, fmt.Sprintf("/tmp/%s.tar.gz", con.Id), con.ImageBase)
 					if cerr != nil {
 						return cerr
 					}

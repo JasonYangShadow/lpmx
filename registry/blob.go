@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"fmt"
 	"github.com/docker/distribution"
 	digest "github.com/opencontainers/go-digest"
 	"io"
@@ -30,24 +31,24 @@ func (registry *Registry) UploadBlob(repository string, digest digest.Digest, co
 	uploadUrl.RawQuery = q.Encode()
 
 	registry.Logf("registry.blob.upload url=%s repository=%s digest=%s", uploadUrl, repository, digest)
-	resq, err := http.NewRequest("PUT", uploadUrl.String(), content)
+	upload, err := http.NewRequest("PUT", uploadUrl.String(), content)
 	if err != nil {
 		return err
 	}
-	resq.Header.Set("Content-Type", "application/octet-stream")
-	resp, err := registry.Client.Do(resq)
-	if resp != nil {
-		defer resp.Body.Close()
-	}
+	upload.Header.Set("Content-Type", "application/octet-stream")
+
+	fmt.Println(upload)
+	rep, err := registry.Client.Do(upload)
 	if err != nil {
 		return err
 	}
+	fmt.Println(rep)
+	defer rep.Body.Close()
 	return nil
 }
 
 func (registry *Registry) HasBlob(repository string, digest digest.Digest) (bool, error) {
 	checkUrl := registry.url("/v2/%s/blobs/%s", repository, digest)
-	registry.Logf("registry.blob.check url=%s repository=%s digest=%s", checkUrl, repository, digest)
 
 	resp, err := registry.Client.Head(checkUrl)
 	if resp != nil {
@@ -74,7 +75,6 @@ func (registry *Registry) HasBlob(repository string, digest digest.Digest) (bool
 
 func (registry *Registry) BlobMetadata(repository string, digest digest.Digest) (distribution.Descriptor, error) {
 	checkUrl := registry.url("/v2/%s/blobs/%s", repository, digest)
-	registry.Logf("registry.blob.check url=%s repository=%s digest=%s", checkUrl, repository, digest)
 
 	resp, err := registry.Client.Head(checkUrl)
 	if resp != nil {
@@ -92,7 +92,6 @@ func (registry *Registry) BlobMetadata(repository string, digest digest.Digest) 
 
 func (registry *Registry) initiateUpload(repository string) (*url.URL, error) {
 	initiateUrl := registry.url("/v2/%s/blobs/uploads/", repository)
-	registry.Logf("registry.blob.initiate-upload url=%s repository=%s", initiateUrl, repository)
 
 	resp, err := registry.Client.Post(initiateUrl, "application/octet-stream", nil)
 	if resp != nil {

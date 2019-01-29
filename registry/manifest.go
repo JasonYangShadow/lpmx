@@ -112,12 +112,13 @@ func (registry *Registry) PutManifest(repository, reference string, manifest dis
 	}
 
 	buffer := bytes.NewBuffer(payload)
-	req, err := http.NewRequest("PUT", url, buffer)
+	req, err := http.NewRequest("PUT", url, ioutil.NopCloser(buffer))
 	if err != nil {
 		return err
 	}
 
 	req.Header.Set("Content-Type", mediaType)
+	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json")
 	resp, err := registry.Client.Do(req)
 	if resp != nil {
 		defer resp.Body.Close()

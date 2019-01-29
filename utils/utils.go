@@ -732,3 +732,14 @@ func Sha256file(file string) (string, *Error) {
 	value := fmt.Sprintf("%x", h.Sum(nil))
 	return value, nil
 }
+
+func Sha256str(str string) (string, *Error) {
+	h := sha256.New()
+	if _, err := io.WriteString(h, str); err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("could not calculate sha256 value of %s", str))
+		return "", cerr
+	}
+
+	value := fmt.Sprintf("%x", h.Sum(nil))
+	return value, nil
+}
