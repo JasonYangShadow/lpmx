@@ -582,14 +582,13 @@ func Untar(target string, folder string) *Error {
 				os.Symlink(header.Linkname, target)
 			}
 
+			//we should avoid of creating hard link
 		case tar.TypeLink:
-			var real_path string
 			if strings.HasPrefix(header.Linkname, "/") {
-				real_path = fmt.Sprintf("%s%s", strings.TrimSuffix(folder, "/"), header.Linkname)
+				os.Symlink(fmt.Sprintf("%s%s", strings.TrimSuffix(folder, "/"), header.Linkname), target)
 			} else {
-				real_path = fmt.Sprintf("%s%s", folder, header.Linkname)
+				os.Symlink(header.Linkname, target)
 			}
-			os.Link(real_path, target)
 		}
 	}
 }

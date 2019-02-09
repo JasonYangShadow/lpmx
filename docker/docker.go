@@ -130,17 +130,21 @@ func MakeManifestV1(registry *registry.Registry, name, tag, layer_sha, base_imag
 		ThrowAway bool   `json:"throwaway,omitempty"`
 	}
 
+	var oid, oparent, ocreated string
+	json.Unmarshal(*orig_v1["id"], &oid)
+	json.Unmarshal(*orig_v1["parent"], &oparent)
+	json.Unmarshal(*orig_v1["created"], &ocreated)
 	v1 := v1comp{
-		ID:      string(rawJsonToStr(orig_v1["id"])),
-		Parent:  string(rawJsonToStr(orig_v1["parent"])),
-		Created: string(rawJsonToStr(orig_v1["created"])),
+		ID:      oid,
+		Parent:  oparent,
+		Created: ocreated,
 		ContainerConfig: struct {
 			Cmd []string
 		}{
 			Cmd: []string{""},
 		},
 	}
-	v1_json, _ := json.Marshal(v1)
+	v1_json, _ := json.Marshal(&v1)
 	man_base.History[0].V1Compatibility = string(v1_json)
 
 	//create new top layer V1Compatibility
@@ -206,8 +210,6 @@ func MakeManifestV1(registry *registry.Registry, name, tag, layer_sha, base_imag
 	histories = append(histories, man_base.History...)
 	manifest.History = histories
 
-	bytes, _ := json.Marshal(manifest)
-	fmt.Println(string(bytes))
 	//modification ends
 	pk, err := libtrust.GenerateECP256PrivateKey()
 	if err != nil {
