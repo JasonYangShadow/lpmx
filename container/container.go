@@ -1424,8 +1424,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	}
 	if _, priv_switch_ok := con.SettingConf["__priv_switch"]; priv_switch_ok {
 		env["__PRIV_SWITCH"] = "TRUE"
-	} else {
-		env["__PRIV_SWITCH"] = "TRUE"
 	}
 
 	if _, fakechroot_debug_ok := con.SettingConf["fakechroot_debug"]; fakechroot_debug_ok {
@@ -1976,26 +1974,26 @@ func setPrivilege(id string, tp string, name string, value string, server string
 	}
 
 	if allow {
-		if tp == ELFOP[5] {
+		if tp == ELFOP[0] {
 			err := mem.MUpdateStrValue(fmt.Sprintf("allow:%s:%s", id, name), value)
 			if err != nil {
 				return err
 			}
 		}
-		if tp == ELFOP[6] {
+		if tp == ELFOP[1] {
 			err := mem.MDeleteByKey(fmt.Sprintf("allow:%s:%s", id, name))
 			if err != nil {
 				return err
 			}
 		}
 	} else {
-		if tp == ELFOP[7] {
+		if tp == ELFOP[2] {
 			err := mem.MUpdateStrValue(fmt.Sprintf("deny:%s:%s", id, name), value)
 			if err != nil {
 				return err
 			}
 		}
-		if tp == ELFOP[8] {
+		if tp == ELFOP[3] {
 			err := mem.MDeleteByKey(fmt.Sprintf("deny:%s:%s", id, name))
 			if err != nil {
 				return err
@@ -2030,7 +2028,7 @@ func setMap(id string, tp string, name string, value string, server string) *Err
 		return err
 	}
 
-	if tp == ELFOP[9] {
+	if tp == ELFOP[4] {
 		err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", id, name), value)
 		if err != nil {
 			return err

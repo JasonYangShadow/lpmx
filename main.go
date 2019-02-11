@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	. "github.com/jasonyangshadow/lpmx/container"
 	. "github.com/jasonyangshadow/lpmx/log"
@@ -517,7 +518,7 @@ func main() {
 	var setCmd = &cobra.Command{
 		Use:   "set",
 		Short: "set environment variables for container",
-		Long:  "set command is an additional comand of lpmx, which is used for setting environment variables of running containers",
+		Long:  "set command is an advanced comand of lpmx, which is used for setting environment variables of running containers, you should clearly know what you want before using this command, it will reduce the performance heavily",
 		Args:  cobra.ExactArgs(0),
 		PreRun: func(cmd *cobra.Command, args []string) {
 			bcheck := checkCompleteness()
@@ -532,6 +533,12 @@ func main() {
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
+			if !strings.Contains(SetVal, ":") {
+				LOGGER.WithFields(logrus.Fields{
+					"value": SetVal,
+				}).Fatal("the program value you input does not have ':', the format should be 'file1:replace_file1;file2:replace_file2'")
+				return
+			}
 			err := Set(SetId, SetType, SetProg, SetVal)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
@@ -544,11 +551,12 @@ func main() {
 	}
 	setCmd.Flags().StringVarP(&SetId, "id", "i", "", "required(container id, you can get the id by command 'lpmx list')")
 	setCmd.MarkFlagRequired("id")
-	setCmd.Flags().StringVarP(&SetType, "type", "t", "", "required('add_needed', 'remove_needed', 'add_rpath', 'remove_rpath', 'change_user', 'add_allow_priv', 'remove_allow_priv','add_deny_priv','remove_deny_priv','add_map','remove_map')")
+	setCmd.Flags().StringVarP(&SetType, "type", "t", "", "required('add_map','remove_map')")
 	setCmd.MarkFlagRequired("type")
-	setCmd.Flags().StringVarP(&SetProg, "name", "n", "", "required(put 'user' for operation change_user)")
+	setCmd.Flags().StringVarP(&SetProg, "name", "n", "", "required(should be the name of libc 'system calls wrapper')")
 	setCmd.MarkFlagRequired("name")
-	setCmd.Flags().StringVarP(&SetVal, "value", "v", "", "value (optional for removing privilege operation or removing map operation)")
+	setCmd.Flags().StringVarP(&SetVal, "value", "v", "", "required(value(file1:replace_file1;file2:repalce_file2;)) ")
+	setCmd.MarkFlagRequired("value")
 
 	var rootCmd = &cobra.Command{
 		Use:   "lpmx",
