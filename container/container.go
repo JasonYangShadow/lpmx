@@ -227,7 +227,7 @@ func Init() *Error {
 
 	path := os.Getenv("PATH")
 
-	if !strings.Contains(path, currdir) {
+	if !strings.HasSuffix(path, currdir) {
 		path = fmt.Sprintf("%s:%s", path, currdir)
 	}
 
@@ -1287,6 +1287,8 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	for _, v := range LD_LIBRARY_PATH_DEFAULT {
 		libs = append(libs, fmt.Sprintf("%s/%s", con.RootPath, v))
 	}
+
+	env["LD_LIBRARY_PATH"] = fmt.Sprintf("%s/$LD_LIBRARY_PATH", con.RootPath)
 
 	if len(libs) > 0 {
 		env["LD_LIBRARY_LPMX"] = strings.Join(libs, ":")
