@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
 	. "github.com/jasonyangshadow/lpmx/error"
 	. "github.com/jasonyangshadow/lpmx/log"
+	. "github.com/jasonyangshadow/lpmx/pid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -64,6 +66,60 @@ func CommandEnv(cmdStr string, env map[string]string, dir string, arg ...string)
 	} else {
 		return string(out), nil
 	}
+}
+
+func ShellEnvPid(sh string, env map[string]string, dir string, arg ...string) *Error {
+	shpath, err := exec.LookPath(sh)
+	if err != nil {
+		cerr := ErrNew(ErrNil, fmt.Sprintf("shell: %s doesn't exist", sh))
+		return cerr
+	}
+	var args []string
+	if len(arg) > 0 {
+		args = append(args, "-c")
+		for _, ar := range arg {
+			args = append(args, ar)
+		}
+	}
+
+	cmd := exec.Command(shpath, args...)
+	var envstrs []string
+	for key, value := range env {
+		if len(arg) > 0 {
+			if key == "FAKECHROOT_EXCLUDE_PATH" {
+				value = value + ":/home"
+			}
+		}
+		envstr := fmt.Sprintf("%s=%s", key, value)
+		envstrs = append(envstrs, envstr)
+	}
+	cmd.Env = envstrs
+	cmd.Dir = dir
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+
+	LOGGER.WithFields(logrus.Fields{
+		"env": envstrs,
+	}).Debug("shell env debug")
+	err = cmd.Start()
+	if err != nil {
+		cerr := ErrNew(err, "cmd start error")
+		return cerr
+	}
+
+	//starting craeting pid file
+	pid_file := fmt.Sprintf("%s/container.pid", filepath.Dir(dir))
+	cerr := PidCreateByPid(pid_file, cmd.Process.Pid)
+	if cerr != nil {
+		return cerr
+	}
+	err = cmd.Wait()
+	if err != nil {
+		cerr := ErrNew(err, "cmd wait error")
+		return cerr
+	}
+	return nil
 }
 
 func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Error {
