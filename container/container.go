@@ -1288,7 +1288,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		libs = append(libs, fmt.Sprintf("%s/%s", con.RootPath, v))
 	}
 
-	env["LD_LIBRARY_PATH"] = fmt.Sprintf("%s/$LD_LIBRARY_PATH", con.RootPath)
+	env["LD_LIBRARY_PATH"] = fmt.Sprintf("%s:$LD_LIBRARY_PATH", currdir)
 
 	if len(libs) > 0 {
 		env["LD_LIBRARY_LPMX"] = strings.Join(libs, ":")
