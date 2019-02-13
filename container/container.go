@@ -1401,30 +1401,30 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 
 	}
 
-	if _, l_switch_ok := con.SettingConf["__log_switch"]; l_switch_ok {
-		env["__LOG_SWITCH"] = "TRUE"
+	if _, l_switch_ok := con.SettingConf["fakechroot_log_switch"]; l_switch_ok {
+		env["FAKECHROOT_LOG_SWITCH"] = "TRUE"
 	} else {
-		env["__LOG_SWITCH"] = "FALSE"
+		env["FAKECHROOT_LOG_SWITCH"] = "FALSE"
 	}
 
-	if l_level, l_level_ok := con.SettingConf["__log_level"]; l_level_ok {
+	if l_level, l_level_ok := con.SettingConf["fakechroot_log_level"]; l_level_ok {
 		switch l_level {
 		case "DEBUG":
-			env["__LOG_LEVEL"] = "0"
+			env["FAKECHROOT_LOG_LEVEL"] = "0"
 		case "INFO":
-			env["__LOG_LEVEL"] = "1"
+			env["FAKECHROOT_LOG_LEVEL"] = "1"
 		case "WARN":
-			env["__LOG_LEVEL"] = "2"
+			env["FAKECHROOT_LOG_LEVEL"] = "2"
 		case "ERROR":
-			env["__LOG_LEVEL"] = "3"
+			env["FAKECHROOT_LOG_LEVEL"] = "3"
 		case "FATAL":
-			env["__LOG_LEVEL"] = "4"
+			env["FAKECHROOT_LOG_LEVEL"] = "4"
 		default:
-			env["__LOG_LEVEL"] = "3"
+			env["FAKECHROOT_LOG_LEVEL"] = "3"
 		}
 	}
-	if _, priv_switch_ok := con.SettingConf["__priv_switch"]; priv_switch_ok {
-		env["__PRIV_SWITCH"] = "TRUE"
+	if _, priv_switch_ok := con.SettingConf["fakechroot_priv_switch"]; priv_switch_ok {
+		env["FAKECHROOT_PRIV_SWITCH"] = "TRUE"
 	}
 
 	if _, fakechroot_debug_ok := con.SettingConf["fakechroot_debug"]; fakechroot_debug_ok {
