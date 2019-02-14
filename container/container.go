@@ -1287,6 +1287,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 
 	if len(libs) > 0 {
 		env["LD_LIBRARY_LPMX"] = strings.Join(libs, ":")
+		env["LD_LIBRARY_PATH"] = fmt.Sprintf("%s/.lpmxsys", currdir)
 	}
 
 	//set default FAKECHROOT_EXCLUDE_PATH
