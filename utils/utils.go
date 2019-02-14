@@ -705,6 +705,7 @@ func KillProcessByPid(pid string) *Error {
 func CheckAndStartMemcache() *Error {
 	if ok, _, _ := GetProcessIdByName("memcached"); !ok {
 		currdir, _ := GetCurrDir()
+		currdir = fmt.Sprintf("%s/.lpmxsys", currdir)
 		_, cerr := CommandBash(fmt.Sprintf("LD_PRELOAD=%s/libevent.so %s/memcached -s %s/.memcached.pid -a 600 -d", currdir, currdir, currdir))
 		if cerr != nil {
 			cerr.AddMsg(fmt.Sprintf("can not start memcached process from %s", currdir))

@@ -59,7 +59,7 @@ type Container struct {
 	PatchedELFLoader    string
 	SettingConf         map[string]interface{}
 	SettingPath         string
-	SysDir              string //dir of lpmx set by appendToSys function
+	SysDir              string //dir of lpmx set by appendToSys function, the directory containing dependencies
 	StartTime           string
 	ContainerName       string
 	CreateUser          string
@@ -130,10 +130,19 @@ func (server *RPC) RPCDelete(req Request, res *Response) error {
 	return nil
 }
 
-func Init() *Error {
+func Init(reset bool) *Error {
 	currdir, _ := GetCurrDir()
 	var sys Sys
 	config := fmt.Sprintf("%s/.lpmxsys", currdir)
+
+	//delete everything
+	if reset {
+		_, cerr := RemoveAll(config)
+		if cerr != nil {
+			return cerr
+		}
+	}
+
 	sys.RootDir = config
 	sys.BinaryDir = currdir
 	sys.LogPath = fmt.Sprintf("%s/log", sys.RootDir)
@@ -178,51 +187,21 @@ func Init() *Error {
 			release = "default"
 		}
 
-		mempath := fmt.Sprintf("%s/memcached.tar.gz", sys.RootDir)
-		if !FileExist(mempath) {
-			fmt.Println("Downloading memcached.tar.gz from github")
-			err = DownloadFilefromGithub(dist, release, "memcached.tar.gz", SETTING_URL, sys.RootDir)
+		deppath := fmt.Sprintf("%s/dependency.tar.gz", sys.RootDir)
+		if !FileExist(deppath) {
+			fmt.Println("Downloading dependency.tar.gz from github")
+			err = DownloadFilefromGithub(dist, release, "dependency.tar.gz", SETTING_URL, sys.RootDir)
 			if err != nil {
 				return err
 			}
-
-			fmt.Println("Uncompressing downloaded memcached.tar.gz")
-			//untar memcache.tar.gz
-			Untar(mempath, currdir)
 		}
 
-		if ok, _, _ := GetProcessIdByName("memcached"); !ok {
-			fmt.Println("Starting memcached process")
-			_, cerr := CommandBash(fmt.Sprintf("LD_PRELOAD=%s/libevent.so %s/memcached -s %s/.memcached.pid -a 600 -d", currdir, currdir, currdir))
-			if cerr != nil {
-				cerr.AddMsg(fmt.Sprintf("can not start memcached process from %s", currdir))
-				return cerr
-			}
-		}
-
-		//download libfakechroot.so
-		fmt.Printf("Downloading %s:%s libfakechroot.so\n", dist, release)
-		err = DownloadFilefromGithub(dist, release, "libfakechroot.so", SETTING_URL, currdir)
+		fmt.Println("Uncompressing downloaded dependency.tar.gz")
+		err = Untar(deppath, sys.RootDir)
 		if err != nil {
 			return err
 		}
 
-		//download libfakeroot.so
-		fmt.Printf("Downloading %s:%s libfakeroot.so\n", dist, release)
-		err = DownloadFilefromGithub(dist, release, "libfakeroot.so", SETTING_URL, currdir)
-		if err != nil {
-			return err
-		}
-
-		//download faked-sysv
-		fmt.Println("Downloading faked-sysv")
-		err = DownloadFilefromGithub(dist, release, "faked-sysv", SETTING_URL, currdir)
-		if err != nil {
-			return err
-		}
-		if _, err = CheckFilePermission(fmt.Sprintf("%s/faked-sysv", currdir), 0755, true); err != nil {
-			return err
-		}
 	}
 
 	path := os.Getenv("PATH")
@@ -236,17 +215,35 @@ func Init() *Error {
 		path = fmt.Sprintf("%s:%s", exposed_bin, path)
 	}
 
-	err := os.Setenv("PATH", path)
-	if err != nil {
-		cerr := ErrNew(err, "lpmx could not set PATH env")
-		return cerr
-	}
-
 	path_var := fmt.Sprintf("PATH=%s", path)
 	bashrc := fmt.Sprintf("%s/.bashrc", os.Getenv("HOME"))
 	ferr := AddVartoFile(path_var, bashrc)
 	if ferr != nil {
 		return ferr
+	}
+	os.Setenv("PATH", path)
+
+	host_ld_env := os.Getenv("LD_LIBRARY_PATH")
+	if !strings.HasPrefix(host_ld_env, sys.RootDir) {
+		if host_ld_env != "" {
+			host_ld_env = fmt.Sprintf("%s:%s", sys.RootDir, host_ld_env)
+		} else {
+			host_ld_env = sys.RootDir
+		}
+		ld_var := fmt.Sprintf("LD_LIBRARY_PATH=%s", host_ld_env)
+		ferr = AddVartoFile(ld_var, bashrc)
+		if ferr != nil {
+			return ferr
+		}
+		os.Setenv("LD_LIBRARY_PATH", host_ld_env)
+	}
+
+	if ok, _, _ := GetProcessIdByName("memcached"); !ok {
+		fmt.Println("starting memcached process")
+		cerr := CheckAndStartMemcache()
+		if cerr != nil {
+			return cerr
+		}
 	}
 
 	return nil
@@ -1273,7 +1270,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	var libs []string
 	//add libmemcached and other libs
 	currdir, _ := GetCurrDir()
-	libs = append(libs, currdir)
+	libs = append(libs, fmt.Sprintf("%s/.lpmxsys", currdir))
 
 	for _, v := range LD_LIBRARY_PATH_DEFAULT {
 		lib_paths, err := GuessPathsContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), v, false)
@@ -1290,7 +1287,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 
 	if len(libs) > 0 {
 		env["LD_LIBRARY_LPMX"] = strings.Join(libs, ":")
-		env["LD_LIBRARY_PATH"] = strings.Join(libs, ":")
 	}
 
 	//set default FAKECHROOT_EXCLUDE_PATH
@@ -1446,21 +1442,12 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 
 func (con *Container) bashShell(args ...string) *Error {
 	env, err := con.genEnv()
-	LOGGER.WithFields(logrus.Fields{
-		"env": env,
-		"err": err,
-	}).Debug("genEnv debug")
 
 	if err != nil {
 		return err
 	}
 
 	if FolderExist(con.RootPath) {
-		LOGGER.WithFields(logrus.Fields{
-			"con.userShell": con.UserShell,
-			"env":           env,
-			"con.RootPath":  con.RootPath,
-		}).Debug("shell env paramters")
 		//we need to start faked-sysv firstly
 		faked_sysv := fmt.Sprintf("%s/faked-sysv", con.SysDir)
 		foutput, ferr := Command(faked_sysv)
@@ -1475,7 +1462,10 @@ func (con *Container) bashShell(args ...string) *Error {
 			KillProcessByPid(faked_str[1])
 		}()
 
-		ShellEnvPid(con.UserShell, env, con.RootPath, args...)
+		cerr := ShellEnvPid(con.UserShell, env, con.RootPath, args...)
+		if cerr != nil {
+			return cerr
+		}
 		return nil
 	}
 	cerr := ErrNew(ErrNExist, fmt.Sprintf("can't locate container root folder %s", con.RootPath))
@@ -1637,10 +1627,10 @@ func (con *Container) appendToSys() *Error {
 			cmap["Image"] = con.ImageBase
 			sys.Containers[con.Id] = cmap
 		}
-		sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", currdir)
+		sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", sys.RootDir)
 		servers := []string{sys.MemcachedPid}
 		con.MemcachedServerList = servers
-		con.SysDir = sys.BinaryDir
+		con.SysDir = rootdir
 		data, _ := StructMarshal(&sys)
 		err := WriteToFile(data, fmt.Sprintf("%s/.info", sys.RootDir))
 		if err != nil {

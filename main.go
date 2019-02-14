@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -14,7 +15,8 @@ import (
 )
 
 var (
-	checklist = []string{"faked-sysv", "libevent.so", "libfakechroot.so", "libfakeroot.so", "libmemcached.so.11", "libsasl2.so.3", "memcached", ".lpmxsys/.info"}
+	checklist      = []string{"faked-sysv", "libevent", "libfakechroot.so", "libfakeroot.so", "libmemcached", "libsasl2", "memcached", ".info"}
+	bool_checklist = make([]bool, len(checklist))
 )
 
 func checkCompleteness() bool {
@@ -23,10 +25,22 @@ func checkCompleteness() bool {
 		LOGGER.Fatal(err.Error())
 		return false
 	}
-	for _, item := range checklist {
-		item_path := fmt.Sprintf("%s/%s", dir, item)
-		if !FileExist(item_path) {
-			LOGGER.Fatal(fmt.Sprintf("necessary file %s does not exist, you may need to use './lpmx init' to initialize lpmx itself firstly", item_path))
+
+	filepath.Walk(fmt.Sprintf("%s/.lpmxsys", dir), func(path string, info os.FileInfo, err error) error {
+		for idx, item := range checklist {
+			if strings.HasPrefix(info.Name(), item) {
+				if item != ".info" {
+					CheckFilePermission(path, 0755, true)
+				}
+				bool_checklist[idx] = true
+			}
+		}
+		return nil
+	})
+
+	for idx, item := range bool_checklist {
+		if !item {
+			LOGGER.Fatal(fmt.Sprintf("necessary file %s does not exist, you may need to use './lpmx init' to initialize lpmx iteself firstly", checklist[idx]))
 			return false
 		}
 	}
@@ -34,19 +48,21 @@ func checkCompleteness() bool {
 }
 
 func main() {
-
+	var InitReset bool
 	var initCmd = &cobra.Command{
 		Use:   "init",
 		Short: "init the lpmx itself",
 		Long:  "init command is the basic command of lpmx, which is used for initializing lpmx system",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Init()
+			err := Init(InitReset)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 			}
+			checkCompleteness()
 		},
 	}
+	initCmd.Flags().BoolVarP(&InitReset, "reset", "r", false, "initialize by force(optional)")
 
 	var listCmd = &cobra.Command{
 		Use:   "list",
