@@ -35,10 +35,7 @@ If there are any dependencies issues, try to execute 'dep ensure' inside project
 - Directly make a call to container application from host
 ![CallToContainer](figures/CallToContainer.gif)
 - Dynamically manage environment variables to achieve advanced function
-
-For creating containers based on cutomized content:  
-1. lpmx run -c config_file_path -s target_container_root_folder -> creates and starts running container based on configuration file and target folder via terminal. 
-2. lpmx run -c config_file_path -s target_container_root_folder -p -> creates and starts running container in passive mode, which will result in opening rpc port to receive commands and no interaction terminal is triggered. 
+![DynamicPriv](figures/DynamicPriv.gif)
 
 # Related projects
 - [fakechroot](https://github.com/JasonYangShadow/fakechroot)
