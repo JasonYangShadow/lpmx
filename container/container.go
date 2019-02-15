@@ -152,7 +152,8 @@ func Init(reset bool) *Error {
 		WriteToFile(data, fmt.Sprintf("%s/.info", sys.RootDir))
 	}()
 
-	if FolderExist(config) {
+	configfile := fmt.Sprintf("%s/.info", sys.RootDir)
+	if FileExist(configfile) {
 		err := unmarshalObj(sys.RootDir, &sys)
 		if err != nil {
 			return err
