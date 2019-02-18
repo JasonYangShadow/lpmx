@@ -3,6 +3,7 @@ package container
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"net/rpc"
 	"os"
@@ -84,6 +85,13 @@ type Docker struct {
 	Images  map[string]interface{}
 }
 
+//used for offline docker image installation
+type DockerInfo struct {
+	Name        string
+	Layers      map[string]int64
+	LayersOrder string
+}
+
 func (server *RPC) RPCExec(req Request, res *Response) error {
 	var pid int
 	var err *Error
@@ -130,7 +138,7 @@ func (server *RPC) RPCDelete(req Request, res *Response) error {
 	return nil
 }
 
-func Init(reset bool) *Error {
+func Init(reset bool, deppath string) *Error {
 	currdir, _ := GetCurrDir()
 	var sys Sys
 	config := fmt.Sprintf("%s/.lpmxsys", currdir)
@@ -188,7 +196,9 @@ func Init(reset bool) *Error {
 			release = "default"
 		}
 
-		deppath := fmt.Sprintf("%s/dependency.tar.gz", sys.RootDir)
+		if deppath == "" {
+			deppath = fmt.Sprintf("%s/dependency.tar.gz", sys.RootDir)
+		}
 		if !FileExist(deppath) {
 			fmt.Println("Downloading dependency.tar.gz from github")
 			err = DownloadFilefromGithub(dist, release, "dependency.tar.gz", SETTING_URL, sys.RootDir)
@@ -203,6 +213,7 @@ func Init(reset bool) *Error {
 			return err
 		}
 
+		fmt.Println("Permission checking")
 	}
 
 	path := os.Getenv("PATH")
@@ -643,6 +654,191 @@ func DockerSearch(name string) ([]string, *Error) {
 	return tags, err
 }
 
+func DockerPackage(name string, user string, pass string) *Error {
+	currdir, _ := GetCurrDir()
+	packagedir := fmt.Sprintf("%s/package", currdir)
+	if !FolderExist(packagedir) {
+		MakeDir(packagedir)
+	}
+	rootdir := fmt.Sprintf("%s/.docker", currdir)
+	err := DockerDownload(name, user, pass)
+	if err != nil && err.Err != ErrExist {
+		return err
+	}
+
+	var doc Docker
+	err = unmarshalObj(rootdir, &doc)
+	if err != nil {
+		return err
+	}
+	if dvalue, dok := doc.Images[name]; dok {
+		if dmap, dmok := dvalue.(map[string]interface{}); dmok {
+			var filelist []string
+			filelist = append(filelist, dmap["config"].(string))
+			layers := strings.Split(dmap["layer_order"].(string), ":")
+			layer_base := dmap["image"].(string)
+			for _, layer := range layers {
+				layer = path.Base(layer)
+				filelist = append(filelist, fmt.Sprintf("%s/%s", layer_base, layer))
+			}
+			filelist = append(filelist, fmt.Sprintf("%s/.info", dmap["rootdir"].(string)))
+			cerr := TarFiles(filelist, packagedir, name)
+			if cerr != nil {
+				return cerr
+			}
+		} else {
+			cerr := ErrNew(ErrMismatch, "type mismatched")
+			return cerr
+		}
+	} else {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("could not find %s, maybe because downloaded image is removed", name))
+		return cerr
+	}
+	return nil
+}
+
+func DockerAdd(file string) *Error {
+	if !FileExist(file) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does not exist", file))
+		return cerr
+	}
+	currdir, _ := GetCurrDir()
+	rootdir := fmt.Sprintf("%s/.docker", currdir)
+	var doc Docker
+	err := unmarshalObj(rootdir, &doc)
+	if err != nil && err.Err != ErrNExist {
+		return err
+	}
+	if err != nil && err.Err == ErrNExist {
+		ret, err := MakeDir(rootdir)
+		doc.RootDir = rootdir
+		doc.Images = make(map[string]interface{})
+		if !ret {
+			return err
+		}
+	}
+
+	//start untaring offline file
+	//create tmp folder
+	dir, derr := ioutil.TempDir("", "lpmx")
+	if derr != nil {
+		cerr := ErrNew(derr, "could not create temp dir")
+		return cerr
+	}
+
+	//Uncompressing
+	cerr := Untar(file, dir)
+	if cerr != nil {
+		return cerr
+	}
+	//read .info
+	if !FileExist(fmt.Sprintf("%s/.info", dir)) {
+		cerr := ErrNew(ErrNExist, ".info metafile does not exist inside package, maybe the package is not created by 'lpmx docker package' command")
+		return cerr
+	}
+	var docinfo DockerInfo
+	cerr = unmarshalObj(dir, &docinfo)
+	if cerr != nil {
+		return cerr
+	}
+	if _, ok := doc.Images[docinfo.Name]; ok {
+		return nil
+	} else {
+		tdata := strings.Split(docinfo.Name, ":")
+		tname := tdata[0]
+		ttag := tdata[1]
+		mdata := make(map[string]interface{})
+		mdata["rootdir"] = fmt.Sprintf("%s/%s/%s", doc.RootDir, tname, ttag)
+		mdata["config"] = fmt.Sprintf("%s/setting.yml", mdata["rootdir"])
+		mdata["image"] = fmt.Sprintf("%s/image", mdata["rootdir"])
+		image_dir, _ := mdata["image"].(string)
+
+		if !FolderExist(mdata["rootdir"].(string)) {
+			MakeDir(mdata["rootdir"].(string))
+		}
+
+		if !FolderExist(mdata["image"].(string)) {
+			MakeDir(mdata["image"].(string))
+		}
+
+		//move layers
+		layers := strings.Split(docinfo.LayersOrder, ":")
+		for _, lay := range layers {
+			lay_path := fmt.Sprintf("%s/%s", dir, lay)
+			if !FileExist(lay_path) {
+				cerr := ErrNew(ErrNExist, fmt.Sprintf("%s layer does not exist", lay_path))
+				return cerr
+			}
+			lay_new_path := fmt.Sprintf("%s/%s", mdata["image"], lay)
+			err := os.Rename(lay_path, lay_new_path)
+			if err != nil {
+				cerr := ErrNew(err, fmt.Sprintf("could not move file %s to %s", lay_path, lay_new_path))
+				return cerr
+			}
+		}
+
+		//move setting.yml
+		config_path := fmt.Sprintf("%s/setting.yml", dir)
+		if !FileExist(config_path) {
+			cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does not exist", config_path))
+			return cerr
+		}
+		err := os.Rename(config_path, mdata["config"].(string))
+		if err != nil {
+			cerr := ErrNew(err, fmt.Sprintf("could not move file %s to %s", config_path, mdata["config"]))
+			return cerr
+		}
+
+		mdata["layer"] = docinfo.Layers
+		mdata["layer_order"] = docinfo.LayersOrder
+
+		workspace := fmt.Sprintf("%s/workspace", mdata["rootdir"])
+		if !FolderExist(workspace) {
+			MakeDir(workspace)
+		}
+		mdata["workspace"] = workspace
+
+		//extract layers
+		base := fmt.Sprintf("%s/base", mdata["rootdir"])
+		if !FolderExist(base) {
+			MakeDir(base)
+		}
+		mdata["base"] = base
+
+		layer_order := strings.Split(docinfo.LayersOrder, ":")
+		for _, k := range layer_order {
+			tar_path := fmt.Sprintf("%s/%s", image_dir, k)
+			layerfolder := fmt.Sprintf("%s/%s", mdata["base"], k)
+			if !FolderExist(layerfolder) {
+				MakeDir(layerfolder)
+			}
+
+			err := Untar(tar_path, layerfolder)
+			if err != nil {
+				return err
+			}
+		}
+
+		//move .info
+		info_path := fmt.Sprintf("%s/.info", dir)
+		info_new_path := fmt.Sprintf("%s/.info", mdata["rootdir"])
+		err = os.Rename(info_path, info_new_path)
+		if err != nil {
+			cerr := ErrNew(err, fmt.Sprintf("could not move file %s to %s", info_path, info_new_path))
+			return cerr
+		}
+
+		doc.Images[docinfo.Name] = mdata
+
+		ddata, _ := StructMarshal(doc)
+		cerr := WriteToFile(ddata, fmt.Sprintf("%s/.info", doc.RootDir))
+		if cerr != nil {
+			return cerr
+		}
+		return nil
+	}
+}
+
 func DockerDownload(name string, user string, pass string) *Error {
 	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
@@ -682,6 +878,24 @@ func DockerDownload(name string, user string, pass string) *Error {
 		}
 		mdata["layer"] = ret
 		mdata["layer_order"] = strings.Join(layer_order, ":")
+
+		//add docker info file(.info)
+		var docinfo DockerInfo
+		docinfo.Name = name
+		docinfo.Layers = ret
+		// layer_order is absolute path
+		var layer_sha []string
+		for _, layer := range layer_order {
+			layer_sha = append(layer_sha, path.Base(layer))
+		}
+		docinfo.LayersOrder = strings.Join(layer_sha, ":")
+
+		dinfodata, _ := StructMarshal(docinfo)
+		err = WriteToFile(dinfodata, fmt.Sprintf("%s/.info", mdata["rootdir"].(string)))
+		if err != nil {
+			return err
+		}
+		//end
 
 		workspace := fmt.Sprintf("%s/workspace", mdata["rootdir"])
 		if !FolderExist(workspace) {
@@ -1072,9 +1286,38 @@ func DockerCreate(name string, container_name string) *Error {
 
 func DockerDelete(name string) *Error {
 	currdir, _ := GetCurrDir()
-	rootdir := fmt.Sprintf("%s/.docker", currdir)
+	//check if there are containers assocated with current image
+	var sys Sys
+	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	err := unmarshalObj(rootdir, &sys)
+	if err == nil {
+		//range containers
+		for key, value := range sys.Containers {
+			if vval, vok := value.(map[string]interface{}); vok {
+				config_path := vval["ConfigPath"].(string)
+
+				var con Container
+				err = unmarshalObj(config_path, &con)
+				if err != nil {
+					return err
+				}
+
+				if con.ImageBase == name {
+					cerr := ErrNew(ErrOperation, fmt.Sprintf("container: %s still relies on image: %s", key, name))
+					return cerr
+				}
+			} else {
+				cerr := ErrNew(ErrType, "container type is not map[string]interface{}")
+				return cerr
+			}
+		}
+	} else {
+		return err
+	}
+
+	rootdir = fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
-	err := unmarshalObj(rootdir, &doc)
+	err = unmarshalObj(rootdir, &doc)
 	if err == nil {
 		if val, ok := doc.Images[name]; ok {
 			if vval, vok := val.(map[string]interface{}); vok {
@@ -1946,6 +2189,8 @@ func unmarshalObj(rootdir string, inf interface{}) *Error {
 			err = StructUnmarshal(data, inf.(*Container))
 		case *Docker:
 			err = StructUnmarshal(data, inf.(*Docker))
+		case *DockerInfo:
+			err = StructUnmarshal(data, inf.(*DockerInfo))
 		default:
 			cerr := ErrNew(ErrMismatch, "interface type mismatched, should be *Sys, *Docker or *Container")
 			return cerr

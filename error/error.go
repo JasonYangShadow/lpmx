@@ -26,6 +26,7 @@ var (
 	ErrHttpNotFound     = errors.New("http 404 error, not found")
 	ErrZero             = errors.New("size 0 error")
 	ErrPidLive          = errors.New("pid file still lives")
+	ErrOperation        = errors.New("operations can not be done")
 )
 
 type Error struct {

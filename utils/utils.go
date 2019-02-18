@@ -37,6 +37,10 @@ const (
 	TYPE_OTHER
 )
 
+var (
+	memcached_checklist = []string{"memcached", "libevent"}
+)
+
 func FileExist(file string) bool {
 	ftype, err := FileType(file)
 	if err == nil && (ftype == TYPE_REGULAR || ftype == TYPE_OTHER) {
@@ -96,6 +100,37 @@ func CheckFilePermission(file string, perm uint32, force bool) (bool, *Error) {
 		return false, nil
 	}
 	return true, nil
+}
+
+func WalkandCheckFilePermission(folder string, checklist []string, perm uint32, force bool) (bool, *Error) {
+	if !FolderExist(folder) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does not exist", folder))
+		return false, cerr
+	}
+	bool_checklist := make([]bool, len(checklist))
+	filepath.Walk(folder, func(path string, info os.FileInfo, err error) error {
+		for idx, item := range checklist {
+			if strings.HasPrefix(info.Name(), item) {
+				bool_checklist[idx] = true
+				if ret, err := CheckFilePermission(path, perm, force); !ret {
+					if err != nil {
+						return err.Err
+					}
+				}
+				return nil
+			}
+		}
+		return nil
+	})
+
+	for idx, item := range bool_checklist {
+		if !item {
+			cerr := ErrNew(ErrNExist, fmt.Sprintf("necessary file %s does not exist", checklist[idx]))
+			return false, cerr
+		}
+	}
+	return true, nil
+
 }
 
 //only check user permission
@@ -386,6 +421,61 @@ func AddConPath(base string, in string) string {
 		return strings.Replace(in, "$", "", -1)
 	}
 	return filepath.Join(base, in)
+}
+
+func TarFiles(filelist []string, target_folder string, target_name string) *Error {
+	target_path := fmt.Sprintf("%s/%s.tar.gz", target_folder, target_name)
+	file, ferr := os.Create(target_path)
+	if ferr != nil {
+		cerr := ErrNew(ferr, fmt.Sprintf("%s creating error", target_path))
+		return cerr
+	}
+	defer file.Close()
+
+	mw := io.Writer(file)
+	gzw := gzip.NewWriter(mw)
+	defer gzw.Close()
+
+	tw := tar.NewWriter(gzw)
+	defer tw.Close()
+
+	for _, fitem := range filelist {
+		fi, err := os.Stat(fitem)
+		if err != nil {
+			cerr := ErrNew(ErrFileStat, fmt.Sprintf("os.stat %s error: %s", fitem, err.Error()))
+			return cerr
+		}
+
+		header, err := tar.FileInfoHeader(fi, fi.Name())
+		if err != nil {
+			cerr := ErrNew(err, "could not get file header")
+			return cerr
+		}
+		//modify header's name
+		header.Name = filepath.Base(fitem)
+		if err := tw.WriteHeader(header); err != nil {
+			cerr := ErrNew(err, "could not write tar file header")
+			return cerr
+		}
+
+		if !fi.Mode().IsRegular() {
+			cerr := ErrNew(ErrType, fmt.Sprintf("%s is not regular file, only supports regular file compression", fitem))
+			return cerr
+		}
+
+		f, err := os.Open(fitem)
+		if err != nil {
+			cerr := ErrNew(err, fmt.Sprintf("could not open file %s", fitem))
+			return cerr
+		}
+		if _, err := io.Copy(tw, f); err != nil {
+			cerr := ErrNew(err, fmt.Sprintf("could not read file %s", fitem))
+			return cerr
+		}
+		f.Close()
+	}
+
+	return nil
 }
 
 //this tar function eliminate symlink
@@ -702,15 +792,44 @@ func KillProcessByPid(pid string) *Error {
 	return nil
 }
 
+func CheckCompleteness(folder string, checklist []string) *Error {
+	if !FolderExist(folder) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s folder does not exist", folder))
+		return cerr
+	}
+	bool_checklist := make([]bool, len(checklist))
+	filepath.Walk(folder, func(path string, info os.FileInfo, err error) error {
+		for idx, item := range checklist {
+			if strings.HasPrefix(info.Name(), item) {
+				bool_checklist[idx] = true
+			}
+		}
+		return nil
+	})
+
+	for idx, item := range bool_checklist {
+		if !item {
+			cerr := ErrNew(ErrNExist, fmt.Sprintf("necessary file %s does not exist", checklist[idx]))
+			return cerr
+		}
+	}
+	return nil
+}
+
 func CheckAndStartMemcache() *Error {
 	if ok, _, _ := GetProcessIdByName("memcached"); !ok {
 		currdir, _ := GetCurrDir()
 		currdir = fmt.Sprintf("%s/.lpmxsys", currdir)
-		_, cerr := CommandBash(fmt.Sprintf("LD_PRELOAD=%s/libevent.so %s/memcached -s %s/.memcached.pid -a 600 -d", currdir, currdir, currdir))
-		if cerr != nil {
-			cerr.AddMsg(fmt.Sprintf("can not start memcached process from %s", currdir))
-			return cerr
+
+		cerr := CheckCompleteness(currdir, memcached_checklist)
+		if cerr == nil {
+			_, cerr := CommandBash(fmt.Sprintf("LD_PRELOAD=%s/libevent.so %s/memcached -s %s/.memcached.pid -a 600 -d", currdir, currdir, currdir))
+			if cerr != nil {
+				cerr.AddMsg(fmt.Sprintf("can not start memcached process from %s", currdir))
+				return cerr
+			}
 		}
+		return cerr
 	}
 	return nil
 }
