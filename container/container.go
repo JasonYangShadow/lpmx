@@ -37,8 +37,11 @@ var (
 	LD                      = []string{"/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2", "/lib/ld.so", "/lib64/ld-linux-x86-64.so.2", "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.1", "/lib64/ld-linux-x86-64.so.1", "/lib/ld-linux.so.2", "/lib/ld-linux.so.1"}
 	LD_LIBRARY_PATH_DEFAULT = []string{"lib", "lib/x86_64-linux-gnu", "usr/lib/x86_64-linux-gnu", "usr/lib", "usr/local/lib"}
 	FOLDER_MODE             = 0755
+	CACHE_FOLDER            = []string{"/var/cache/apt/archives"}
+	UNSTALL_FOLDER          = []string{".lpmxsys", "sync", "bin", ".docker", "package"}
 )
 
+//located inside $/.lpmxsys/.info
 type Sys struct {
 	RootDir      string // the abs path of folder .lpmxsys
 	BinaryDir    string // the folder cotnainers .lpmxsys and binaries
@@ -47,13 +50,14 @@ type Sys struct {
 	MemcachedPid string
 }
 
+//located inside $/.docker/image/tag/workspace/.lpmx/.info
 type Container struct {
 	Id                  string
 	RootPath            string
 	ConfigPath          string
 	ImageBase           string
 	DockerBase          bool
-	Layers              string
+	Layers              string //e.g, rw:layer1:layer2
 	BaseLayerPath       string
 	LogPath             string
 	ElfPatcherPath      string
@@ -72,6 +76,7 @@ type Container struct {
 	RPCMap              map[int]string
 	PidFile             string
 	Pid                 int
+	DataSyncFolder      string //sync folder with host
 }
 
 type RPC struct {
@@ -80,16 +85,17 @@ type RPC struct {
 	Con *Container
 }
 
+//used for storing all docker images, located inside $/.docker/.info
 type Docker struct {
 	RootDir string
 	Images  map[string]interface{}
 }
 
-//used for offline docker image installation
+//used for offline docker image installation, located inside $/.docker/image/tag/.info
 type DockerInfo struct {
-	Name        string
-	Layers      map[string]int64
-	LayersOrder string
+	Name      string
+	LayersMap map[string]int64 //map containing layers and their sizes
+	Layers    string           //should be original order, used for extraction
 }
 
 func (server *RPC) RPCExec(req Request, res *Response) error {
@@ -257,7 +263,27 @@ func Init(reset bool, deppath string) *Error {
 			return cerr
 		}
 	}
+	sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", sys.RootDir)
 
+	return nil
+}
+
+func Uninstall() *Error {
+	currdir, _ := GetCurrDir()
+	if ok, pid, _ := GetProcessIdByName("memcached"); ok {
+		fmt.Println("stopping memcached instance...")
+		err := KillProcessByPid(pid)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, i := range UNSTALL_FOLDER {
+		_, err := RemoveAll(fmt.Sprintf("%s/%s", currdir, i))
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -397,6 +423,7 @@ func Resume(id string, args ...string) *Error {
 						configmap["baselayerpath"] = con.BaseLayerPath
 						configmap["elf_loader"] = con.PatchedELFLoader
 						configmap["parent_dir"] = filepath.Dir(con.RootPath)
+						configmap["sync_folder"] = con.DataSyncFolder
 					}
 
 					err := Run(&configmap, args...)
@@ -498,6 +525,7 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 			con.Layers = (*configmap)["layers"].(string)
 			con.BaseLayerPath = (*configmap)["baselayerpath"].(string)
 			con.PatchedELFLoader = (*configmap)["elf_loader"].(string)
+			con.DataSyncFolder = (*configmap)["sync_folder"].(string)
 		}
 	} else {
 		con.DockerBase = false
@@ -661,13 +689,8 @@ func DockerPackage(name string, user string, pass string) *Error {
 		MakeDir(packagedir)
 	}
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
-	err := DockerDownload(name, user, pass)
-	if err != nil && err.Err != ErrExist {
-		return err
-	}
-
 	var doc Docker
-	err = unmarshalObj(rootdir, &doc)
+	err := unmarshalObj(rootdir, &doc)
 	if err != nil {
 		return err
 	}
@@ -691,8 +714,10 @@ func DockerPackage(name string, user string, pass string) *Error {
 			return cerr
 		}
 	} else {
-		cerr := ErrNew(ErrNExist, fmt.Sprintf("could not find %s, maybe because downloaded image is removed", name))
-		return cerr
+		cerr := DockerDownload(name, user, pass)
+		if cerr != nil && cerr.Err != ErrExist {
+			return cerr
+		}
 	}
 	return nil
 }
@@ -762,7 +787,7 @@ func DockerAdd(file string) *Error {
 		}
 
 		//move layers
-		layers := strings.Split(docinfo.LayersOrder, ":")
+		layers := strings.Split(docinfo.Layers, ":")
 		for _, lay := range layers {
 			lay_path := fmt.Sprintf("%s/%s", dir, lay)
 			if !FileExist(lay_path) {
@@ -789,8 +814,13 @@ func DockerAdd(file string) *Error {
 			return cerr
 		}
 
-		mdata["layer"] = docinfo.Layers
-		mdata["layer_order"] = docinfo.LayersOrder
+		//here we have to restore absolute path
+		layersmap := make(map[string]int64)
+		for k, v := range docinfo.LayersMap {
+			layersmap[fmt.Sprintf("%s/%s", mdata["image"].(string), k)] = v
+		}
+		mdata["layer"] = layersmap
+		mdata["layer_order"] = docinfo.Layers
 
 		workspace := fmt.Sprintf("%s/workspace", mdata["rootdir"])
 		if !FolderExist(workspace) {
@@ -805,7 +835,7 @@ func DockerAdd(file string) *Error {
 		}
 		mdata["base"] = base
 
-		layer_order := strings.Split(docinfo.LayersOrder, ":")
+		layer_order := strings.Split(docinfo.Layers, ":")
 		for _, k := range layer_order {
 			tar_path := fmt.Sprintf("%s/%s", image_dir, k)
 			layerfolder := fmt.Sprintf("%s/%s", mdata["base"], k)
@@ -839,6 +869,305 @@ func DockerAdd(file string) *Error {
 	}
 }
 
+func DockerCommit(id, newname, newtag string) *Error {
+	currdir, _ := GetCurrDir()
+	var sys Sys
+	//first check whether the container is running
+	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	err := unmarshalObj(rootdir, &sys)
+	if err == nil {
+		if v, ok := sys.Containers[id]; ok {
+			if val, vok := v.(map[string]interface{}); vok {
+				config_path := val["ConfigPath"].(string)
+
+				var con Container
+				err = unmarshalObj(config_path, &con)
+				if err != nil {
+					return err
+				}
+				pidfile := fmt.Sprintf("%s/container.pid", path.Dir(con.RootPath))
+
+				if pok, _ := PidIsActive(pidfile); !pok {
+					//parameters are src/target folder, target file name, and layer paths
+					//check new image already exists?
+					rootdir := fmt.Sprintf("%s/.docker", currdir)
+					var doc Docker
+					err := unmarshalObj(rootdir, &doc)
+					if err != nil {
+						return err
+					}
+					if _, ok := doc.Images[fmt.Sprintf("%s:%s", newname, newtag)]; ok {
+						cerr := ErrNew(ErrExist, fmt.Sprintf("%s:%s already exists, please choose another name and tag", newname, newtag))
+						return cerr
+					}
+
+					//step0: before taring rw layer, remove unecessary folders
+					for _, cache := range CACHE_FOLDER {
+						cache = fmt.Sprintf("%s%s", con.RootPath, cache)
+						if FolderExist(cache) {
+							RemoveAll(cache)
+						}
+					}
+					//moving /etc/group /etc/passwd /proc /tmp folder to temp folder
+					cache_temp_dir, _ := ioutil.TempDir("", "lpmx")
+					if FileExist(fmt.Sprintf("%s/etc/group", con.RootPath)) {
+						cerr := Rename(fmt.Sprintf("%s/etc/group", con.RootPath), fmt.Sprintf("%s/etc/group", cache_temp_dir))
+						if cerr != nil {
+							return cerr
+						}
+					}
+					if FileExist(fmt.Sprintf("%s/etc/passwd", con.RootPath)) {
+						cerr := Rename(fmt.Sprintf("%s/etc/passwd", con.RootPath), fmt.Sprintf("%s/etc/passwd", cache_temp_dir))
+						if cerr != nil {
+							return cerr
+						}
+					}
+					if FolderExist(fmt.Sprintf("%s/proc", con.RootPath)) {
+						cerr := Rename(fmt.Sprintf("%s/proc", con.RootPath), fmt.Sprintf("%s/proc", cache_temp_dir))
+						if cerr != nil {
+							return cerr
+						}
+					}
+					if FolderExist(fmt.Sprintf("%s/tmp", con.RootPath)) {
+						RemoveAll(fmt.Sprintf("%s/tmp", con.RootPath))
+					}
+					if FileExist(fmt.Sprintf("%s/.wh.tmp", con.RootPath)) {
+						RemoveFile(fmt.Sprintf("%s/.wh.tmp", con.RootPath))
+					}
+					//remove data symlink
+					if FolderExist(fmt.Sprintf("%s/lpmx", con.RootPath)) {
+						RemoveAll(fmt.Sprintf("%s/lpmx", con.RootPath))
+					}
+
+					//remove apt cache
+					if FolderExist(fmt.Sprintf("%s/var/lib/apt/lists", con.RootPath)) {
+						RemoveAll(fmt.Sprintf("%s/var/lib/apt/lists", con.RootPath))
+					}
+
+					if FolderExist(fmt.Sprintf("%s/var/lib/dpkg", con.RootPath)) {
+						RemoveAll(fmt.Sprintf("%s/var/lib/dpkg", con.RootPath))
+					}
+
+					//step 1: tar rw layer
+					layers := strings.Split(con.Layers, ":")
+					layers = layers[1:]
+					layers_full_path := []string{con.RootPath}
+					for _, layer := range layers {
+						layers_full_path = append(layers_full_path, fmt.Sprintf("%s/%s", con.BaseLayerPath, layer))
+					}
+					fmt.Println("taring rw layers...")
+					//get temp dir
+					temp_dir, _ := ioutil.TempDir("", "lpmx")
+					cerr := TarLayer(con.RootPath, temp_dir, con.Id, layers_full_path)
+					if cerr != nil {
+						return cerr
+					}
+					//step 2: calculate shasum value and move it to image folder
+					rw_tar_path := fmt.Sprintf("%s/%s.tar.gz", temp_dir, con.Id)
+					shasum, serr := Sha256file(rw_tar_path)
+					if serr != nil {
+						return serr
+					}
+					//image dir is LPMX/.docker/.image
+					//moving layer tarball to image folder
+					fmt.Println("renaming rw layer...")
+					image_dir := fmt.Sprintf("%s/.image", filepath.Dir(con.BaseLayerPath))
+					src_tar_path := rw_tar_path
+					target_tar_path := fmt.Sprintf("%s/%s", image_dir, shasum)
+					rerr := os.Rename(src_tar_path, target_tar_path)
+					if rerr != nil {
+						cerr := ErrNew(rerr, fmt.Sprintf("could not rename(move): %s to %s", src_tar_path, target_tar_path))
+						return cerr
+					}
+
+					//moving rw layer to base folder
+					rerr = os.Rename(con.RootPath, fmt.Sprintf("%s/%s", con.BaseLayerPath, shasum))
+					if rerr != nil {
+						cerr := ErrNew(rerr, fmt.Sprintf("could not rename(move): %s to %s", con.RootPath, fmt.Sprintf("%s/%s", con.BaseLayerPath, shasum)))
+						return cerr
+					}
+
+					//create new symlink
+					new_symlink_path := fmt.Sprintf("%s/%s", filepath.Dir(con.RootPath), shasum)
+					old_symlink_path := fmt.Sprintf("%s/%s", con.BaseLayerPath, shasum)
+					rerr = os.Symlink(old_symlink_path, new_symlink_path)
+					if rerr != nil {
+						cerr := ErrNew(rerr, fmt.Sprintf("could not symlink: %s to %s", old_symlink_path, new_symlink_path))
+						return cerr
+					}
+
+					//moving workspace and copyting setting.yml to new place
+					docker_path := filepath.Dir(con.BaseLayerPath)
+					new_workspace_path := fmt.Sprintf("%s/%s/%s/workspace", docker_path, newname, newtag)
+					if !FolderExist(new_workspace_path) {
+						derr := os.MkdirAll(new_workspace_path, os.FileMode(FOLDER_MODE))
+						if derr != nil {
+							cerr := ErrNew(derr, fmt.Sprintf("could not make dir %s", new_workspace_path))
+							return cerr
+						}
+					}
+
+					old_workspace_path := filepath.Dir(con.ConfigPath)
+					rerr = os.Rename(old_workspace_path, fmt.Sprintf("%s/%s", new_workspace_path, id))
+					if rerr != nil {
+						cerr := ErrNew(rerr, fmt.Sprintf("could not rename(move): %s to %s", old_workspace_path, fmt.Sprintf("%s/%s", new_workspace_path, id)))
+						return cerr
+					}
+					//copy setting.yml rather than rename
+					new_setting_path := fmt.Sprintf("%s/setting.yml", filepath.Dir(new_workspace_path))
+					_, cerr = CopyFile(con.SettingPath, new_setting_path)
+					if cerr != nil {
+						return cerr
+					}
+					con.RootPath = fmt.Sprintf("%s/%s/rw", new_workspace_path, id)
+					con.SettingPath = new_setting_path
+					con.ConfigPath = fmt.Sprintf("%s/%s/.lpmx", new_workspace_path, id)
+					con.LogPath = fmt.Sprintf("%s/log", con.ConfigPath)
+					con.PatchedELFLoader = fmt.Sprintf("%s/%s/ld.so.patch", new_workspace_path, id)
+
+					//step 3: froze rw layer and create new rw layer
+					fmt.Println("cleaning up...")
+					derr := os.Mkdir(con.RootPath, os.FileMode(FOLDER_MODE))
+					if derr != nil {
+						cerr := ErrNew(derr, fmt.Sprintf("could not make new folder: %s", con.RootPath))
+						return cerr
+					}
+					derr = os.Symlink(con.DataSyncFolder, fmt.Sprintf("%s/lpmx", con.RootPath))
+					if derr != nil {
+						cerr := ErrNew(derr, fmt.Sprintf("could not symlink, oldpath: %s, newpath: %s", con.DataSyncFolder, fmt.Sprintf("%s/lpmx", con.RootPath)))
+						return cerr
+					}
+					//moving folders back to new rw folder
+					if FileExist(fmt.Sprintf("%s/etc/group", cache_temp_dir)) {
+						cerr := Rename(fmt.Sprintf("%s/etc/group", cache_temp_dir), fmt.Sprintf("%s/etc/group", con.RootPath))
+						if cerr != nil {
+							return cerr
+						}
+					}
+					if FileExist(fmt.Sprintf("%s/etc/passwd", cache_temp_dir)) {
+						cerr := Rename(fmt.Sprintf("%s/etc/passwd", cache_temp_dir), fmt.Sprintf("%s/etc/passwd", con.RootPath))
+						if cerr != nil {
+							return cerr
+						}
+					}
+					//create rw/proc/self/cwd to fake cwd
+					proc_self_path := fmt.Sprintf("%s/proc/self", con.RootPath)
+					os.MkdirAll(proc_self_path, os.FileMode(FOLDER_MODE))
+					os.Symlink("/", fmt.Sprintf("%s/cwd", proc_self_path))
+					os.Symlink("/", fmt.Sprintf("%s/exe", proc_self_path))
+					//create new tmp
+					os.MkdirAll(fmt.Sprintf("%s/tmp", con.RootPath), os.FileMode(FOLDER_MODE))
+					f, _ := os.Create(fmt.Sprintf("%s/.wh.tmp", con.RootPath))
+					f.Close()
+
+					//step 4: modify container info
+					new_layers := []string{"rw", shasum}
+					new_layers = append(new_layers, strings.Split(con.Layers, ":")[1:]...)
+					con.Layers = strings.Join(new_layers, ":")
+
+					data, _ := StructMarshal(&con)
+					LOGGER.WithFields(logrus.Fields{
+						"con": con,
+					}).Debug("DockerCommit update container info")
+					cerr = WriteToFile(data, fmt.Sprintf("%s/.info", con.ConfigPath))
+					if cerr != nil {
+						return cerr
+					}
+					old_imagebase := con.ImageBase
+					con.ImageBase = fmt.Sprintf("%s:%s", newname, newtag)
+					//update $/.lpmxsys/.info
+					con.appendToSys()
+					//end of updating container info
+
+					//located inside $/.docker
+					//start updating image info
+					fmt.Println("updating image info...")
+					mdata := make(map[string]interface{})
+					mdata["rootdir"] = fmt.Sprintf("%s/%s/%s", docker_path, newname, newtag)
+					mdata["config"] = con.SettingPath
+					mdata["image"] = fmt.Sprintf("%s/.image", docker_path)
+					//get old layer map
+					image_map := doc.Images[old_imagebase]
+					if image_map != nil {
+						if map_interface, map_ok := image_map.(map[string]interface{}); map_ok {
+							if old_map, old_ok := (map_interface["layer"]).(map[string]interface{}); old_ok {
+								size, serr := GetFileSize(target_tar_path)
+								if serr != nil {
+									return serr
+								}
+								old_map[fmt.Sprintf("%s/%s", mdata["image"].(string), shasum)] = size
+								mdata["layer"] = old_map
+								mdata["layer_order"] = fmt.Sprintf("%s:%s", map_interface["layer_order"].(string), fmt.Sprintf("%s/%s", mdata["image"].(string), shasum))
+							} else {
+								cerr := ErrNew(ErrType, fmt.Sprintf("doc.Image.Layer type is not right, actual: %T, want: map[string]interface{}", map_interface))
+								return cerr
+							}
+						} else {
+							cerr := ErrNew(ErrType, fmt.Sprintf("doc.Image type is not right, actual: %T, want: map[string]interface{}", image_map))
+							return cerr
+						}
+					}
+					mdata["workspace"] = fmt.Sprintf("%s/workspace", mdata["rootdir"])
+					mdata["base"] = fmt.Sprintf("%s/.base", docker_path)
+
+					doc.Images[fmt.Sprintf("%s:%s", newname, newtag)] = mdata
+					mddata, _ := StructMarshal(doc)
+					LOGGER.WithFields(logrus.Fields{
+						"doc": doc,
+					}).Debug("DockerCommit, update image info")
+					cerr = WriteToFile(mddata, fmt.Sprintf("%s/.info", doc.RootDir))
+					if cerr != nil {
+						return cerr
+					}
+
+					//start adding docinfo
+					var docinfo DockerInfo
+					docinfo.Name = fmt.Sprintf("%s:%s", newname, newtag)
+					// layer_order is absolute path
+					docinfo.LayersMap = make(map[string]int64)
+					if mdata["layer"] != nil {
+						layerinfo := mdata["layer"].(map[string]interface{})
+						for key, value := range layerinfo {
+							docinfo.LayersMap[path.Base(key)] = value.(int64)
+						}
+					}
+					//here we remove the absolute path, only keep shasum value
+					layersorder := strings.Split(mdata["layer_order"].(string), ":")
+					for idx, l := range layersorder {
+						layersorder[idx] = path.Base(l)
+					}
+					docinfo.Layers = strings.Join(layersorder, ":")
+
+					LOGGER.WithFields(logrus.Fields{
+						"docinfo": docinfo,
+					}).Debug("DockerCommit, update docinfo info")
+					dinfodata, _ := StructMarshal(docinfo)
+					err = WriteToFile(dinfodata, fmt.Sprintf("%s/.info", mdata["rootdir"].(string)))
+					if err != nil {
+						return err
+					}
+					//end
+
+					return nil
+					//done
+				} else {
+					pid, _ := PidValue(pidfile)
+					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner with id: %s is running with pid: %d, can't package layer, please stop it firstly", id, pid))
+					return cerr
+				}
+			}
+		} else {
+			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
+			return cerr
+		}
+		return nil
+	}
+	if err == ErrNExist {
+		err.AddMsg(fmt.Sprintf("%s does not exist", rootdir))
+	}
+	return err
+}
+
 func DockerDownload(name string, user string, pass string) *Error {
 	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
@@ -862,13 +1191,14 @@ func DockerDownload(name string, user string, pass string) *Error {
 		cerr := ErrNew(ErrExist, fmt.Sprintf("%s already exists", name))
 		return cerr
 	} else {
+		//downloading image from github
 		tdata := strings.Split(name, ":")
 		tname := tdata[0]
 		ttag := tdata[1]
 		mdata := make(map[string]interface{})
 		mdata["rootdir"] = fmt.Sprintf("%s/%s/%s", doc.RootDir, tname, ttag)
-		mdata["config"] = fmt.Sprintf("%s/setting.yml", mdata["rootdir"])
-		mdata["image"] = fmt.Sprintf("%s/image", mdata["rootdir"])
+		mdata["config"] = fmt.Sprintf("%s/setting.yml", mdata["rootdir"].(string))
+		mdata["image"] = fmt.Sprintf("%s/.image", rootdir)
 		image_dir, _ := mdata["image"].(string)
 
 		//download layers
@@ -880,15 +1210,32 @@ func DockerDownload(name string, user string, pass string) *Error {
 		mdata["layer_order"] = strings.Join(layer_order, ":")
 
 		//add docker info file(.info)
+		if !FolderExist(mdata["rootdir"].(string)) {
+			merr := os.MkdirAll(mdata["rootdir"].(string), os.FileMode(FOLDER_MODE))
+			if merr != nil {
+				cerr := ErrNew(merr, fmt.Sprintf("could not mkdir %s", mdata["rootdir"].(string)))
+				return cerr
+			}
+		}
 		var docinfo DockerInfo
 		docinfo.Name = name
-		docinfo.Layers = ret
 		// layer_order is absolute path
+		//docinfo layers map should remove absolute path of host
+		layersmap := make(map[string]int64)
+		for k, v := range ret {
+			layersmap[path.Base(k)] = v
+		}
+		docinfo.LayersMap = layersmap
+
 		var layer_sha []string
 		for _, layer := range layer_order {
 			layer_sha = append(layer_sha, path.Base(layer))
 		}
-		docinfo.LayersOrder = strings.Join(layer_sha, ":")
+		docinfo.Layers = strings.Join(layer_sha, ":")
+
+		LOGGER.WithFields(logrus.Fields{
+			"docinfo": docinfo,
+		}).Debug("DockerDownload debug, docinfo debug")
 
 		dinfodata, _ := StructMarshal(docinfo)
 		err = WriteToFile(dinfodata, fmt.Sprintf("%s/.info", mdata["rootdir"].(string)))
@@ -904,7 +1251,7 @@ func DockerDownload(name string, user string, pass string) *Error {
 		mdata["workspace"] = workspace
 
 		//extract layers
-		base := fmt.Sprintf("%s/base", mdata["rootdir"])
+		base := fmt.Sprintf("%s/.base", rootdir)
 		if !FolderExist(base) {
 			MakeDir(base)
 		}
@@ -1035,7 +1382,6 @@ func DockerPush(user string, pass string, name string, tag string, id string) *E
 		err.AddMsg(fmt.Sprintf("%s does not exist, you may need to use 'lpmx init' firstly", rootdir))
 	}
 	return err
-
 }
 
 func DockerList() *Error {
@@ -1105,6 +1451,7 @@ func DockerCreate(name string, container_name string) *Error {
 	if err == nil {
 		if val, ok := doc.Images[name]; ok {
 			if vval, vok := val.(map[string]interface{}); vok {
+				//base is LPMX/.docker/.base
 				base, _ := vval["base"].(string)
 				workspace, _ := vval["workspace"].(string)
 				config, _ := vval["config"].(string)
@@ -1157,6 +1504,20 @@ func DockerCreate(name string, container_name string) *Error {
 				configmap["layers"] = strings.Join(reverse_keys, ":")
 				configmap["baselayerpath"] = base
 				configmap["container_name"] = container_name
+				configmap["sync_folder"] = fmt.Sprintf("%s/sync/%s", currdir, id)
+				if !FolderExist(configmap["sync_folder"].(string)) {
+					oerr := os.MkdirAll(configmap["sync_folder"].(string), os.FileMode(FOLDER_MODE))
+					if oerr != nil {
+						cerr := ErrNew(oerr, fmt.Sprintf("could not mkdir %s", configmap["sync_folder"].(string)))
+						return cerr
+					}
+				}
+				//create symlink inside rw folder to host
+				serr := os.Symlink(configmap["sync_folder"].(string), fmt.Sprintf("%s/lpmx", configmap["dir"].(string)))
+				if serr != nil {
+					cerr := ErrNew(serr, fmt.Sprintf("could not symlink, oldpath: %s, newpath: %s", configmap["sync_folder"].(string), fmt.Sprintf("%s/lpmx", configmap["dir"].(string))))
+					return cerr
+				}
 
 				//patch ld.so
 				ld_new_path := fmt.Sprintf("%s/ld.so.patch", rootfolder)
@@ -1537,6 +1898,9 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	//set default FAKECHROOT_EXCLUDE_PATH
 	env["FAKECHROOT_EXCLUDE_PATH"] = "/dev:/proc:/sys"
 
+	//set data sync folder
+	env["FAKECHROOT_DATA_SYNC"] = con.DataSyncFolder
+
 	//set default FAKECHROOT_CMD_SUBSET
 	env["FAKECHROOT_CMD_SUBST"] = "/sbin/ldconfig.real=/bin/true:/sbin/insserv=/bin/true:/sbin/ldconfig=/bin/true:/usr/bin/ischroot=/bin/true:/usr/bin/mkfifo=/bin/true"
 
@@ -1859,7 +2223,8 @@ func (con *Container) appendToSys() *Error {
 	err := unmarshalObj(rootdir, &sys)
 
 	if err == nil {
-		if _, ok := sys.Containers[con.Id]; !ok {
+		//update or add
+		if value, ok := sys.Containers[con.Id]; !ok {
 			cmap := make(map[string]string)
 			cmap["RootPath"] = con.RootPath
 			cmap["SettingPath"] = con.SettingPath
@@ -1871,6 +2236,17 @@ func (con *Container) appendToSys() *Error {
 			cmap["DockerBase"] = strconv.FormatBool(con.DockerBase)
 			cmap["Image"] = con.ImageBase
 			sys.Containers[con.Id] = cmap
+		} else {
+			vvalue, vok := value.(map[string]interface{})
+			if !vok {
+				cerr := ErrNew(ErrType, fmt.Sprintf("appendToSys container type mismatch, actual: %T, should be map[string]string", value))
+				return cerr
+			}
+			vvalue["RootPath"] = con.RootPath
+			vvalue["SettingPath"] = con.SettingPath
+			vvalue["ConfigPath"] = con.ConfigPath
+			vvalue["Image"] = con.ImageBase
+			sys.Containers[con.Id] = vvalue
 		}
 		sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", sys.RootDir)
 		servers := []string{sys.MemcachedPid}

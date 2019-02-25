@@ -34,16 +34,18 @@ const (
 	TYPE_DIR
 	TYPE_SYMLINK
 	TYPE_PIPE
+	TYPE_SOCKET
 	TYPE_OTHER
 )
 
 var (
 	memcached_checklist = []string{"memcached", "libevent"}
+	time_sleep          = 2
 )
 
 func FileExist(file string) bool {
 	ftype, err := FileType(file)
-	if err == nil && (ftype == TYPE_REGULAR || ftype == TYPE_OTHER) {
+	if err == nil && (ftype == TYPE_REGULAR || ftype == TYPE_SOCKET || ftype == TYPE_OTHER || ftype == TYPE_SYMLINK) {
 		return true
 	}
 	return false
@@ -63,6 +65,7 @@ func FileType(file string) (int8, *Error) {
 		cerr := ErrNew(ErrFileStat, fmt.Sprintf("os.stat %s error: %s", file, err.Error()))
 		return -1, cerr
 	}
+
 	switch mode := fi.Mode(); {
 	case mode.IsRegular():
 		return TYPE_REGULAR, nil
@@ -72,6 +75,8 @@ func FileType(file string) (int8, *Error) {
 		return TYPE_SYMLINK, nil
 	case mode&os.ModeNamedPipe != 0:
 		return TYPE_PIPE, nil
+	case mode&os.ModeSocket != 0:
+		return TYPE_SOCKET, nil
 	default:
 		return TYPE_OTHER, nil
 	}
@@ -210,6 +215,23 @@ func GetFilePermission(file interface{}) (uint32, *Error) {
 	}
 }
 
+func GetFileSize(file interface{}) (int64, *Error) {
+	switch file.(type) {
+	case string:
+		fi, err := os.Stat(file.(string))
+		if err != nil {
+			cerr := ErrNew(ErrFileStat, fmt.Sprintf("os.stat %s error: %s", file, err.Error()))
+			return 1, cerr
+		}
+		return fi.Size(), nil
+	case os.FileInfo:
+		return file.(os.FileInfo).Size(), nil
+	default:
+		cerr := ErrNew(ErrMismatch, "file type is not in (string, os.FileInfo)")
+		return 1, cerr
+	}
+}
+
 func MakeDir(dir string) (bool, *Error) {
 	err := os.MkdirAll(dir, 0777)
 	if err == nil {
@@ -235,6 +257,37 @@ func RemoveFile(path string) (bool, *Error) {
 	}
 	cerr := ErrNew(err, fmt.Sprintf("removing %s file error", path))
 	return false, cerr
+}
+
+func Rename(old_path string, new_path string) *Error {
+	if t, terr := FileType(old_path); terr == nil {
+		if t == TYPE_DIR {
+			parent_dir := filepath.Dir(new_path)
+			if !FolderExist(parent_dir) {
+				err := os.MkdirAll(parent_dir, 0777)
+				if err != nil {
+					cerr := ErrNew(err, fmt.Sprintf("could not mkdir %s", parent_dir))
+					return cerr
+				}
+			}
+		}
+		if t == TYPE_REGULAR {
+			parent_dir := filepath.Dir(new_path)
+			if !FolderExist(parent_dir) {
+				err := os.MkdirAll(parent_dir, 0777)
+				if err != nil {
+					cerr := ErrNew(err, fmt.Sprintf("could not mkdir %s", parent_dir))
+					return cerr
+				}
+			}
+		}
+	}
+	err := os.Rename(old_path, new_path)
+	if err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("could not rename from: %s, to: %s", old_path, new_path))
+		return cerr
+	}
+	return nil
 }
 
 func ReadFromFile(dir string) ([]byte, *Error) {
@@ -826,6 +879,13 @@ func CheckAndStartMemcache() *Error {
 			_, cerr := CommandBash(fmt.Sprintf("LD_PRELOAD=%s/libevent.so %s/memcached -s %s/.memcached.pid -a 600 -d", currdir, currdir, currdir))
 			if cerr != nil {
 				cerr.AddMsg(fmt.Sprintf("can not start memcached process from %s", currdir))
+				return cerr
+			}
+			memcached_pid_path := fmt.Sprintf("%s/.memcached.pid", currdir)
+			//delay several seconds to detect .memcached.pid exists
+			time.Sleep(time.Duration(time_sleep) * time.Second)
+			if !FileExist(memcached_pid_path) {
+				cerr = ErrNew(ErrNExist, fmt.Sprintf("could not find pid file: %s, memcached starts failure", memcached_pid_path))
 				return cerr
 			}
 		}

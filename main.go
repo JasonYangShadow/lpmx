@@ -18,6 +18,10 @@ var (
 	checklist = []string{"faked-sysv", "libfakechroot.so", "libfakeroot.so", "libmemcached"}
 )
 
+const (
+	VERSION = "alpha-0.3"
+)
+
 func checkCompleteness() *Error {
 	dir, err := GetCurrDir()
 	if err != nil {
@@ -368,6 +372,39 @@ func main() {
 	dockerPackageCmd.Flags().StringVarP(&DockerPackageUser, "user", "u", "", "optional")
 	dockerPackageCmd.Flags().StringVarP(&DockerPackagePass, "pass", "p", "", "optional")
 
+	var DockerCommitId string
+	var DockerCommitName string
+	var DockerCommitTag string
+	var dockerCommitCmd = &cobra.Command{
+		Use:   "commit",
+		Short: "commit docker container",
+		Long:  "docker commit sub-command is the advanced command of lpmx, which is used for committing container to new image",
+		Args:  cobra.ExactArgs(0),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := checkCompleteness()
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			err := DockerCommit(DockerCommitId, DockerCommitName, DockerCommitTag)
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			} else {
+				LOGGER.Info("DONE")
+				return
+			}
+		},
+	}
+	dockerCommitCmd.Flags().StringVarP(&DockerCommitId, "id", "i", "", "required")
+	dockerCommitCmd.MarkFlagRequired("id")
+	dockerCommitCmd.Flags().StringVarP(&DockerCommitName, "name", "n", "", "required")
+	dockerCommitCmd.MarkFlagRequired("name")
+	dockerCommitCmd.Flags().StringVarP(&DockerCommitTag, "tag", "t", "", "required")
+	dockerCommitCmd.MarkFlagRequired("tag")
+
 	var DockerCreateName string
 	var dockerCreateCmd = &cobra.Command{
 		Use:   "create",
@@ -534,7 +571,7 @@ func main() {
 		Short: "docker command",
 		Long:  "docker command is the advanced comand of lpmx, which is used for executing docker related commands",
 	}
-	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd, dockerPackageCmd, dockerAddCmd)
+	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd, dockerPackageCmd, dockerAddCmd, dockerCommitCmd)
 
 	var ExposeId string
 	var ExposeName string
@@ -673,10 +710,34 @@ func main() {
 	setCmd.Flags().StringVarP(&SetVal, "value", "v", "", "required(value(file1:replace_file1;file2:repalce_file2;)) ")
 	setCmd.MarkFlagRequired("value")
 
+	var uninstallCmd = &cobra.Command{
+		Use:   "uninstall",
+		Short: "uninstall lpmx completely",
+		Long:  "entirely uninstall everything of lpmx",
+		Args:  cobra.ExactArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			err := Uninstall()
+			if err != nil {
+				LOGGER.Error(err.Error())
+				return
+			}
+		},
+	}
+
+	var versionCmd = &cobra.Command{
+		Use:   "version",
+		Short: "show the version of LPMX",
+		Long:  "LPMX version",
+		Args:  cobra.ExactArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			LOGGER.Info(fmt.Sprintf("LPMX Version: %s", VERSION))
+		},
+	}
+
 	var rootCmd = &cobra.Command{
 		Use:   "lpmx",
 		Short: "lpmx rootless container",
 	}
-	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, runCmd, setCmd, resumeCmd, rpcCmd, getCmd, dockerCmd, exposeCmd)
+	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, setCmd, resumeCmd, getCmd, dockerCmd, exposeCmd, uninstallCmd, versionCmd)
 	rootCmd.Execute()
 }
