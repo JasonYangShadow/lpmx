@@ -814,7 +814,12 @@ func DockerAdd(file string) *Error {
 			return cerr
 		}
 
-		mdata["layer"] = docinfo.LayersMap
+		//here we have to restore absolute path
+		layersmap := make(map[string]int64)
+		for k, v := range docinfo.LayersMap {
+			layersmap[fmt.Sprintf("%s/%s", mdata["image"].(string), k)] = v
+		}
+		mdata["layer"] = layersmap
 		mdata["layer_order"] = docinfo.Layers
 
 		workspace := fmt.Sprintf("%s/workspace", mdata["rootdir"])
@@ -1123,10 +1128,15 @@ func DockerCommit(id, newname, newtag string) *Error {
 					if mdata["layer"] != nil {
 						layerinfo := mdata["layer"].(map[string]interface{})
 						for key, value := range layerinfo {
-							docinfo.LayersMap[key] = value.(int64)
+							docinfo.LayersMap[path.Base(key)] = value.(int64)
 						}
 					}
-					docinfo.Layers = mdata["layer_order"].(string)
+					//here we remove the absolute path, only keep shasum value
+					layersorder := strings.Split(mdata["layer_order"].(string), ":")
+					for idx, l := range layersorder {
+						layersorder[idx] = path.Base(l)
+					}
+					docinfo.Layers = strings.Join(layersorder, ":")
 
 					LOGGER.WithFields(logrus.Fields{
 						"docinfo": docinfo,
@@ -1210,7 +1220,13 @@ func DockerDownload(name string, user string, pass string) *Error {
 		var docinfo DockerInfo
 		docinfo.Name = name
 		// layer_order is absolute path
-		docinfo.LayersMap = ret
+		//docinfo layers map should remove absolute path of host
+		layersmap := make(map[string]int64)
+		for k, v := range ret {
+			layersmap[path.Base(k)] = v
+		}
+		docinfo.LayersMap = layersmap
+
 		var layer_sha []string
 		for _, layer := range layer_order {
 			layer_sha = append(layer_sha, path.Base(layer))
