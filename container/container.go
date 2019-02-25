@@ -930,8 +930,17 @@ func DockerCommit(id, newname, newtag string) *Error {
 						RemoveFile(fmt.Sprintf("%s/.wh.tmp", con.RootPath))
 					}
 					//remove data symlink
-					if FileExist(fmt.Sprintf("%s/lpmx", con.RootPath)) {
-						RemoveFile(fmt.Sprintf("%s/lpmx", con.RootPath))
+					if FolderExist(fmt.Sprintf("%s/lpmx", con.RootPath)) {
+						RemoveAll(fmt.Sprintf("%s/lpmx", con.RootPath))
+					}
+
+					//remove apt cache
+					if FolderExist(fmt.Sprintf("%s/var/lib/apt/lists", con.RootPath)) {
+						RemoveAll(fmt.Sprintf("%s/var/lib/apt/lists", con.RootPath))
+					}
+
+					if FolderExist(fmt.Sprintf("%s/var/lib/dpkg", con.RootPath)) {
+						RemoveAll(fmt.Sprintf("%s/var/lib/dpkg", con.RootPath))
 					}
 
 					//step 1: tar rw layer
