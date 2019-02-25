@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/jasonyangshadow/lpmx/error"
-	. "github.com/jasonyangshadow/lpmx/log"
-	. "github.com/jasonyangshadow/lpmx/pid"
+	. "github.com/JasonYangShadow/lpmx/error"
+	. "github.com/JasonYangShadow/lpmx/log"
+	. "github.com/JasonYangShadow/lpmx/pid"
 	"github.com/sirupsen/logrus"
 )
 

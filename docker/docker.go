@@ -14,12 +14,12 @@ import (
 	"strings"
 	"time"
 
+	. "github.com/JasonYangShadow/lpmx/error"
+	registry "github.com/JasonYangShadow/lpmx/registry"
+	. "github.com/JasonYangShadow/lpmx/utils"
 	. "github.com/docker/distribution/manifest"
 	"github.com/docker/distribution/manifest/schema1"
 	"github.com/docker/libtrust"
-	. "github.com/jasonyangshadow/lpmx/error"
-	registry "github.com/jasonyangshadow/lpmx/registry"
-	. "github.com/jasonyangshadow/lpmx/utils"
 	digest "github.com/opencontainers/go-digest"
 )
 

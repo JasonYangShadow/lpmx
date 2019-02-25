@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	. "github.com/jasonyangshadow/lpmx/error"
-	. "github.com/jasonyangshadow/lpmx/log"
-	. "github.com/jasonyangshadow/lpmx/paeudo"
+	. "github.com/JasonYangShadow/lpmx/error"
+	. "github.com/JasonYangShadow/lpmx/log"
+	. "github.com/JasonYangShadow/lpmx/paeudo"
 	"github.com/phayes/permbits"
 	"github.com/sirupsen/logrus"
 )

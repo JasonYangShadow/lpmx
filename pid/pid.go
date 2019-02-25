@@ -2,7 +2,7 @@ package pid
 
 import (
 	"fmt"
-	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/JasonYangShadow/lpmx/error"
 	"io/ioutil"
 	"os"
 	"strconv"

@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	. "github.com/jasonyangshadow/lpmx/container"
-	. "github.com/jasonyangshadow/lpmx/error"
-	. "github.com/jasonyangshadow/lpmx/log"
-	. "github.com/jasonyangshadow/lpmx/utils"
+	. "github.com/JasonYangShadow/lpmx/container"
+	. "github.com/JasonYangShadow/lpmx/error"
+	. "github.com/JasonYangShadow/lpmx/log"
+	. "github.com/JasonYangShadow/lpmx/utils"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )

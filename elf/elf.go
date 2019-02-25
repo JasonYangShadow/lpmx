@@ -3,9 +3,9 @@ package elf
 import (
 	"bytes"
 	"fmt"
-	. "github.com/jasonyangshadow/lpmx/error"
-	. "github.com/jasonyangshadow/lpmx/paeudo"
-	. "github.com/jasonyangshadow/lpmx/utils"
+	. "github.com/JasonYangShadow/lpmx/error"
+	. "github.com/JasonYangShadow/lpmx/paeudo"
+	. "github.com/JasonYangShadow/lpmx/utils"
 	"io/ioutil"
 	"os"
 )

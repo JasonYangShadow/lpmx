@@ -1,8 +1,8 @@
 package container
 
 import (
-	. "github.com/jasonyangshadow/lpmx/msgpack"
-	. "github.com/jasonyangshadow/lpmx/utils"
+	. "github.com/JasonYangShadow/lpmx/msgpack"
+	. "github.com/JasonYangShadow/lpmx/utils"
 	"testing"
 )
 

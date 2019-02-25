@@ -2,7 +2,7 @@ package yaml
 
 import (
 	"fmt"
-	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/JasonYangShadow/lpmx/error"
 	"github.com/spf13/viper"
 	"path/filepath"
 	"strings"

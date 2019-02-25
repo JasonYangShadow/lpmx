@@ -1,7 +1,7 @@
 package msgpack
 
 import (
-	. "github.com/jasonyangshadow/lpmx/error"
+	. "github.com/JasonYangShadow/lpmx/error"
 	"github.com/vmihailenco/msgpack"
 )
 

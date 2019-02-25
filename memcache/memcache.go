@@ -2,8 +2,8 @@ package memcache
 
 import (
 	"fmt"
+	. "github.com/JasonYangShadow/lpmx/error"
 	. "github.com/bradfitz/gomemcache/memcache"
-	. "github.com/jasonyangshadow/lpmx/error"
 	"strings"
 )
 
