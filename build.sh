@@ -13,3 +13,5 @@ for GOOS in linux; do
         fi
      done
 done
+
+echo `date +"%Y%m%d%H"` > VERSION
