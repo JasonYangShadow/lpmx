@@ -1,7 +1,6 @@
 ![lpmx logo](./lpmx_small.PNG)
 
-![build_status](https://travis-ci.com/JasonYangShadow/lpmx.svg?branch=master)
-# LPMX 
+# LPMX ![travis](https://travis-ci.org/JasonYangShadow/lpmx.svg?branch=master) [![Gitter](https://badges.gitter.im/lpmx_container/community.svg)](https://gitter.im/lpmx_container/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 LPMX, i.e, Local Package Manager X edition, is a pure rootless and composable container system.
 
 # Feature
