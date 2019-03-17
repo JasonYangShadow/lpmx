@@ -42,7 +42,7 @@ If there are any dependencies issues, try to execute 'dep ensure' inside project
 
 - ### Directly make a call to host application inside container
 
-    Advanced feature such as directly making a call to host application is also easy to achieve, just set environment var inside containers. See detail in [Wiki](https://github.com/JasonYangShadow/lpmx/wiki).
+    Advanced feature such as directly making a call to host application is also easy to achieve, just set environment var 'EXCLUDE_EXE' e.g. export EXCLUDE_EXE=/usr/bin/nano, inside containers. See detail in [Wiki](https://github.com/JasonYangShadow/lpmx/wiki).
 ![CallToHost](figures/CallToHost.gif)
 
 - ### Directly make a call to container application from host
