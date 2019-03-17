@@ -1,7 +1,7 @@
 ![lpmx logo](./lpmx_small.PNG)
 
 # LPMX [![Build Status](https://travis-ci.com/JasonYangShadow/lpmx.svg?branch=master)](https://travis-ci.com/JasonYangShadow/lpmx) [![Gitter](https://badges.gitter.im/lpmx_container/community.svg)](https://gitter.im/lpmx_container/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=JasonYangShadow_lpmx&metric=alert_status)](https://sonarcloud.io/dashboard?id=JasonYangShadow_lpmx) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=JasonYangShadow_lpmx&metric=coverage)](https://sonarcloud.io/dashboard?id=JasonYangShadow_lpmx) [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=JasonYangShadow_lpmx&metric=sqale_rating)](https://sonarcloud.io/dashboard?id=JasonYangShadow_lpmx) [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=JasonYangShadow_lpmx&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=JasonYangShadow_lpmx) 
-LPMX, i.e, Local Package Manager X edition, is a pure rootless and composable container system.
+LPMX, i.e, Local Package Manager X, is a pure rootless and composable container system.
 
 # Feature
 1. **Pure rootless**, root privilege(root/sudo) is not required in any stage. It runs completely inside user space, which is especially suiable for running containers in restricted environment such as Linux cluster, grid infrastructure, batch system and etc, where root privilege is not approved.
