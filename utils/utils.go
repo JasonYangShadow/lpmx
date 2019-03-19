@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -41,6 +42,7 @@ const (
 var (
 	memcached_checklist = []string{"memcached", "libevent"}
 	time_sleep          = 2
+	gdrive_prefix       = "https://drive.google.com/file/d/"
 )
 
 func FileExist(file string) bool {
@@ -308,6 +310,56 @@ func WriteToFile(data []byte, dir string) *Error {
 		err := ErrNew(ErrFileIO, fmt.Sprintf("writing file %s error", dir))
 		return err
 	}
+}
+
+func DownloadFile(url string, folder string, filename string) *Error {
+	filepath := fmt.Sprintf("%s/%s", folder, filename)
+	if !FolderExist(folder) {
+		_, err := MakeDir(folder)
+		if err != nil {
+			return err
+		}
+	}
+
+	out, err := os.Create(filepath)
+	if err != nil {
+		cerr := ErrNew(ErrFileStat, fmt.Sprintf("%s file create error", filepath))
+		return cerr
+	}
+	defer out.Close()
+
+	resp, err := http.Get(url)
+	if err != nil {
+		cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", url))
+		return cerr
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		cerr := ErrNew(ErrFileIO, fmt.Sprintf("response from %s is 404", url))
+		return cerr
+	}
+
+	_, err = io.Copy(out, resp.Body)
+	if err != nil {
+		cerr := ErrNew(ErrFileIO, fmt.Sprintf("io copy from %s to %s encounters error", url, filepath))
+		return cerr
+	}
+	return nil
+}
+
+func GetGDriveDownloadLink(url string) (string, *Error) {
+	if strings.HasPrefix(url, gdrive_prefix) {
+		url = strings.TrimPrefix(url, gdrive_prefix)
+		idx := strings.Index(url, "/")
+		if idx != -1 {
+			id := url[0:idx]
+			dl := fmt.Sprintf("https://drive.google.com/uc?export=download&id=%s", id)
+			return dl, nil
+		}
+	}
+	cerr := ErrNew(ErrType, fmt.Sprintf("could not understand url, it should has prefix %s ", gdrive_prefix))
+	return "", cerr
 }
 
 func CopyFile(src string, dst string) (bool, *Error) {

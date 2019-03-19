@@ -5,7 +5,20 @@ import (
 	"testing"
 )
 
+func TestGdrive(t *testing.T) {
+	url := "https://drive.google.com/file/d/0B_Pq1NjbA3TdQ1dzYzBKYXlNSVU/view?usp=sharing"
+	new_url, n_err := GetGDriveDownloadLink(url)
+	if n_err != nil {
+		t.Error(n_err)
+	}
+	d_err := DownloadFile(new_url, "/tmp", "file")
+	if d_err != nil {
+		t.Error(d_err)
+	}
+}
+
 func TestTar(t *testing.T) {
+	t.Skip("test")
 	layers := []string{"/tmp"}
 	err := TarLayer("/tmp/test", "/tmp", "file", layers)
 	if err != nil {
