@@ -55,6 +55,7 @@ If there are any dependencies issues, try to execute 'dep ensure' inside project
     LPMX also supports dynamically setting envrionment variables through embedded memcache server with immediate effect. 
 ![DynamicPriv](figures/DynamicPriv.gif)
 
-# Relate projects
+# Related projects
 - [Fakechroot](https://github.com/JasonYangShadow/fakechroot)
 - [LPM](https://lpm.bio/)
+- [udocker](https://github.com/indigo-dc/udocker)
