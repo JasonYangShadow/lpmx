@@ -30,10 +30,11 @@ For bash users, 'source ~/.bashrc' will add lpmx folder to PATH env
 3. cd $GOPATH/src/github.com/jasonyangshadow/lpmx
 4. ./build.sh
 
+If there are any dependencies issues, try to execute 'dep ensure' inside project folder and then add vendor subfolder into $GOROOT var.
+
 # Compile Fakechroot from source code
 LPMX uses [customized fakechroot](https://github.com/jasonyangshadow/fakechroot) for trapping glibc system calls, if you want to compile fakechroot, please refer [Wiki](https://github.com/JasonYangShadow/lpmx/wiki)
 
-If there are any dependencies issues, try to execute 'dep ensure' inside project folder and then add vendor subfolder into $GOROOT var.
 
 # How to use it
 - ### Download and Initialize
