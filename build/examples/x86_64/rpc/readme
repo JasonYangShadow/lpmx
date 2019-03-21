@@ -1,9 +1,0 @@
-In this exmaple, there will be two binaries under /tmp/x86_64/rpc folder named
-loop1 and loop2, which iterately prints out running messages. The container
-itself is started in passive mode(rpc mode), which will open tcp port for
-receiving rpc request, i.e executing commands remotely. We will run two
-binaries through this way, and you might check the output of these binaries
-under folder /tmp/x86_64/rpc/log.
-
-Additionaly, you might want to know other rpc subcommands, please visit this
-website: https://github.com/JasonYangShadow/lpmx/blob/master/build/linux/x86_64/lpmx
