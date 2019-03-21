@@ -32,6 +32,8 @@ For bash users, 'source ~/.bashrc' will add lpmx folder to PATH env
 
 If there are any dependencies issues, try to execute 'dep ensure' inside project folder and then add vendor subfolder into $GOROOT var.
 
+## [Wiki](https://github.com/JasonYangShadow/lpmx/wiki)
+
 # How to use it
 - ### Download and Initialize
 
