@@ -11,6 +11,13 @@ LPMX, i.e, Local Package Manager X, is a pure rootless and composable container 
 5. **Dynamic management of environmental variables**, LPMX allows end-users to set environment variables dynamically without stopping containers, all settings come into effect immediately.
 6. **Designed for restricted runtime environment**, LPMX is designed for running containers in restricted runtime environments, such as root privilege is not approved or complete offline usage. LPMX supports complete offline initialinzation and deployment, which is especially suitable for scientific computing infrastructure.
   
+# Examples with LPMX
+- Download and run containerized ubuntu 18.04 on old Linux OS on HPC, such as centos 5, then run programs with latest libraries available.
+- Create and run containerized ubuntu system locally, install any software inside, package and copy tar files to another machine with network access limited, then you get everything work as locally.
+- Run pipelines inside container, then make a call to host programs as you wish.
+- Install software inside container, expose them to host and call them as you wish.
+- Dynamically modify file path for loading data, open any files in any places through one unique file path.
+
 # Quick run
 1. check out [release page](https://github.com/JasonYangShadow/lpmx/releases)
 2. chmod a+x lpmx && ./lpmx init
@@ -28,7 +35,7 @@ If there are any dependencies issues, try to execute 'dep ensure' inside project
 # How to use it
 - ### Download and Initialize
 
-    You are only required to download one binary program and execute it.
+    If you have network connection, only one binary program 'lpmx' is required, for end-users working under restricted network envrionments 'lpmx' and its dependency tarball are required, for details please check [Wiki](https://github.com/JasonYangShadow/lpmx/wiki)
 ![Init](figures/Init.gif)
 - ### Search docker images and Download
 
