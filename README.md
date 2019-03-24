@@ -24,7 +24,7 @@ LPMX, i.e, Local Package Manager X, is a pure rootless and composable container 
 
 For bash users, 'source ~/.bashrc' will add lpmx folder to PATH env
 
-# Compile from source code 
+# Compile LPMX from source code 
 1. Make sure golang and [dep](https://github.com/golang/dep) are installed on your OS
 2. go get -v github.com/jasonyangshadow/lpmx
 3. cd $GOPATH/src/github.com/jasonyangshadow/lpmx
@@ -32,7 +32,9 @@ For bash users, 'source ~/.bashrc' will add lpmx folder to PATH env
 
 If there are any dependencies issues, try to execute 'dep ensure' inside project folder and then add vendor subfolder into $GOROOT var.
 
-## [Wiki](https://github.com/JasonYangShadow/lpmx/wiki)
+# Compile Fakechroot from source code
+LPMX uses [customized fakechroot](https://github.com/jasonyangshadow/fakechroot) for trapping glibc system calls, if you want to compile fakechroot, please refer [Wiki](https://github.com/JasonYangShadow/lpmx/wiki#9-compile-fakechroot-and-its-dependencies-from-scratch)
+
 
 # How to use it
 - ### Download and Initialize
