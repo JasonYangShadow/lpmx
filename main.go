@@ -169,6 +169,42 @@ func main() {
 	getCmd.Flags().StringVarP(&GetName, "name", "n", "", "required")
 	getCmd.MarkFlagRequired("name")
 
+	var DownloadSource string
+	var downloadCmd = &cobra.Command{
+		Use:   "download",
+		Short: "download files from online storage",
+		Long:  "download command is the basic command of lpmx, which is used for downloading dependency or other files from online storage",
+		Args:  cobra.ExactArgs(2),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := checkCompleteness()
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			if DownloadSource == "gdrive" {
+				new_url, nerr := GetGDriveDownloadLink(args[0])
+				if nerr != nil {
+					LOGGER.Fatal(nerr.Error())
+					return
+				}
+				target_folder := filepath.Dir(args[1])
+				target_file := filepath.Base(args[1])
+				derr := DownloadFile(new_url, target_folder, target_file)
+				if derr != nil {
+					LOGGER.Fatal(derr.Error())
+					return
+				}
+
+				LOGGER.Info("DONE")
+				return
+			}
+		},
+	}
+	downloadCmd.Flags().StringVarP(&DownloadSource, "source", "s", "", "required, download source(gdrive)")
+	downloadCmd.MarkFlagRequired("source")
+
 	var RExecIp string
 	var RExecPort string
 	var RExecTimeout string
@@ -738,6 +774,6 @@ func main() {
 		Use:   "lpmx",
 		Short: "lpmx rootless container",
 	}
-	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, setCmd, resumeCmd, getCmd, dockerCmd, exposeCmd, uninstallCmd, versionCmd)
+	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, setCmd, resumeCmd, getCmd, dockerCmd, exposeCmd, uninstallCmd, versionCmd, downloadCmd)
 	rootCmd.Execute()
 }
