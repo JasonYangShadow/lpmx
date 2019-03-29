@@ -35,7 +35,7 @@ const (
 var (
 	ELFOP                   = []string{"add_allow_priv", "remove_allow_priv", "add_deny_priv", "remove_deny_priv", "add_map", "remove_map"}
 	LD                      = []string{"/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2", "/lib/ld.so", "/lib64/ld-linux-x86-64.so.2", "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.1", "/lib64/ld-linux-x86-64.so.1", "/lib/ld-linux.so.2", "/lib/ld-linux.so.1"}
-	LD_LIBRARY_PATH_DEFAULT = []string{"lib", "lib64", "lib/x86_64-linux-gnu", "usr/lib/x86_64-linux-gnu", "usr/lib", "usr/local/lib", "usr/lib64", "usr/local/lib64"}
+	LD_LIBRARY_PATH_DEFAULT = []string{"lib", "lib64", "lib/x86_64-linux-gnu", "usr/lib/x86_64-linux-gnu", "usr/lib", "usr/local/lib", "usr/lib64"}
 	FOLDER_MODE             = 0755
 	CACHE_FOLDER            = []string{"/var/cache/apt/archives"}
 	UNSTALL_FOLDER          = []string{".lpmxsys", "sync", "bin", ".docker", "package"}
