@@ -861,7 +861,7 @@ func GetHostOSInfo() (string, string, *Error) {
 }
 
 func GetProcessIdByName(name string) (bool, string, *Error) {
-	cmd_context := fmt.Sprintf("ps -ef|grep %s|grep -v grep|awk '{print $2}'", name)
+	cmd_context := fmt.Sprintf("ps -ef|grep $USER|grep %s|grep -v grep|awk '{print $2}'", name)
 	out, err := CommandBash(cmd_context)
 	if err != nil {
 		return false, "", err
