@@ -755,7 +755,13 @@ func Untar(target string, folder string) *Error {
 			}
 
 		case tar.TypeReg:
-			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+			t_file_mode := os.FileMode(header.Mode)
+			//here we check file mode, if it is 0000, then changing it to 0700
+			//fixing "permission denied" error on cluster
+			if t_file_mode.Perm() == 0000 {
+				t_file_mode = os.FileMode(0700)
+			}
+			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, t_file_mode)
 			if err != nil {
 				cerr := ErrNew(err, fmt.Sprintf("untar create file %s error", target))
 				return cerr
