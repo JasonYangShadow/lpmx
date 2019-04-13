@@ -483,6 +483,7 @@ func Destroy(id string) *Error {
 						cdir := fmt.Sprintf("%s/.lpmx", val["RootPath"])
 						RemoveAll(cdir)
 					}
+					RemoveAll(val["DataSyncFolder"].(string))
 					delete(sys.Containers, id)
 				} else {
 					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner with id: %s is running with pid: %d, can't destroy", id, pid))
@@ -2235,6 +2236,7 @@ func (con *Container) appendToSys() *Error {
 			cmap["RPC"] = strconv.Itoa(con.RPCPort)
 			cmap["DockerBase"] = strconv.FormatBool(con.DockerBase)
 			cmap["Image"] = con.ImageBase
+			cmap["DataSyncFolder"] = con.DataSyncFolder
 			sys.Containers[con.Id] = cmap
 		} else {
 			vvalue, vok := value.(map[string]interface{})

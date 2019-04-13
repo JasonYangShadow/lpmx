@@ -756,10 +756,13 @@ func Untar(target string, folder string) *Error {
 
 		case tar.TypeReg:
 			t_file_mode := os.FileMode(header.Mode)
-			//here we check file mode, if it is 0000, then changing it to 0700
+			//here we check file mode, if file does not have at least rw mode, we change it
 			//fixing "permission denied" error on cluster
-			if t_file_mode.Perm() == 0000 {
-				t_file_mode = os.FileMode(0700)
+			permission := permbits.FileMode(t_file_mode)
+			if !(permission.UserRead() && permission.UserWrite()) {
+				permission.SetUserRead(true)
+				permission.SetUserWrite(true)
+				permbits.UpdateFileMode(&t_file_mode, permission)
 			}
 			f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, t_file_mode)
 			if err != nil {
@@ -867,7 +870,7 @@ func GetHostOSInfo() (string, string, *Error) {
 }
 
 func GetProcessIdByName(name string) (bool, string, *Error) {
-	cmd_context := fmt.Sprintf("ps -ef|grep $USER|grep %s|grep -v grep|awk '{print $2}'", name)
+	cmd_context := fmt.Sprintf("ps -ef|grep %s|grep -v grep|awk '{print $2}'", name)
 	out, err := CommandBash(cmd_context)
 	if err != nil {
 		return false, "", err
