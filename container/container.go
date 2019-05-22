@@ -1891,11 +1891,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		libs = append(libs, fmt.Sprintf("%s/%s", con.RootPath, v))
 	}
 
-	if len(libs) > 0 {
-		env["LD_LIBRARY_LPMX"] = strings.Join(libs, ":")
-		env["LD_LIBRARY_PATH"] = fmt.Sprintf("%s/.lpmxsys", currdir)
-	}
-
 	//set default FAKECHROOT_EXCLUDE_PATH
 	env["FAKECHROOT_EXCLUDE_PATH"] = "/dev:/proc:/sys"
 
@@ -2005,6 +2000,15 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 			}
 		}
 
+	}
+
+	if len(libs) > 0 {
+		if ld_library_val, ld_library_ok := env["LD_LIBRARY_LPMX"]; ld_library_ok {
+			env["LD_LIBRARY_LPMX"] = fmt.Sprintf("%s:%s", strings.Join(libs, ":"), ld_library_val)
+		} else {
+			env["LD_LIBRARY_LPMX"] = strings.Join(libs, ":")
+		}
+		env["LD_LIBRARY_PATH"] = fmt.Sprintf("%s/.lpmxsys", currdir)
 	}
 
 	if _, l_switch_ok := con.SettingConf["fakechroot_log_switch"]; l_switch_ok {
