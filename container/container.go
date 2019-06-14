@@ -909,7 +909,7 @@ func DockerCommit(id, newname, newtag string) *Error {
 							RemoveAll(cache)
 						}
 					}
-					//moving /etc/group /etc/passwd /proc /tmp folder to temp folder
+					//moving /etc/group /etc/passwd /tmp folder to temp folder
 					cache_temp_dir, _ := ioutil.TempDir("", "lpmx")
 					if FileExist(fmt.Sprintf("%s/etc/group", con.RootPath)) {
 						cerr := Rename(fmt.Sprintf("%s/etc/group", con.RootPath), fmt.Sprintf("%s/etc/group", cache_temp_dir))
@@ -919,12 +919,6 @@ func DockerCommit(id, newname, newtag string) *Error {
 					}
 					if FileExist(fmt.Sprintf("%s/etc/passwd", con.RootPath)) {
 						cerr := Rename(fmt.Sprintf("%s/etc/passwd", con.RootPath), fmt.Sprintf("%s/etc/passwd", cache_temp_dir))
-						if cerr != nil {
-							return cerr
-						}
-					}
-					if FolderExist(fmt.Sprintf("%s/proc", con.RootPath)) {
-						cerr := Rename(fmt.Sprintf("%s/proc", con.RootPath), fmt.Sprintf("%s/proc", cache_temp_dir))
 						if cerr != nil {
 							return cerr
 						}
@@ -1051,11 +1045,6 @@ func DockerCommit(id, newname, newtag string) *Error {
 							return cerr
 						}
 					}
-					//create rw/proc/self/cwd to fake cwd
-					proc_self_path := fmt.Sprintf("%s/proc/self", con.RootPath)
-					os.MkdirAll(proc_self_path, os.FileMode(FOLDER_MODE))
-					os.Symlink("/", fmt.Sprintf("%s/cwd", proc_self_path))
-					os.Symlink("/", fmt.Sprintf("%s/exe", proc_self_path))
 					//create new tmp
 					os.MkdirAll(fmt.Sprintf("%s/tmp", con.RootPath), os.FileMode(FOLDER_MODE))
 					f, _ := os.Create(fmt.Sprintf("%s/.wh.tmp", con.RootPath))
@@ -1618,12 +1607,6 @@ func DockerCreate(name string, container_name string) *Error {
 					}
 				}
 
-				//create rw/proc/self/cwd to fake cwd
-				proc_self_path := fmt.Sprintf("%s/proc/self", configmap["dir"].(string))
-				os.MkdirAll(proc_self_path, os.FileMode(FOLDER_MODE))
-				os.Symlink("/", fmt.Sprintf("%s/cwd", proc_self_path))
-				os.Symlink("/", fmt.Sprintf("%s/exe", proc_self_path))
-
 				//create tmp folder and create whiteout file for tmp
 				os.MkdirAll(fmt.Sprintf("%s/tmp", configmap["dir"].(string)), os.FileMode(FOLDER_MODE))
 				f, _ := os.Create(fmt.Sprintf("%s/.wh.tmp", configmap["dir"].(string)))
@@ -1863,8 +1846,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["PWD"] = "/"
 	env["HOME"] = "/root"
 	env["FAKED_MODE"] = "unknown-is-root"
-	//used for faking proc file
-	env["FAKECHROOT_EXCLUDE_PROC_PATH"] = "/proc/self/cwd:/proc/self/exe"
 	if con.DockerBase {
 		env["DockerBase"] = "TRUE"
 	} else {
