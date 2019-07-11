@@ -19,7 +19,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-0.4"
+	VERSION = "alpha-0.5"
 )
 
 func checkCompleteness() *Error {
@@ -442,6 +442,7 @@ func main() {
 	dockerCommitCmd.MarkFlagRequired("tag")
 
 	var DockerCreateName string
+	var DockerCreateVolume string
 	var dockerCreateCmd = &cobra.Command{
 		Use:   "create",
 		Short: "initialize the local docker images",
@@ -465,7 +466,7 @@ func main() {
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
-			err := DockerCreate(args[0], DockerCreateName)
+			err := DockerCreate(args[0], DockerCreateName, DockerCreateVolume)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -473,6 +474,7 @@ func main() {
 		},
 	}
 	dockerCreateCmd.Flags().StringVarP(&DockerCreateName, "name", "n", "", "optional")
+	dockerCreateCmd.Flags().StringVarP(&DockerCreateVolume, "volume", "v", "", "optional")
 
 	var dockerDeleteCmd = &cobra.Command{
 		Use:   "delete",

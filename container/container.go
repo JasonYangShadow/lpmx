@@ -77,6 +77,7 @@ type Container struct {
 	PidFile             string
 	Pid                 int
 	DataSyncFolder      string //sync folder with host
+	DataSyncMap         string //sync folder mapping info(host:contain)
 }
 
 type RPC struct {
@@ -424,6 +425,7 @@ func Resume(id string, args ...string) *Error {
 						configmap["elf_loader"] = con.PatchedELFLoader
 						configmap["parent_dir"] = filepath.Dir(con.RootPath)
 						configmap["sync_folder"] = con.DataSyncFolder
+						configmap["sync_ori_folder"] = con.DataSyncMap
 					}
 
 					err := Run(&configmap, args...)
@@ -483,7 +485,9 @@ func Destroy(id string) *Error {
 						cdir := fmt.Sprintf("%s/.lpmx", val["RootPath"])
 						RemoveAll(cdir)
 					}
-					RemoveAll(val["DataSyncFolder"].(string))
+					//here we delete default sync folder
+					data_sync_folder := fmt.Sprintf("%s/sync/%s", currdir, id)
+					RemoveAll(data_sync_folder)
 					delete(sys.Containers, id)
 				} else {
 					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner with id: %s is running with pid: %d, can't destroy", id, pid))
@@ -527,6 +531,7 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 			con.BaseLayerPath = (*configmap)["baselayerpath"].(string)
 			con.PatchedELFLoader = (*configmap)["elf_loader"].(string)
 			con.DataSyncFolder = (*configmap)["sync_folder"].(string)
+			con.DataSyncMap = (*configmap)["sync_ori_folder"].(string)
 		}
 	} else {
 		con.DockerBase = false
@@ -930,8 +935,18 @@ func DockerCommit(id, newname, newtag string) *Error {
 						RemoveFile(fmt.Sprintf("%s/.wh.tmp", con.RootPath))
 					}
 					//remove data symlink
-					if FolderExist(fmt.Sprintf("%s/lpmx", con.RootPath)) {
-						RemoveAll(fmt.Sprintf("%s/lpmx", con.RootPath))
+					if len(con.DataSyncMap) > 0 {
+						for _, kv := range strings.Split(con.DataSyncMap, ";") {
+							if len(kv) > 0 {
+								v := strings.Split(kv, ":")
+								if len(v) == 2 && len(v[1]) > 0 {
+									s_folder := fmt.Sprintf("%s%s", con.RootPath, v[1])
+									if FolderExist(s_folder) {
+										RemoveAll(s_folder)
+									}
+								}
+							}
+						}
 					}
 
 					//remove apt cache
@@ -1027,10 +1042,16 @@ func DockerCommit(id, newname, newtag string) *Error {
 						cerr := ErrNew(derr, fmt.Sprintf("could not make new folder: %s", con.RootPath))
 						return cerr
 					}
-					derr = os.Symlink(con.DataSyncFolder, fmt.Sprintf("%s/lpmx", con.RootPath))
-					if derr != nil {
-						cerr := ErrNew(derr, fmt.Sprintf("could not symlink, oldpath: %s, newpath: %s", con.DataSyncFolder, fmt.Sprintf("%s/lpmx", con.RootPath)))
-						return cerr
+					//create new data sync folder
+					for _, kv := range strings.Split(con.DataSyncMap, ";") {
+						if len(kv) > 0 {
+							v := strings.Split(kv, ":")
+							derr := os.Symlink(v[0], fmt.Sprintf("%s%s", con.RootPath, v[1]))
+							if derr != nil {
+								cerr := ErrNew(derr, fmt.Sprintf("could not symlink, oldpath: %s, newpath: %s", v[0], fmt.Sprintf("%s%s", v[1])))
+								return cerr
+							}
+						}
 					}
 					//moving folders back to new rw folder
 					if FileExist(fmt.Sprintf("%s/etc/group", cache_temp_dir)) {
@@ -1433,7 +1454,7 @@ func DockerReset(name string) *Error {
 	return err
 }
 
-func DockerCreate(name string, container_name string) *Error {
+func DockerCreate(name string, container_name string, volume_map string) *Error {
 	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
@@ -1457,7 +1478,7 @@ func DockerCreate(name string, container_name string) *Error {
 					}
 				}
 
-				//create symlink folder
+				//create symlink folder for different layers
 				var keys []string
 				for _, k := range strings.Split(layers, ":") {
 					k = path.Base(k)
@@ -1494,19 +1515,46 @@ func DockerCreate(name string, container_name string) *Error {
 				configmap["layers"] = strings.Join(reverse_keys, ":")
 				configmap["baselayerpath"] = base
 				configmap["container_name"] = container_name
-				configmap["sync_folder"] = fmt.Sprintf("%s/sync/%s", currdir, id)
-				if !FolderExist(configmap["sync_folder"].(string)) {
-					oerr := os.MkdirAll(configmap["sync_folder"].(string), os.FileMode(FOLDER_MODE))
+
+				//dealing with sync folder/volume problem
+				//add default sync folder firstly if not exists
+				var sync_folder []string
+				default_sync_folder := fmt.Sprintf("%s/sync/%s", currdir, id)
+				if !FolderExist(default_sync_folder) {
+					oerr := os.MkdirAll(default_sync_folder, os.FileMode(FOLDER_MODE))
 					if oerr != nil {
-						cerr := ErrNew(oerr, fmt.Sprintf("could not mkdir %s", configmap["sync_folder"].(string)))
+						cerr := ErrNew(oerr, fmt.Sprintf("could not mkdir %s", default_sync_folder))
 						return cerr
 					}
 				}
-				//create symlink inside rw folder to host
-				serr := os.Symlink(configmap["sync_folder"].(string), fmt.Sprintf("%s/lpmx", configmap["dir"].(string)))
-				if serr != nil {
-					cerr := ErrNew(serr, fmt.Sprintf("could not symlink, oldpath: %s, newpath: %s", configmap["sync_folder"].(string), fmt.Sprintf("%s/lpmx", configmap["dir"].(string))))
-					return cerr
+				if !strings.Contains(volume_map, default_sync_folder) {
+					volume_map = fmt.Sprintf("%s:/lpmx;%s", default_sync_folder, volume_map)
+				}
+				//add user defined ones
+				for _, volume := range strings.Split(volume_map, ";") {
+					if len(volume) > 0 {
+						v := strings.Split(volume, ":")
+						if !FolderExist(v[0]) {
+							continue
+						} else {
+							v_abs := fmt.Sprintf("%s/rw%s", rootfolder, v[1])
+							if FolderExist(v_abs) {
+								continue
+							} else {
+								serr := os.Symlink(v[0], v_abs)
+								if serr != nil {
+									cerr := ErrNew(serr, fmt.Sprintf("could not symlink, oldpath: %s, newpath: %s", v[0], v_abs))
+									return cerr
+								}
+								sync_folder = append(sync_folder, v[0])
+							}
+						}
+					}
+				}
+				configmap["sync_ori_folder"] = volume_map
+				configmap["sync_folder"] = strings.Join(sync_folder, ":")
+				if len(sync_folder) == 1 {
+					configmap["sync_folder"] = strings.TrimSuffix(configmap["sync_folder"].(string), ":")
 				}
 
 				//patch ld.so
@@ -1859,6 +1907,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	currdir, _ := GetCurrDir()
 	libs = append(libs, fmt.Sprintf("%s/.lpmxsys", currdir))
 
+	//find from base layers
 	for _, v := range LD_LIBRARY_PATH_DEFAULT {
 		lib_paths, err := GuessPathsContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), v, false)
 		if err != nil {
@@ -1868,6 +1917,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		}
 	}
 
+	//add current rw layer
 	for _, v := range LD_LIBRARY_PATH_DEFAULT {
 		libs = append(libs, fmt.Sprintf("%s/%s", con.RootPath, v))
 	}
@@ -1983,6 +2033,10 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 
 	}
 
+	LOGGER.WithFields(logrus.Fields{
+		"allenv": con.SettingConf,
+	}).Debug("all env vars read from setting.yaml")
+
 	if len(libs) > 0 {
 		if ld_library_val, ld_library_ok := env["LD_LIBRARY_LPMX"]; ld_library_ok {
 			env["LD_LIBRARY_LPMX"] = fmt.Sprintf("%s:%s", strings.Join(libs, ":"), ld_library_val)
@@ -2030,7 +2084,9 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		env["FAKECHROOT_ELFLOADER"] = elfloader_path
 	}
 
-	//set language
+	if ep_path, ep_ok := con.SettingConf["fakechroot_exclude_ex_path"]; ep_ok {
+		env["FAKECHROOT_EXCLUDE_EX_PATH"] = ep_path.(string)
+	}
 
 	return env, nil
 }
@@ -2222,6 +2278,7 @@ func (con *Container) appendToSys() *Error {
 			cmap["DockerBase"] = strconv.FormatBool(con.DockerBase)
 			cmap["Image"] = con.ImageBase
 			cmap["DataSyncFolder"] = con.DataSyncFolder
+			cmap["DataSyncMap"] = con.DataSyncMap
 			sys.Containers[con.Id] = cmap
 		} else {
 			vvalue, vok := value.(map[string]interface{})
