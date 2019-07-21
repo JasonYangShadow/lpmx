@@ -11,12 +11,14 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 	"time"
 
 	. "github.com/JasonYangShadow/lpmx/error"
 	registry "github.com/JasonYangShadow/lpmx/registry"
 	. "github.com/JasonYangShadow/lpmx/utils"
+	. "github.com/JasonYangShadow/lpmx/yaml"
 	. "github.com/docker/distribution/manifest"
 	"github.com/docker/distribution/manifest/schema1"
 	"github.com/docker/libtrust"
@@ -409,14 +411,59 @@ func DownloadLayers(username string, pass string, name string, tag string, folde
 	return data, layer_order, nil
 }
 
-func DownloadSetting(name string, tag string, folder string) *Error {
-	filepath := fmt.Sprintf("%s/setting.yml", folder)
+//find correct download url based on the yaml description file
+func GenGithubURLfromYaml(name, tag, url, yaml, target_file string) (string, *Error) {
+	if !FileExist(yaml) {
+		//download ymal file first
+		yaml_file_name := path.Base(yaml)
+		yaml_folder_name := path.Dir(yaml)
+		yaml_url := fmt.Sprintf("%s/%s", url, yaml_file_name)
+		DirectDownloadFilefromGithub(yaml_file_name, yaml_url, yaml_folder_name)
+	}
+
+	ret_url := ""
+	if FileExist(yaml) {
+		_, config, lerr := LoadConfig(yaml)
+		if lerr == nil {
+			//assemble url
+			name = strings.ToLower(name)
+			tag = strings.ToLower(tag)
+			if m, m_ok := config["map"].(map[string]interface{}); m_ok {
+				if n, n_ok := m[name].(string); n_ok {
+					name = n
+				}
+			}
+			if v, v_ok := config["version"].(map[string]interface{}); v_ok {
+				if v_data, v_data_ok := v[name]; v_data_ok {
+					if v_array, v_array_ok := v_data.([]interface{}); v_array_ok {
+						for _, arr := range v_array {
+							ret, _ := CompareVersion(arr.(string), tag, ".")
+							if ret == 0 || ret == -1 {
+								tag = arr.(string)
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	ret_url = fmt.Sprintf("%s/%s/%s/%s", url, name, tag, target_file)
+	return ret_url, nil
+}
+
+//a patched version that could search file from different level and auto-select the closet one
+//name: is the name of distro, tag: version of distro, filename: the target request file on github, url: fixed github prefix, folder: local folder saving downloaded file, yaml: yaml file saving distro info located on github
+func DownloadFilefromGithubPlus(name, tag, filename, url, folder, yaml string) *Error {
+	filepath := fmt.Sprintf("%s/%s", folder, filename)
 	if !FolderExist(folder) {
 		_, err := MakeDir(folder)
 		if err != nil {
 			return err
 		}
 	}
+
 	out, err := os.Create(filepath)
 	if err != nil {
 		cerr := ErrNew(ErrFileStat, fmt.Sprintf("%s file create error", filepath))
@@ -424,44 +471,62 @@ func DownloadSetting(name string, tag string, folder string) *Error {
 	}
 	defer out.Close()
 
-	name = strings.ToLower(name)
-	tag = strings.ToLower(tag)
+	gen_url, _ := GenGithubURLfromYaml(name, tag, url, yaml, filename)
 
-	http_req := fmt.Sprintf("%s/%s/%s/setting.yml", SETTING_URL, name, tag)
-	resp, err := http.Get(http_req)
+	derr := DirectDownloadFilefromGithub(filename, gen_url, folder)
+	if derr != nil {
+		//change to fallback search
+		gen_url = fmt.Sprintf("%s/%s/%s", url, name, filename)
+		derr = DirectDownloadFilefromGithub(filename, gen_url, folder)
+		if derr != nil {
+			gen_url = fmt.Sprintf("%s/default.%s", url, filename)
+			derr = DirectDownloadFilefromGithub(filename, gen_url, folder)
+			if derr != nil {
+				return derr
+			}
+		}
+	}
+
+	fmt.Printf("Downloading %s from %s", filename, gen_url)
+	return nil
+}
+
+//url is github url
+func DirectDownloadFilefromGithub(filename string, url string, folder string) *Error {
+	filepath := fmt.Sprintf("%s/%s", folder, filename)
+	if !FolderExist(folder) {
+		_, err := MakeDir(folder)
+		if err != nil {
+			return err
+		}
+	}
+
+	resp, err := http.Get(url)
 	if err != nil {
-		cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
+		cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", url))
 		return cerr
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == 404 {
-		http_req := fmt.Sprintf("%s/default.yml", SETTING_URL)
-		resp, err := http.Get(http_req)
-		if err != nil {
-			cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
-			return cerr
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode == 404 {
-			cerr := ErrNew(ErrHttpNotFound, fmt.Sprintf("http request to %s encounters failure", http_req))
-			return cerr
-		}
-		_, err = io.Copy(out, resp.Body)
-		if err != nil {
-			cerr := ErrNew(ErrFileIO, fmt.Sprintf("io copy from %s to %s encounters error", http_req, filepath))
-			return cerr
-		}
-		return nil
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s returns 404", url))
+		return cerr
 	}
+
+	out, err := os.Create(filepath)
+	if err != nil {
+		cerr := ErrNew(ErrFileStat, fmt.Sprintf("%s file create error", filepath))
+		return cerr
+	}
+	defer out.Close()
 
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
-		cerr := ErrNew(ErrFileIO, fmt.Sprintf("io copy from %s to %s encounters error", http_req, filepath))
+		cerr := ErrNew(ErrFileIO, fmt.Sprintf("io copy from %s to %s encounters error", url, filepath))
 		return cerr
 	}
 	return nil
+
 }
 
 func DownloadFilefromGithub(name string, tag string, filename string, url string, folder string) *Error {

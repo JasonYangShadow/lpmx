@@ -3,7 +3,6 @@ package container
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"net/rpc"
 	"os"
@@ -36,7 +35,6 @@ var (
 	ELFOP                   = []string{"add_allow_priv", "remove_allow_priv", "add_deny_priv", "remove_deny_priv", "add_map", "remove_map"}
 	LD                      = []string{"/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2", "/lib/ld.so", "/lib64/ld-linux-x86-64.so.2", "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.1", "/lib64/ld-linux-x86-64.so.1", "/lib/ld-linux.so.2", "/lib/ld-linux.so.1"}
 	LD_LIBRARY_PATH_DEFAULT = []string{"lib", "lib64", "lib/x86_64-linux-gnu", "usr/lib/x86_64-linux-gnu", "usr/lib", "usr/local/lib", "usr/lib64", "usr/local/lib64"}
-	FOLDER_MODE             = 0755
 	CACHE_FOLDER            = []string{"/var/cache/apt/archives"}
 	UNSTALL_FOLDER          = []string{".lpmxsys", "sync", "bin", ".docker", "package"}
 )
@@ -207,8 +205,8 @@ func Init(reset bool, deppath string) *Error {
 			deppath = fmt.Sprintf("%s/dependency.tar.gz", sys.RootDir)
 		}
 		if !FileExist(deppath) {
-			fmt.Println("Downloading dependency.tar.gz from github")
-			err = DownloadFilefromGithub(dist, release, "dependency.tar.gz", SETTING_URL, sys.RootDir)
+			yaml := fmt.Sprintf("%s/distro.management.yml", sys.RootDir)
+			err = DownloadFilefromGithubPlus(dist, release, "dependency.tar.gz", SETTING_URL, sys.RootDir, yaml)
 			if err != nil {
 				return err
 			}
@@ -735,6 +733,13 @@ func DockerAdd(file string) *Error {
 	}
 	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
+	tempdir := fmt.Sprintf("%s/.temp", currdir)
+	//we delete temp dir if it exists at the end of the function
+	defer func() {
+		if FolderExist(tempdir) {
+			os.RemoveAll(tempdir)
+		}
+	}()
 	var doc Docker
 	err := unmarshalObj(rootdir, &doc)
 	if err != nil && err.Err != ErrNExist {
@@ -751,10 +756,9 @@ func DockerAdd(file string) *Error {
 
 	//start untaring offline file
 	//create tmp folder
-	dir, derr := ioutil.TempDir("", "lpmx")
+	dir, derr := CreateTempDir(tempdir)
 	if derr != nil {
-		cerr := ErrNew(derr, "could not create temp dir")
-		return cerr
+		return derr
 	}
 
 	//Uncompressing
@@ -881,6 +885,14 @@ func DockerCommit(id, newname, newtag string) *Error {
 	//first check whether the container is running
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err := unmarshalObj(rootdir, &sys)
+	tempdir := fmt.Sprintf("%s/.temp", currdir)
+
+	//here we delete tempdir if it exists at the end of this function
+	defer func() {
+		if FolderExist(tempdir) {
+			os.RemoveAll(tempdir)
+		}
+	}()
 	if err == nil {
 		if v, ok := sys.Containers[id]; ok {
 			if val, vok := v.(map[string]interface{}); vok {
@@ -915,7 +927,11 @@ func DockerCommit(id, newname, newtag string) *Error {
 						}
 					}
 					//moving /etc/group /etc/passwd /tmp folder to temp folder
-					cache_temp_dir, _ := ioutil.TempDir("", "lpmx")
+					cache_temp_dir, cache_err := CreateTempDir(tempdir)
+					if cache_err != nil {
+						return cache_err
+					}
+
 					if FileExist(fmt.Sprintf("%s/etc/group", con.RootPath)) {
 						cerr := Rename(fmt.Sprintf("%s/etc/group", con.RootPath), fmt.Sprintf("%s/etc/group", cache_temp_dir))
 						if cerr != nil {
@@ -967,7 +983,10 @@ func DockerCommit(id, newname, newtag string) *Error {
 					}
 					fmt.Println("taring rw layers...")
 					//get temp dir
-					temp_dir, _ := ioutil.TempDir("", "lpmx")
+					temp_dir, temp_err := CreateTempDir(tempdir)
+					if temp_err != nil {
+						return temp_err
+					}
 					cerr := TarLayer(con.RootPath, temp_dir, con.Id, layers_full_path)
 					if cerr != nil {
 						return cerr
@@ -1182,6 +1201,7 @@ func DockerCommit(id, newname, newtag string) *Error {
 func DockerDownload(name string, user string, pass string) *Error {
 	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
+	sysdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	var doc Docker
 	err := unmarshalObj(rootdir, &doc)
 	if err != nil && err.Err != ErrNExist {
@@ -1284,7 +1304,9 @@ func DockerDownload(name string, user string, pass string) *Error {
 
 		//download setting from github
 		rdir, _ := mdata["rootdir"].(string)
-		err = DownloadFilefromGithub(tname, ttag, "setting.yml", SETTING_URL, rdir)
+
+		yaml := fmt.Sprintf("%s/distro.management.yml", sysdir)
+		err = DownloadFilefromGithubPlus(tname, ttag, "setting.yml", SETTING_URL, rdir, yaml)
 		if err != nil {
 			LOGGER.WithFields(logrus.Fields{
 				"err":    err,
@@ -2103,6 +2125,10 @@ func (con *Container) bashShell(args ...string) *Error {
 		faked_sysv := fmt.Sprintf("%s/faked-sysv", con.SysDir)
 		foutput, ferr := Command(faked_sysv)
 		if ferr != nil {
+			LOGGER.WithFields(logrus.Fields{
+				"ouput": ferr.Err.Error(),
+				"param": faked_sysv,
+			}).Error("faked-sysv starts error")
 			return ferr
 		}
 		faked_str := strings.Split(foutput, ":")

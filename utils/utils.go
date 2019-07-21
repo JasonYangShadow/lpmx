@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -43,6 +44,7 @@ var (
 	memcached_checklist = []string{"memcached", "libevent"}
 	time_sleep          = 2
 	gdrive_prefix       = "https://drive.google.com/file/d/"
+	FOLDER_MODE         = 0755
 )
 
 func FileExist(file string) bool {
@@ -870,7 +872,7 @@ func GetHostOSInfo() (string, string, *Error) {
 }
 
 func GetProcessIdByName(name string) (bool, string, *Error) {
-	cmd_context := fmt.Sprintf("ps -ef|grep %s|grep -v grep|awk '{print $2}'", name)
+	cmd_context := fmt.Sprintf("pgrep -u $USER %s", name)
 	out, err := CommandBash(cmd_context)
 	if err != nil {
 		return false, "", err
@@ -982,4 +984,80 @@ func Sha256str(str string) (string, *Error) {
 
 	value := fmt.Sprintf("%x", h.Sum(nil))
 	return value, nil
+}
+
+//this function is used for the replacement of system ioutil.TempDir, as sometimes the /tmp folder is another mount on HPC and rename could not be done
+func CreateTempDir(dir string) (string, *Error) {
+	if !FolderExist(dir) {
+		derr := os.MkdirAll(dir, os.FileMode(FOLDER_MODE))
+		if derr != nil {
+			cerr := ErrNew(derr, fmt.Sprintf("%s could not be created", dir))
+			return "", cerr
+		}
+	}
+	rand_str := RandomString(10)
+	id := fmt.Sprintf("%s/%s", dir, rand_str)
+	for {
+		if !FolderExist(id) {
+			derr := os.MkdirAll(id, os.FileMode(FOLDER_MODE))
+			if derr != nil {
+				cerr := ErrNew(derr, fmt.Sprintf("%s could not be created", id))
+				return "", cerr
+			}
+			break
+		} else {
+			//randomly generate unique id
+			rand_str = RandomString(10)
+			id = fmt.Sprintf("%s/%s", dir, rand_str)
+		}
+	}
+	return id, nil
+}
+
+func CompareVersion(str1, str2, delimeter string) (int, *Error) {
+	str1 = strings.ToLower(str1)
+	str2 = strings.ToLower(str2)
+
+	if str1 == str2 {
+		return 0, nil
+	}
+
+	str1_arr := strings.Split(str1, delimeter)
+	str2_arr := strings.Split(str2, delimeter)
+
+	min := len(str1_arr)
+	if len(str1_arr) > len(str2_arr) {
+		min = len(str2_arr)
+	}
+
+	for i := 0; i < min; i++ {
+		i1, e1 := strconv.Atoi(str1_arr[i])
+		if e1 != nil {
+			cerr := ErrNew(e1, "could not convert string to int")
+			return 0, cerr
+		}
+		i2, e2 := strconv.Atoi(str2_arr[i])
+		if e2 != nil {
+			cerr := ErrNew(e2, "could not convert string to int")
+			return 0, cerr
+		}
+
+		if i1 < i2 {
+			return -1, nil
+		}
+
+		if i1 > i2 {
+			return 1, nil
+		}
+	}
+
+	if len(str1_arr) < len(str2_arr) {
+		return -1, nil
+	}
+
+	if len(str1_arr) > len(str2_arr) {
+		return 1, nil
+	}
+
+	return 0, nil
 }

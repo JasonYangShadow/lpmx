@@ -52,8 +52,30 @@ func TestDownloadBlob(t *testing.T) {
 }
 
 func TestUploadManifest(t *testing.T) {
-	//t.Skip("skip test")
+	t.Skip("skip test")
 	err := UploadManifests("JasonYangShadow", "", "JasonYangShadow/ubuntu", "test", "45e43933efa9dab764a881ee4a87b4ffde3965584cd03b76f51d17de4b538ee0", "ubuntu:16.04")
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestDownloadGithub(t *testing.T) {
+	//t.Skip("skip test")
+	SETTING_URL := "https://raw.githubusercontent.com/JasonYangShadow/LPMXSettingRepository/master"
+	yaml := "/tmp/distro.management.yml"
+	url, err := GenGithubURLfromYaml("redhat", "6.1", SETTING_URL, yaml, "dependency.tar.gz")
+	if err != nil {
+		t.Error(err)
+	} else {
+		t.Log(url)
+	}
+}
+
+func TestDownloadGithubPlus(t *testing.T) {
+	t.Skip("skip test")
+	SETTING_URL := "https://raw.githubusercontent.com/JasonYangShadow/LPMXSettingRepository/master"
+	yaml := "/tmp/distro.management.yml"
+	err := DownloadFilefromGithubPlus("linuxmint", "14.04", "dependency.tar.gz", SETTING_URL, "/tmp", yaml)
 	if err != nil {
 		t.Error(err)
 	}
