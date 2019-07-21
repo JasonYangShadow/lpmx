@@ -487,7 +487,7 @@ func DownloadFilefromGithubPlus(name, tag, filename, url, folder, yaml string) *
 		}
 	}
 
-	fmt.Printf("Downloading %s from %s", filename, gen_url)
+	fmt.Printf("Downloading %s from %s\n", filename, gen_url)
 	return nil
 }
 
