@@ -19,7 +19,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-0.5"
+	VERSION = "alpha-0.6"
 )
 
 func checkCompleteness() *Error {
