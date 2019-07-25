@@ -63,6 +63,20 @@ func FolderExist(folder string) bool {
 	return false
 }
 
+func GetFileLength(file string) (int64, *Error) {
+	if FileExist(file) {
+		fi, err := os.Stat(file)
+		if err != nil {
+			cerr := ErrNew(err, "GetFileLength encounters error")
+			return -1, cerr
+		}
+
+		return fi.Size(), nil
+	}
+	cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does not exist", file))
+	return -1, cerr
+}
+
 func FileType(file string) (int8, *Error) {
 	fi, err := os.Stat(file)
 	if err != nil {

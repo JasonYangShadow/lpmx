@@ -1198,6 +1198,164 @@ func DockerCommit(id, newname, newtag string) *Error {
 	return err
 }
 
+func DockerMerge(name, user, pass string) *Error {
+	currdir, _ := GetCurrDir()
+	rootdir := fmt.Sprintf("%s/.docker", currdir)
+	sysdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	var doc Docker
+	err := unmarshalObj(rootdir, &doc)
+	if err != nil && err.Err != ErrNExist {
+		return err
+	}
+	if err != nil && err.Err == ErrNExist {
+		ret, err := MakeDir(rootdir)
+		doc.RootDir = rootdir
+		doc.Images = make(map[string]interface{})
+		if !ret {
+			return err
+		}
+	}
+	if !strings.Contains(name, ":") {
+		name = name + ":latest"
+	}
+
+	mdata := make(map[string]interface{})
+	tdata := strings.Split(name, ":")
+	tname := tdata[0]
+	ttag := tdata[1]
+	mdata["rootdir"] = fmt.Sprintf("%s/%s/%s-merge", doc.RootDir, tname, ttag)
+	mdata["config"] = fmt.Sprintf("%s/setting.yml", mdata["rootdir"].(string))
+	mdata["image"] = fmt.Sprintf("%s/.image", rootdir)
+	image_dir, _ := mdata["image"].(string)
+	//name is something like "ubuntu:16.04"
+	var layer_order []string
+	if mdata_orig, ok := doc.Images[name]; ok {
+		if mdata_map, m_ok := mdata_orig.(map[string]interface{}); m_ok {
+			layer_order = strings.Split(mdata_map["layer_order"].(string), ":")
+		}
+	} else {
+		_, layer_order, err = DownloadLayers(user, pass, tname, ttag, image_dir)
+		if err != nil {
+			return err
+		}
+	}
+
+	//base folder
+	base := fmt.Sprintf("%s/.base", rootdir)
+	if !FolderExist(base) {
+		MakeDir(base)
+	}
+	mdata["base"] = base
+
+	//workspace folder
+	workspace := fmt.Sprintf("%s/workspace", mdata["rootdir"])
+	if !FolderExist(workspace) {
+		MakeDir(workspace)
+	}
+	mdata["workspace"] = workspace
+
+	//create temp folder
+	tmpdir, terr := CreateTempDir(mdata["base"].(string))
+	//extract firstly
+	for _, k := range layer_order {
+		k = path.Base(k)
+		tar_path := fmt.Sprintf("%s/%s", image_dir, k)
+		err := Untar(tar_path, tmpdir)
+		if err != nil {
+			return err
+		}
+	}
+
+	//download setting from github
+	rdir, _ := mdata["rootdir"].(string)
+
+	yaml := fmt.Sprintf("%s/distro.management.yml", sysdir)
+	err = DownloadFilefromGithubPlus(tname, ttag, "setting.yml", SETTING_URL, rdir, yaml)
+	if err != nil {
+		LOGGER.WithFields(logrus.Fields{
+			"err":    err,
+			"toPath": rdir,
+		}).Error("Download setting from github failure and could not rollback to default one")
+		return err
+	}
+
+	//tar folder to tarball
+	target_name := RandomString(10)
+	terr = TarLayer(tmpdir, image_dir, target_name, nil)
+	if terr != nil {
+		return terr
+	}
+
+	tar_image_path := fmt.Sprintf("%s/%s.tar.gz", image_dir, target_name)
+	sha256, serr := Sha256file(tar_image_path)
+	if serr != nil {
+		return serr
+	}
+
+	//rename folder and file
+	new_folder_name := fmt.Sprintf("%s/%s", mdata["base"].(string), sha256)
+	new_image_name := fmt.Sprintf("%s/%s", mdata["image"].(string), sha256)
+	rerr := Rename(tmpdir, new_folder_name)
+	if rerr != nil {
+		return rerr
+	}
+	rerr = Rename(tar_image_path, new_image_name)
+	if rerr != nil {
+		return rerr
+	}
+
+	//write info to disk file
+	ret := make(map[string]int64)
+	size, ierr := GetFileLength(new_image_name)
+	if ierr != nil {
+		return ierr
+	}
+	ret[new_image_name] = size
+	mdata["layer"] = ret
+	mdata["layer_order"] = new_image_name
+
+	//add docker info file(.info)
+	if !FolderExist(mdata["rootdir"].(string)) {
+		merr := os.MkdirAll(mdata["rootdir"].(string), os.FileMode(FOLDER_MODE))
+		if merr != nil {
+			cerr := ErrNew(merr, fmt.Sprintf("could not mkdir %s", mdata["rootdir"].(string)))
+			return cerr
+		}
+	}
+
+	var docinfo DockerInfo
+	docinfo.Name = name
+	layersmap := make(map[string]int64)
+	for k, v := range ret {
+		layersmap[path.Base(k)] = v
+	}
+	docinfo.LayersMap = layersmap
+
+	var layer_sha []string
+	for _, layer := range layer_order {
+		layer_sha = append(layer_sha, path.Base(layer))
+	}
+	docinfo.Layers = strings.Join(layer_sha, ":")
+
+	dinfodata, _ := StructMarshal(docinfo)
+	err = WriteToFile(dinfodata, fmt.Sprintf("%s/.info", mdata["rootdir"].(string)))
+	if err != nil {
+		return err
+	}
+
+	//add map to this image
+	//change name here
+	new_name := fmt.Sprintf("%s-merge", name)
+	doc.Images[new_name] = mdata
+	ddata, _ := StructMarshal(doc)
+	err = WriteToFile(ddata, fmt.Sprintf("%s/.info", doc.RootDir))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func DockerDownload(name string, user string, pass string) *Error {
 	currdir, _ := GetCurrDir()
 	rootdir := fmt.Sprintf("%s/.docker", currdir)

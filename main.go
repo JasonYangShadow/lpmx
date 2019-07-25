@@ -19,7 +19,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-0.6"
+	VERSION = "alpha-0.7"
 )
 
 func checkCompleteness() *Error {
@@ -330,6 +330,7 @@ func main() {
 	//docker cmd
 	var DockerDownloadUser string
 	var DockerDownloadPass string
+	var DockerDownloadMerge bool
 	var dockerDownloadCmd = &cobra.Command{
 		Use:   "download",
 		Short: "download the docker images from docker hub",
@@ -343,7 +344,12 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := DockerDownload(args[0], DockerDownloadUser, DockerDownloadPass)
+			var err *Error
+			if DockerDownloadMerge {
+				err = DockerMerge(args[0], DockerDownloadUser, DockerDownloadPass)
+			} else {
+				err = DockerDownload(args[0], DockerDownloadUser, DockerDownloadPass)
+			}
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -353,6 +359,7 @@ func main() {
 			}
 		},
 	}
+	dockerDownloadCmd.Flags().BoolVarP(&DockerDownloadMerge, "merge", "m", false, "merge all layers(optional)")
 	dockerDownloadCmd.Flags().StringVarP(&DockerDownloadUser, "user", "u", "", "optional")
 	dockerDownloadCmd.Flags().StringVarP(&DockerDownloadPass, "pass", "p", "", "optional")
 
