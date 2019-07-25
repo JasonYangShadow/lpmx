@@ -1310,6 +1310,7 @@ func DockerMerge(name, user, pass string) *Error {
 	if ierr != nil {
 		return ierr
 	}
+	//new layer name : size
 	ret[new_image_name] = size
 	mdata["layer"] = ret
 	mdata["layer_order"] = new_image_name
@@ -1326,16 +1327,12 @@ func DockerMerge(name, user, pass string) *Error {
 	var docinfo DockerInfo
 	docinfo.Name = name
 	layersmap := make(map[string]int64)
+	//sha256:size
 	for k, v := range ret {
 		layersmap[path.Base(k)] = v
 	}
 	docinfo.LayersMap = layersmap
-
-	var layer_sha []string
-	for _, layer := range layer_order {
-		layer_sha = append(layer_sha, path.Base(layer))
-	}
-	docinfo.Layers = strings.Join(layer_sha, ":")
+	docinfo.Layers = sha256
 
 	dinfodata, _ := StructMarshal(docinfo)
 	err = WriteToFile(dinfodata, fmt.Sprintf("%s/.info", mdata["rootdir"].(string)))
