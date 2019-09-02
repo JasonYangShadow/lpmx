@@ -1002,7 +1002,7 @@ func DockerCommit(id, newname, newtag string) *Error {
 					fmt.Println("renaming rw layer...")
 					image_dir := fmt.Sprintf("%s/.image", filepath.Dir(con.BaseLayerPath))
 					src_tar_path := rw_tar_path
-					target_tar_path := fmt.Sprintf("%s/%s", image_dir, shasum)
+					target_tar_path := fmt.Sprintf("%s/%s.tar.gz", image_dir, shasum)
 					rerr := os.Rename(src_tar_path, target_tar_path)
 					if rerr != nil {
 						cerr := ErrNew(rerr, fmt.Sprintf("could not rename(move): %s to %s", src_tar_path, target_tar_path))
@@ -1067,7 +1067,7 @@ func DockerCommit(id, newname, newtag string) *Error {
 							v := strings.Split(kv, ":")
 							derr := os.Symlink(v[0], fmt.Sprintf("%s%s", con.RootPath, v[1]))
 							if derr != nil {
-								cerr := ErrNew(derr, fmt.Sprintf("could not symlink, oldpath: %s, newpath: %s", v[0], fmt.Sprintf("%s%s", v[1])))
+								cerr := ErrNew(derr, fmt.Sprintf("could not symlink, oldpath: %s, newpath: %s", v[0], v[1]))
 								return cerr
 							}
 						}
@@ -1350,6 +1350,158 @@ func DockerMerge(name, user, pass string) *Error {
 		return err
 	}
 
+	return nil
+}
+
+func DockerLoad(file string) *Error {
+	currdir, _ := GetCurrDir()
+	rootdir := fmt.Sprintf("%s/.docker", currdir)
+	sysdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	tempdir := fmt.Sprintf("%s/.temp", currdir)
+	//we delete temp dir if it exists at the end of the function
+	defer func() {
+		if FolderExist(tempdir) {
+			os.RemoveAll(tempdir)
+		}
+	}()
+
+	//check if file exists
+	if !FileExist(file) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does exist", file))
+		return cerr
+	}
+
+	//configure Docker related info locally
+	var doc Docker
+	err := unmarshalObj(rootdir, &doc)
+	if err != nil && err.Err != ErrNExist {
+		return err
+	}
+
+	if err != nil && err.Err == ErrNExist {
+		ret, err := MakeDir(rootdir)
+		doc.RootDir = rootdir
+		doc.Images = make(map[string]interface{})
+		if !ret {
+			return err
+		}
+	}
+
+	//get temp folder for extraction
+	tmpdir, terr := CreateTempDir(tempdir)
+	if terr != nil {
+		return terr
+	}
+
+	//untar tar ball
+	uerr := Untar(file, tmpdir)
+	if uerr != nil {
+		return uerr
+	}
+
+	image_dir := fmt.Sprintf("%s/.image", rootdir)
+	name, ret, layer_order, lerr := LoadDockerTar(tmpdir, image_dir)
+	if lerr != nil {
+		return lerr
+	}
+	if _, ok := doc.Images[name]; ok {
+		cerr := ErrNew(ErrExist, fmt.Sprintf("%s already exists", name))
+		return cerr
+	} else {
+		tdata := strings.Split(name, ":")
+		tname := tdata[0]
+		ttag := tdata[1]
+		mdata := make(map[string]interface{})
+		mdata["rootdir"] = fmt.Sprintf("%s/%s/%s", doc.RootDir, tname, ttag)
+		mdata["config"] = fmt.Sprintf("%s/setting.yml", mdata["rootdir"].(string))
+		mdata["image"] = fmt.Sprintf("%s/.image", rootdir)
+		mdata["layer"] = ret
+		mdata["layer_order"] = strings.Join(layer_order, ":")
+
+		//add docker info file(.info)
+		if !FolderExist(mdata["rootdir"].(string)) {
+			merr := os.MkdirAll(mdata["rootdir"].(string), os.FileMode(FOLDER_MODE))
+			if merr != nil {
+				cerr := ErrNew(merr, fmt.Sprintf("could not mkdir %s", mdata["rootdir"].(string)))
+				return cerr
+			}
+		}
+		var docinfo DockerInfo
+		docinfo.Name = name
+		// layer_order is absolute path
+		//docinfo layers map should remove absolute path of host
+		layersmap := make(map[string]int64)
+		for k, v := range ret {
+			layersmap[path.Base(k)] = v
+		}
+		docinfo.LayersMap = layersmap
+
+		var layer_sha []string
+		for _, layer := range layer_order {
+			layer_sha = append(layer_sha, path.Base(layer))
+		}
+		docinfo.Layers = strings.Join(layer_sha, ":")
+
+		LOGGER.WithFields(logrus.Fields{
+			"docinfo": docinfo,
+		}).Debug("DockerLoad debug, docinfo debug")
+
+		dinfodata, _ := StructMarshal(docinfo)
+		err = WriteToFile(dinfodata, fmt.Sprintf("%s/.info", mdata["rootdir"].(string)))
+		if err != nil {
+			return err
+		}
+		//end
+
+		workspace := fmt.Sprintf("%s/workspace", mdata["rootdir"])
+		if !FolderExist(workspace) {
+			MakeDir(workspace)
+		}
+		mdata["workspace"] = workspace
+
+		//extract layers
+		base := fmt.Sprintf("%s/.base", rootdir)
+		if !FolderExist(base) {
+			MakeDir(base)
+		}
+		mdata["base"] = base
+
+		for _, k := range layer_order {
+			k = path.Base(k)
+			tar_path := fmt.Sprintf("%s/%s", image_dir, k)
+			layerfolder := fmt.Sprintf("%s/%s", mdata["base"], k)
+			if !FolderExist(layerfolder) {
+				MakeDir(layerfolder)
+			}
+
+			err := Untar(tar_path, layerfolder)
+			if err != nil {
+				return err
+			}
+		}
+
+		//download setting from github
+		rdir, _ := mdata["rootdir"].(string)
+
+		yaml := fmt.Sprintf("%s/distro.management.yml", sysdir)
+		err = DownloadFilefromGithubPlus(tname, ttag, "setting.yml", SETTING_URL, rdir, yaml)
+		if err != nil {
+			LOGGER.WithFields(logrus.Fields{
+				"err":    err,
+				"toPath": rdir,
+			}).Error("Download setting from github failure and could not rollback to default one")
+			return err
+		}
+
+		//add map to this image
+		doc.Images[name] = mdata
+
+		ddata, _ := StructMarshal(doc)
+		err = WriteToFile(ddata, fmt.Sprintf("%s/.info", doc.RootDir))
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

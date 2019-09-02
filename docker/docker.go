@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,6 +30,13 @@ const (
 	DOCKER_URL  = "https://registry-1.docker.io"
 	SETTING_URL = "https://raw.githubusercontent.com/JasonYangShadow/LPMXSettingRepository/master"
 )
+
+//Docker load image structure
+type DockerSaveInfo struct {
+	Config   string   //config json file name
+	RepoTags []string //tag list
+	Layers   []string //layers included inside this image, from lower to higher layers
+}
 
 func ListRepositories(username string, pass string) ([]string, *Error) {
 	log.SetOutput(ioutil.Discard)
@@ -334,6 +342,56 @@ func DeleteManifest(username string, pass string, name string, tag string) *Erro
 	return nil
 }
 
+//dir is temp dir used for tarball extraction, image dir is used for the storage of image data
+func LoadDockerTar(dir, imagedir string) (string, map[string]int64, []string, *Error) {
+	if !FolderExist(dir) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does not exist", dir))
+		return "", nil, nil, cerr
+	}
+
+	var infos []DockerSaveInfo
+	manifest_file := fmt.Sprintf("%s/manifest.json", dir)
+	b, berr := ioutil.ReadFile(manifest_file)
+	if berr != nil {
+		cerr := ErrNew(berr, fmt.Sprintf("could not read file: %s", manifest_file))
+		return "", nil, nil, cerr
+	}
+
+	jerr := json.Unmarshal(b, &infos)
+	if jerr != nil {
+		cerr := ErrNew(jerr, "could not unmarshal json bytes to objects")
+		return "", nil, nil, cerr
+	}
+
+	name := infos[0].RepoTags[0]
+	layer_data := make(map[string]int64)
+	var layers []string
+	for _, k := range infos[0].Layers {
+		// k is sha256/layer.tar
+		layer_path := fmt.Sprintf("%s/%s", dir, k)
+		shavalue := filepath.Dir(k)
+		//create tar.gz package of current tar package
+		cerr := ConvertTar2Gzip(layer_path, fmt.Sprintf("%s/%s/%s", dir, shavalue, shavalue))
+		if cerr != nil {
+			return "", nil, nil, cerr
+		}
+
+		target_path := fmt.Sprintf("%s/%s.tar.gz", imagedir, shavalue)
+		rerr := Rename(fmt.Sprintf("%s/%s/%s", dir, shavalue, shavalue), target_path)
+		if rerr != nil {
+			return "", nil, nil, rerr
+		}
+		file_length, ferr := GetFileLength(target_path)
+		if ferr != nil {
+			return "", nil, nil, ferr
+		}
+		layer_data[target_path] = file_length
+		layers = append(layers, target_path)
+	}
+
+	return name, layer_data, layers, nil
+}
+
 func DownloadLayers(username string, pass string, name string, tag string, folder string) (map[string]int64, []string, *Error) {
 	log.SetOutput(ioutil.Discard)
 	if !strings.Contains(name, "library/") && !strings.Contains(name, "/") {
@@ -370,7 +428,7 @@ func DownloadLayers(username string, pass string, name string, tag string, folde
 		if strings.HasSuffix(folder, "/") {
 			folder = strings.TrimSuffix(folder, "/")
 		}
-		filename := folder + "/" + strings.TrimPrefix(dig.String(), "sha256:")
+		filename := folder + "/" + strings.TrimPrefix(dig.String(), "sha256:") + ".tar.gz"
 		to, err := os.Create(filename)
 		if err != nil {
 			cerr := ErrNew(err, fmt.Sprintf("create file %s failure", filename))
@@ -408,6 +466,8 @@ func DownloadLayers(username string, pass string, name string, tag string, folde
 		data[filename] = element.Size
 		layer_order = append(layer_order, filename)
 	}
+	//data is map[string]int64, string is filename, int64 is the size of the layer
+	//layer_order is the array of filenames
 	return data, layer_order, nil
 }
 

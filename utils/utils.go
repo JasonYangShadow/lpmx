@@ -599,6 +599,43 @@ func TarFiles(filelist []string, target_folder string, target_name string) *Erro
 	return nil
 }
 
+//convert tar to tar.gz
+func ConvertTar2Gzip(src_file, target_file string) *Error {
+	if !FileExist(src_file) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s file does not exist", src_file))
+		return cerr
+	}
+
+	if FileExist(target_file) {
+		cerr := ErrNew(ErrExist, fmt.Sprintf("%s file exists, could not overwrite it", target_file))
+		return cerr
+	}
+
+	file, ferr := os.Create(target_file)
+	if ferr != nil {
+		cerr := ErrNew(ferr, fmt.Sprintf("%s creating error", target_file))
+		return cerr
+	}
+	defer file.Close()
+
+	mw := io.Writer(file)
+	gzw := gzip.NewWriter(mw)
+	defer gzw.Close()
+
+	f, err := os.Open(src_file)
+	if err != nil {
+		cerr := ErrNew(err, "could not open file")
+		return cerr
+	}
+
+	if _, err := io.Copy(gzw, f); err != nil {
+		cerr := ErrNew(err, "could not write file")
+		return cerr
+	}
+
+	return nil
+}
+
 //this tar function eliminate symlink
 func TarLayer(src_folder string, target_folder string, target_name string, layers []string) *Error {
 	if !FolderExist(src_folder) {
@@ -719,25 +756,36 @@ func TarLayer(src_folder string, target_folder string, target_name string, layer
 
 }
 
-func Untar(target string, folder string) *Error {
-	if !FileExist(target) {
-		cerr := ErrNew(ErrNExist, fmt.Sprintf("file %s does not exist", target))
+func Untar(file string, folder string) *Error {
+	if !FileExist(file) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("file %s does not exist", file))
 		return cerr
 	}
-	r, err := os.Open(target)
+	r, err := os.Open(file)
 	if err != nil {
-		cerr := ErrNew(ErrFileIO, fmt.Sprintf("open file %s failure", target))
+		cerr := ErrNew(ErrFileIO, fmt.Sprintf("open file %s failure", file))
 		return cerr
 	}
 	defer r.Close()
-	gzr, err := gzip.NewReader(r)
-	if err != nil {
-		cerr := ErrNew(err, fmt.Sprintf("gzip open file %s failure", target))
+
+	var tr *tar.Reader
+	ext := filepath.Ext(file)
+	if strings.ToLower(ext) == ".tar" {
+		tr = tar.NewReader(r)
+	} else if strings.ToLower(ext) == ".gz" && filepath.Ext(strings.TrimSuffix(strings.ToLower(file), ".gz")) == ".tar" {
+		gzr, err := gzip.NewReader(r)
+		if err != nil {
+			cerr := ErrNew(err, fmt.Sprintf("gzip open file %s failure", file))
+			return cerr
+		}
+		defer gzr.Close()
+
+		tr = tar.NewReader(gzr)
+
+	} else {
+		cerr := ErrNew(ErrMismatch, fmt.Sprintf("%s file is neither tar.gz file nor tar file", file))
 		return cerr
 	}
-	defer gzr.Close()
-
-	tr := tar.NewReader(gzr)
 
 	for {
 		header, err := tr.Next()

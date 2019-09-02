@@ -19,7 +19,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-0.7"
+	VERSION = "alpha-0.8"
 )
 
 func checkCompleteness() *Error {
@@ -611,12 +611,36 @@ func main() {
 	dockerPushCmd.Flags().StringVarP(&DockerPushId, "id", "i", "", "required")
 	dockerPushCmd.MarkFlagRequired("id")
 
+	var dockerLoadCmd = &cobra.Command{
+		Use:   "load",
+		Short: "load the 'docker save' generated tar ball to system",
+		Long:  "docker load sub-command is one advanced command of lpmx, which is used for importing 'docker save' generated tar ball to system",
+		Args:  cobra.ExactArgs(1),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := checkCompleteness()
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			err := DockerLoad(args[0])
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			} else {
+				LOGGER.Info("DONE")
+				return
+			}
+		},
+	}
+
 	var dockerCmd = &cobra.Command{
 		Use:   "docker",
 		Short: "docker command",
 		Long:  "docker command is the advanced comand of lpmx, which is used for executing docker related commands",
 	}
-	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd, dockerPackageCmd, dockerAddCmd, dockerCommitCmd)
+	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd, dockerPackageCmd, dockerAddCmd, dockerCommitCmd, dockerLoadCmd)
 
 	var ExposeId string
 	var ExposeName string

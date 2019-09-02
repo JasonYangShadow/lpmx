@@ -1,12 +1,17 @@
 package container
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"testing"
+
 	. "github.com/JasonYangShadow/lpmx/msgpack"
 	. "github.com/JasonYangShadow/lpmx/utils"
-	"testing"
 )
 
 func TestContainerMarshal(t *testing.T) {
+	t.Skip("skip test")
 	var con Container
 	con.ConfigPath = "/tmp/lpmx_test"
 	t.Log(con)
@@ -27,6 +32,7 @@ func TestContainerMarshal(t *testing.T) {
 }
 
 func TestUnmarshal(t *testing.T) {
+	t.Skip("skip test")
 	var con Container
 	data, err := ReadFromFile("/tmp/lpmx_test/.lpmx/.info")
 	if err != nil {
@@ -37,4 +43,27 @@ func TestUnmarshal(t *testing.T) {
 		t.Error(err)
 	}
 	t.Log(con)
+}
+
+func TestJsonUnmarshal(t *testing.T) {
+	//t.Skip("skip test")
+	tmpdir := "/tmp"
+	uerr := Untar("/tmp/ubuntu.tar", tmpdir, false)
+	if uerr != nil {
+		t.Error(uerr)
+	}
+
+	var dockerSaveInfos []DockerSaveInfo
+	manifest_file := fmt.Sprintf("%s/manifest.json", tmpdir)
+	b, berr := ioutil.ReadFile(manifest_file)
+	if berr != nil {
+		t.Error(berr)
+	}
+
+	err := json.Unmarshal(b, &dockerSaveInfos)
+	if err != nil {
+		t.Error(err)
+	}
+
+	fmt.Println(dockerSaveInfos)
 }
