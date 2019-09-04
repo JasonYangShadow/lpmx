@@ -144,7 +144,10 @@ func (server *RPC) RPCDelete(req Request, res *Response) error {
 }
 
 func Init(reset bool, deppath string) *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	var sys Sys
 	config := fmt.Sprintf("%s/.lpmxsys", currdir)
 
@@ -268,7 +271,10 @@ func Init(reset bool, deppath string) *Error {
 }
 
 func Uninstall() *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	if ok, pid, _ := GetProcessIdByName("memcached"); ok {
 		fmt.Println("stopping memcached instance...")
 		err := KillProcessByPid(pid)
@@ -286,11 +292,113 @@ func Uninstall() *Error {
 	return nil
 }
 
+func Update() *Error {
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
+	config := fmt.Sprintf("%s/.lpmxsys", currdir)
+	if !FolderExist(config) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("could not find config folder in %s, something goes wrong, please uninstall and reset", currdir))
+		return cerr
+	}
+
+	//check if there are containers running
+	var sys Sys
+	err = unmarshalObj(config, &sys)
+	if err == nil {
+		//range containers
+		for _, value := range sys.Containers {
+			if vval, vok := value.(map[string]interface{}); vok {
+				config_path := vval["ConfigPath"].(string)
+
+				var con Container
+				err = unmarshalObj(config_path, &con)
+				if err != nil {
+					return err
+				}
+
+				pidfile := fmt.Sprintf("%s/container.pid", path.Dir(con.RootPath))
+
+				if pok, _ := PidIsActive(pidfile); pok {
+					pid, _ := PidValue(pidfile)
+					cerr := ErrNew(ErrExist, fmt.Sprintf("conatiner is running with pid: %d, can't update(please stop all running containers in order to update libraries)", pid))
+					return cerr
+				}
+			} else {
+				cerr := ErrNew(ErrType, "container type is not map[string]interface{}")
+				return cerr
+			}
+		}
+	} else {
+		return err
+	}
+
+	dist, release, cerr := GetHostOSInfo()
+	if cerr != nil {
+		dist = "default"
+		release = "default"
+	}
+
+	if dist == "" {
+		dist = "default"
+	}
+
+	if release == "" {
+		release = "default"
+	}
+
+	deppath := fmt.Sprintf("%s/dependency.tar.gz", config)
+	if FileExist(deppath) {
+		_, ferr := RemoveFile(deppath)
+		if ferr != nil {
+			return ferr
+		}
+	}
+	if !FileExist(deppath) {
+		yaml := fmt.Sprintf("%s/distro.management.yml", sys.RootDir)
+		err = DownloadFilefromGithubPlus(dist, release, "dependency.tar.gz", SETTING_URL, config, yaml)
+		if err != nil {
+			return err
+		}
+		//create temp folder
+		temp, terr := CreateTempDir(config)
+		if terr != nil {
+			return terr
+		}
+
+		defer func() {
+			if FolderExist(temp) {
+				os.RemoveAll(temp)
+			}
+		}()
+
+		err = Untar(deppath, temp)
+		if err != nil {
+			return err
+		}
+
+		err = Rename(fmt.Sprintf("%s/libfakechroot.so", temp), fmt.Sprintf("%s/libfakechroot.so", config))
+		if err != nil {
+			return err
+		}
+
+		//Done
+		return nil
+	}
+
+	cerr = ErrNew(ErrExist, fmt.Sprintf("could not find %s, terminated", deppath))
+	return cerr
+}
+
 func List() *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := unmarshalObj(rootdir, &sys)
+	err = unmarshalObj(rootdir, &sys)
 	if err == nil {
 		fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", "ContainerID", "ContainerName", "Status", "PID", "RPC", "DockerBase", "Image"))
 		for k, v := range sys.Containers {
@@ -393,10 +501,13 @@ func RPCDelete(ip string, port string, pid int) (*Response, *Error) {
 }
 
 func Resume(id string, args ...string) *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := unmarshalObj(rootdir, &sys)
+	err = unmarshalObj(rootdir, &sys)
 	if err == nil {
 		if v, ok := sys.Containers[id]; ok {
 			if val, vok := v.(map[string]interface{}); vok {
@@ -451,10 +562,13 @@ func Resume(id string, args ...string) *Error {
 }
 
 func Destroy(id string) *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := unmarshalObj(rootdir, &sys)
+	err = unmarshalObj(rootdir, &sys)
 
 	defer func() {
 		data, _ := StructMarshal(&sys)
@@ -605,10 +719,13 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 }
 
 func Get(id string, name string) *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := unmarshalObj(rootdir, &sys)
+	err = unmarshalObj(rootdir, &sys)
 
 	if err == nil {
 		if _, ok := sys.Containers[id]; ok {
@@ -630,10 +747,13 @@ func Get(id string, name string) *Error {
 }
 
 func Set(id string, tp string, name string, value string) *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := unmarshalObj(rootdir, &sys)
+	err = unmarshalObj(rootdir, &sys)
 
 	if err == nil {
 		if v, ok := sys.Containers[id]; ok {
@@ -687,14 +807,17 @@ func DockerSearch(name string) ([]string, *Error) {
 }
 
 func DockerPackage(name string, user string, pass string) *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	packagedir := fmt.Sprintf("%s/package", currdir)
 	if !FolderExist(packagedir) {
 		MakeDir(packagedir)
 	}
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
-	err := unmarshalObj(rootdir, &doc)
+	err = unmarshalObj(rootdir, &doc)
 	if err != nil {
 		return err
 	}
@@ -731,7 +854,10 @@ func DockerAdd(file string) *Error {
 		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does not exist", file))
 		return cerr
 	}
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	tempdir := fmt.Sprintf("%s/.temp", currdir)
 	//we delete temp dir if it exists at the end of the function
@@ -741,7 +867,7 @@ func DockerAdd(file string) *Error {
 		}
 	}()
 	var doc Docker
-	err := unmarshalObj(rootdir, &doc)
+	err = unmarshalObj(rootdir, &doc)
 	if err != nil && err.Err != ErrNExist {
 		return err
 	}
@@ -880,11 +1006,14 @@ func DockerAdd(file string) *Error {
 }
 
 func DockerCommit(id, newname, newtag string) *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	var sys Sys
 	//first check whether the container is running
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := unmarshalObj(rootdir, &sys)
+	err = unmarshalObj(rootdir, &sys)
 	tempdir := fmt.Sprintf("%s/.temp", currdir)
 
 	//here we delete tempdir if it exists at the end of this function
@@ -1199,11 +1328,14 @@ func DockerCommit(id, newname, newtag string) *Error {
 }
 
 func DockerMerge(name, user, pass string) *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	sysdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	var doc Docker
-	err := unmarshalObj(rootdir, &doc)
+	err = unmarshalObj(rootdir, &doc)
 	if err != nil && err.Err != ErrNExist {
 		return err
 	}
@@ -1354,7 +1486,10 @@ func DockerMerge(name, user, pass string) *Error {
 }
 
 func DockerLoad(file string) *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	sysdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	tempdir := fmt.Sprintf("%s/.temp", currdir)
@@ -1373,7 +1508,7 @@ func DockerLoad(file string) *Error {
 
 	//configure Docker related info locally
 	var doc Docker
-	err := unmarshalObj(rootdir, &doc)
+	err = unmarshalObj(rootdir, &doc)
 	if err != nil && err.Err != ErrNExist {
 		return err
 	}
@@ -1506,11 +1641,14 @@ func DockerLoad(file string) *Error {
 }
 
 func DockerDownload(name string, user string, pass string) *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	sysdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	var doc Docker
-	err := unmarshalObj(rootdir, &doc)
+	err = unmarshalObj(rootdir, &doc)
 	if err != nil && err.Err != ErrNExist {
 		return err
 	}
@@ -1635,11 +1773,14 @@ func DockerDownload(name string, user string, pass string) *Error {
 }
 
 func DockerPush(user string, pass string, name string, tag string, id string) *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	var sys Sys
 	//first check whether the container is running
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := unmarshalObj(rootdir, &sys)
+	err = unmarshalObj(rootdir, &sys)
 	if err == nil {
 		if v, ok := sys.Containers[id]; ok {
 			if val, vok := v.(map[string]interface{}); vok {
@@ -1725,10 +1866,13 @@ func DockerPush(user string, pass string, name string, tag string, id string) *E
 }
 
 func DockerList() *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
-	err := unmarshalObj(rootdir, &doc)
+	err = unmarshalObj(rootdir, &doc)
 	fmt.Println(fmt.Sprintf("%s", "Name"))
 	if err == nil {
 		for k, _ := range doc.Images {
@@ -1746,10 +1890,13 @@ func DockerReset(name string) *Error {
 	if !strings.Contains(name, ":") {
 		name = name + ":latest"
 	}
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
-	err := unmarshalObj(rootdir, &doc)
+	err = unmarshalObj(rootdir, &doc)
 	if err == nil {
 		if name_data, name_ok := doc.Images[name].(map[string]interface{}); name_ok {
 			image_dir, _ := name_data["image"].(string)
@@ -1784,10 +1931,13 @@ func DockerReset(name string) *Error {
 }
 
 func DockerCreate(name string, container_name string, volume_map string) *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	rootdir := fmt.Sprintf("%s/.docker", currdir)
 	var doc Docker
-	err := unmarshalObj(rootdir, &doc)
+	err = unmarshalObj(rootdir, &doc)
 	if err == nil {
 		if val, ok := doc.Images[name]; ok {
 			if vval, vok := val.(map[string]interface{}); vok {
@@ -2007,11 +2157,14 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 }
 
 func DockerDelete(name string) *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	//check if there are containers assocated with current image
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := unmarshalObj(rootdir, &sys)
+	err = unmarshalObj(rootdir, &sys)
 	if err == nil {
 		//range containers
 		for key, value := range sys.Containers {
@@ -2065,10 +2218,13 @@ func DockerDelete(name string) *Error {
 }
 
 func Expose(id string, name string) *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := unmarshalObj(rootdir, &sys)
+	err = unmarshalObj(rootdir, &sys)
 
 	if err == nil {
 		if v, ok := sys.Containers[id]; ok {
@@ -2233,7 +2389,10 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	//set default LD_LIBRARY_LPMX
 	var libs []string
 	//add libmemcached and other libs
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return nil, err
+	}
 	libs = append(libs, fmt.Sprintf("%s/.lpmxsys", currdir))
 
 	//find from base layers
@@ -2592,10 +2751,13 @@ func (con *Container) patchBineries() *Error {
 }
 
 func (con *Container) appendToSys() *Error {
-	currdir, _ := GetCurrDir()
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return err
+	}
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-	err := unmarshalObj(rootdir, &sys)
+	err = unmarshalObj(rootdir, &sys)
 
 	if err == nil {
 		//update or add

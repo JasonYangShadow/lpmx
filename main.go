@@ -793,6 +793,22 @@ func main() {
 		},
 	}
 
+	var updateCmd = &cobra.Command{
+		Use:   "update",
+		Short: "update dependencies",
+		Long:  "update necessary libraries of lpmx",
+		Args:  cobra.ExactArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			err := Update()
+			if err != nil {
+				LOGGER.Error(err.Error())
+				return
+			} else {
+				LOGGER.Info("DONE")
+			}
+		},
+	}
+
 	var versionCmd = &cobra.Command{
 		Use:   "version",
 		Short: "show the version of LPMX",
@@ -807,6 +823,6 @@ func main() {
 		Use:   "lpmx",
 		Short: "lpmx rootless container",
 	}
-	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, setCmd, resumeCmd, getCmd, dockerCmd, exposeCmd, uninstallCmd, versionCmd, downloadCmd)
+	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, setCmd, resumeCmd, getCmd, dockerCmd, exposeCmd, uninstallCmd, versionCmd, downloadCmd, updateCmd)
 	rootCmd.Execute()
 }

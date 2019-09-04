@@ -871,10 +871,11 @@ func ReverseStrArray(input []string) []string {
 
 func GetCurrDir() (string, *Error) {
 	arg_path, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	filename := filepath.Base(os.Args[0])
 	searchPaths := []string{arg_path, "."}
 	searchPaths = append(searchPaths, strings.Split(os.Getenv("PATH"), ":")...)
 	for _, path := range searchPaths {
-		p := fmt.Sprintf("%s/lpmx", path)
+		p := fmt.Sprintf("%s/%s", path, filename)
 		if FileExist(p) {
 			return path, nil
 		}
@@ -996,7 +997,10 @@ func CheckCompleteness(folder string, checklist []string) *Error {
 
 func CheckAndStartMemcache() *Error {
 	if ok, _, _ := GetProcessIdByName("memcached"); !ok {
-		currdir, _ := GetCurrDir()
+		currdir, err := GetCurrDir()
+		if err != nil {
+			return err
+		}
 		currdir = fmt.Sprintf("%s/.lpmxsys", currdir)
 
 		cerr := CheckCompleteness(currdir, memcached_checklist)
