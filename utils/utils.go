@@ -847,7 +847,11 @@ func Untar(file string, folder string) *Error {
 			if strings.HasPrefix(header.Linkname, "/") {
 				os.Symlink(fmt.Sprintf("%s%s", strings.TrimSuffix(folder, "/"), header.Linkname), target)
 			} else {
-				os.Symlink(header.Linkname, target)
+				if strings.ContainsAny(header.Linkname, "/") {
+					os.Symlink(fmt.Sprintf("%s%s", folder, header.Linkname), target)
+				} else {
+					os.Symlink(header.Linkname, target)
+				}
 			}
 
 			//we should avoid of creating hard link
@@ -855,7 +859,13 @@ func Untar(file string, folder string) *Error {
 			if strings.HasPrefix(header.Linkname, "/") {
 				os.Symlink(fmt.Sprintf("%s%s", strings.TrimSuffix(folder, "/"), header.Linkname), target)
 			} else {
-				os.Symlink(header.Linkname, target)
+				//for some hard links they link to usr/bin/xxx
+				if strings.ContainsAny(header.Linkname, "/") {
+					os.Symlink(fmt.Sprintf("%s%s", folder, header.Linkname), target)
+				} else {
+					//only works on linking to the file inside the same folder
+					os.Symlink(header.Linkname, target)
+				}
 			}
 		}
 	}
