@@ -844,29 +844,18 @@ func Untar(file string, folder string) *Error {
 
 		case tar.TypeSymlink:
 			//if linkname is absolute path should be linked to the same layer
-			if strings.HasPrefix(header.Linkname, "/") {
-				os.Symlink(fmt.Sprintf("%s%s", strings.TrimSuffix(folder, "/"), header.Linkname), target)
-			} else {
-				if strings.ContainsAny(header.Linkname, "/") {
-					os.Symlink(fmt.Sprintf("%s%s", folder, header.Linkname), target)
-				} else {
-					os.Symlink(header.Linkname, target)
-				}
-			}
+			//target here is symlink, header.Linkname points the target to be linked.
+			//target -> header.Linkname
+
+			//os.Symlink(oldname <- to be linked, newname <- link)
+			//fmt.Printf("-----symlink---- %s, %s, %s\n", header.Linkname, folder, target)
+			os.Symlink(header.Linkname, target)
 
 			//we should avoid of creating hard link
 		case tar.TypeLink:
-			if strings.HasPrefix(header.Linkname, "/") {
-				os.Symlink(fmt.Sprintf("%s%s", strings.TrimSuffix(folder, "/"), header.Linkname), target)
-			} else {
-				//for some hard links they link to usr/bin/xxx
-				if strings.ContainsAny(header.Linkname, "/") {
-					os.Symlink(fmt.Sprintf("%s%s", folder, header.Linkname), target)
-				} else {
-					//only works on linking to the file inside the same folder
-					os.Symlink(header.Linkname, target)
-				}
-			}
+			//fmt.Printf("-----hardlink---- %s, %s, %s\n", header.Linkname, folder, target)
+			//only works on linking to the file inside the same folder
+			os.Symlink(header.Linkname, target)
 		}
 	}
 }

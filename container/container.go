@@ -2534,28 +2534,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		env["LD_LIBRARY_PATH"] = fmt.Sprintf("%s/.lpmxsys", currdir)
 	}
 
-	if _, l_switch_ok := con.SettingConf["fakechroot_log_switch"]; l_switch_ok {
-		env["FAKECHROOT_LOG_SWITCH"] = "TRUE"
-	} else {
-		env["FAKECHROOT_LOG_SWITCH"] = "FALSE"
-	}
-
-	if l_level, l_level_ok := con.SettingConf["fakechroot_log_level"]; l_level_ok {
-		switch l_level {
-		case "DEBUG":
-			env["FAKECHROOT_LOG_LEVEL"] = "0"
-		case "INFO":
-			env["FAKECHROOT_LOG_LEVEL"] = "1"
-		case "WARN":
-			env["FAKECHROOT_LOG_LEVEL"] = "2"
-		case "ERROR":
-			env["FAKECHROOT_LOG_LEVEL"] = "3"
-		case "FATAL":
-			env["FAKECHROOT_LOG_LEVEL"] = "4"
-		default:
-			env["FAKECHROOT_LOG_LEVEL"] = "3"
-		}
-	}
 	if _, priv_switch_ok := con.SettingConf["fakechroot_priv_switch"]; priv_switch_ok {
 		env["FAKECHROOT_PRIV_SWITCH"] = "TRUE"
 	}
