@@ -2395,20 +2395,22 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	}
 	libs = append(libs, fmt.Sprintf("%s/.lpmxsys", currdir))
 
+	//******* important, here we do not use LD_LIBRARY_LPMX any longer, as we will directly use LD_LIBRARY_PATH inside container, and make fakechroot to generate LD_LIBRARY_PATH itself base on layers info.
+
 	//find from base layers
-	for _, v := range LD_LIBRARY_PATH_DEFAULT {
-		lib_paths, err := GuessPathsContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), v, false)
-		if err != nil {
-			continue
-		} else {
-			libs = append(libs, lib_paths...)
-		}
-	}
+	//for _, v := range LD_LIBRARY_PATH_DEFAULT {
+	//	lib_paths, err := GuessPathsContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), v, false)
+	//	if err != nil {
+	//		continue
+	//	} else {
+	//		libs = append(libs, lib_paths...)
+	//	}
+	//}
 
 	//add current rw layer
-	for _, v := range LD_LIBRARY_PATH_DEFAULT {
-		libs = append(libs, fmt.Sprintf("%s/%s", con.RootPath, v))
-	}
+	//for _, v := range LD_LIBRARY_PATH_DEFAULT {
+	//	libs = append(libs, fmt.Sprintf("%s/%s", con.RootPath, v))
+	//}
 
 	//set default FAKECHROOT_EXCLUDE_PATH
 	env["FAKECHROOT_EXCLUDE_PATH"] = "/dev:/proc:/sys"
@@ -2526,12 +2528,19 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	}).Debug("all env vars read from setting.yaml")
 
 	if len(libs) > 0 {
-		if ld_library_val, ld_library_ok := env["LD_LIBRARY_LPMX"]; ld_library_ok {
-			env["LD_LIBRARY_LPMX"] = fmt.Sprintf("%s:%s", strings.Join(libs, ":"), ld_library_val)
+		//if we have customized LD_LIBRARY_PATH set inside yaml file, let us merge them
+		if ld_library_val, ld_library_ok := env["LD_LIBRARY_PATH"]; ld_library_ok {
+			env["LD_LIBRARY_PATH"] = fmt.Sprintf("%s:%s", strings.Join(libs, ":"), ld_library_val)
 		} else {
-			env["LD_LIBRARY_LPMX"] = strings.Join(libs, ":")
+			env["LD_LIBRARY_PATH"] = strings.Join(libs, ":")
 		}
-		env["LD_LIBRARY_PATH"] = fmt.Sprintf("%s/.lpmxsys", currdir)
+
+		//if ld_library_val, ld_library_ok := env["LD_LIBRARY_LPMX"]; ld_library_ok {
+		//	env["LD_LIBRARY_LPMX"] = fmt.Sprintf("%s:%s", strings.Join(libs, ":"), ld_library_val)
+		//} else {
+		//	env["LD_LIBRARY_LPMX"] = strings.Join(libs, ":")
+		//}
+		//env["LD_LIBRARY_PATH"] = strings.Join(libs, ":")
 	}
 
 	if _, priv_switch_ok := con.SettingConf["fakechroot_priv_switch"]; priv_switch_ok {
@@ -2554,6 +2563,9 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		env["FAKECHROOT_EXCLUDE_EX_PATH"] = ep_path.(string)
 	}
 
+	if _, fakechroot_ok := os.LookupEnv("FAKECHROOT_DEBUG"); fakechroot_ok {
+		env["FAKECHROOT_DEBUG"] = "TRUE"
+	}
 	return env, nil
 }
 

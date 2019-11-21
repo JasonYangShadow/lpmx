@@ -112,13 +112,15 @@ func Patchldso(elfpath string, newpath string) *Error {
 	lib := []byte("\x00/lib")
 	usr := []byte("\x00/usr/lib")
 
-	ld_path_orig := []byte("\x00LD_LIBRARY_PATH\x00")
-	ld_path_new := []byte("\x00LD_LIBRARY_LPMX\x00")
+	//******* important: here we do not patch LD_LIBRARY_PATH because we want to directly use it inside container.
+
+	//ld_path_orig := []byte("\x00LD_LIBRARY_PATH\x00")
+	//ld_path_new := []byte("\x00LD_LIBRARY_LPMX\x00")
 	content = bytes.Replace(content, etc, nul_etc, -1)
 	content = bytes.Replace(content, etc1, nul_etc1, -1)
 	content = bytes.Replace(content, lib, nul_lib, -1)
 	content = bytes.Replace(content, usr, nul_usr, -1)
-	content = bytes.Replace(content, ld_path_orig, ld_path_new, -1)
+	//content = bytes.Replace(content, ld_path_orig, ld_path_new, -1)
 
 	err = ioutil.WriteFile(newpath, content, os.FileMode(permissions))
 	if err != nil {
