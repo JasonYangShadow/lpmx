@@ -2080,6 +2080,8 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 				uname := user.Username
 				uid := user.Uid
 				gid := user.Gid
+				passwd_patch := false
+				group_patch := false
 				for _, l := range strings.Split(configmap["layers"].(string), ":") {
 					passwd_path := fmt.Sprintf("%s/%s/etc/passwd", configmap["baselayerpath"].(string), l)
 					if _, err := os.Stat(passwd_path); err == nil {
@@ -2098,6 +2100,8 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 								cerr := ErrNew(err, fmt.Sprintf("%s/passwd", new_passwd_path))
 								return cerr
 							}
+
+							passwd_patch = true
 						} else {
 							return c_err
 						}
@@ -2132,13 +2136,17 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 								}
 								host_f.Close()
 							}
+
+							group_patch = true
 						} else {
 							return c_err
 						}
 					}
 
-					//here we have to break because previous success copy and modification
-					break
+					if passwd_patch && group_patch {
+						//already finished patch return
+						break
+					}
 				}
 
 				//create tmp folder and create whiteout file for tmp
