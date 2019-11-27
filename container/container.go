@@ -2073,6 +2073,10 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 					return cerr
 				}
 
+				LOGGER.WithFields(logrus.Fields{
+					"configmap": configmap,
+				}).Debug("configmap info debugging before copy and create /etc/passwd and /etc/group")
+
 				uname := user.Username
 				uid := user.Uid
 				gid := user.Gid
@@ -2132,6 +2136,9 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 							return c_err
 						}
 					}
+
+					//here we have to break because previous success copy and modification
+					break
 				}
 
 				//create tmp folder and create whiteout file for tmp

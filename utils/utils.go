@@ -393,7 +393,7 @@ func CopyFile(src string, dst string) (bool, *Error) {
 		return false, cerr
 	}
 	if FileExist(dst) {
-		cerr := ErrNew(ErrExist, fmt.Sprintf("target file %s exist, can't override", src))
+		cerr := ErrNew(ErrExist, fmt.Sprintf("target file %s exist, can't override", dst))
 		return false, cerr
 	}
 	in, ierr := os.Open(src)
