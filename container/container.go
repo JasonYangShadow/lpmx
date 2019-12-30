@@ -1594,6 +1594,11 @@ func DockerLoad(file string) *Error {
 		}
 		mdata["workspace"] = workspace
 
+		patchfolder := fmt.Sprintf("%s/patch", mdata["rootdir"])
+		if !FolderExist(patchfolder) {
+			MakeDir(patchfolder)
+		}
+
 		//extract layers
 		base := fmt.Sprintf("%s/.base", rootdir)
 		if !FolderExist(base) {
@@ -1626,6 +1631,24 @@ func DockerLoad(file string) *Error {
 				"toPath": rdir,
 			}).Error("Download setting from github failure and could not rollback to default one")
 			return err
+		}
+
+		//here we start downloading patch tar ball to rdir/patch folder
+		pdir := fmt.Sprintf("%s/patch", rdir)
+		//save patch.tar.gz into rdir and untar it to pdir
+		err = DownloadFilefromGithubPlus(tname, ttag, "patch.tar.gz", SETTING_URL, rdir, yaml)
+		if err != nil {
+			LOGGER.WithFields(logrus.Fields{
+				"err":    err,
+				"toPath": rdir,
+			}).Error("Download patch.tar.gz from github failure and could not rollback to default one")
+			return err
+		} else {
+			//if download success, we have to untar it
+			err = Untar(fmt.Sprintf("%s/patch.tar.gz", rdir), pdir)
+			if err != nil {
+				return err
+			}
 		}
 
 		//add map to this image
@@ -1726,6 +1749,11 @@ func DockerDownload(name string, user string, pass string) *Error {
 		}
 		mdata["workspace"] = workspace
 
+		patchfolder := fmt.Sprintf("%s/patch", mdata["rootdir"])
+		if !FolderExist(patchfolder) {
+			MakeDir(patchfolder)
+		}
+
 		//extract layers
 		base := fmt.Sprintf("%s/.base", rootdir)
 		if !FolderExist(base) {
@@ -1758,6 +1786,24 @@ func DockerDownload(name string, user string, pass string) *Error {
 				"toPath": rdir,
 			}).Error("Download setting from github failure and could not rollback to default one")
 			return err
+		}
+
+		//here we start downloading patch tar ball to rdir/patch folder
+		pdir := fmt.Sprintf("%s/patch", rdir)
+		//save patch.tar.gz into rdir and untar it to pdir
+		err = DownloadFilefromGithubPlus(tname, ttag, "patch.tar.gz", SETTING_URL, rdir, yaml)
+		if err != nil {
+			LOGGER.WithFields(logrus.Fields{
+				"err":    err,
+				"toPath": rdir,
+			}).Error("Download patch.tar.gz from github failure and could not rollback to default one")
+			return err
+		} else {
+			//if download success, we have to untar it
+			err = Untar(fmt.Sprintf("%s/patch.tar.gz", rdir), pdir)
+			if err != nil {
+				return err
+			}
 		}
 
 		//add map to this image
@@ -2037,11 +2083,28 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 				}
 
 				//patch ld.so
+				//update on 20191223 we downloaded patch.tar.gz from github and we need to patch ld.so included inside this tar ball rather than using the one inside container
 				ld_new_path := fmt.Sprintf("%s/ld.so.patch", rootfolder)
 				LOGGER.WithFields(logrus.Fields{
 					"ld_patched_path": ld_new_path,
 				}).Debug("layers sha256 list")
 				if !FileExist(ld_new_path) {
+					ld_orig_path := fmt.Sprintf("%s/patch/ld.so", filepath.Dir(filepath.Dir(rootfolder)))
+					LOGGER.WithFields(logrus.Fields{
+						"ld_path": ld_orig_path,
+					}).Debug("DockerCreate prepares patching target ld.so")
+					_, err := os.Stat(ld_orig_path)
+					if err == nil {
+						perr := Patchldso(ld_orig_path, ld_new_path)
+						if perr != nil {
+							return perr
+						}
+						configmap["elf_loader"] = ld_new_path
+					} else {
+						cerr := ErrNew(err, fmt.Sprintf("could not patch target ld.so: %s", ld_orig_path))
+						return cerr
+					}
+					/**
 					for _, v := range LD {
 						for _, l := range strings.Split(configmap["layers"].(string), ":") {
 							ld_orig_path := fmt.Sprintf("%s/%s%s", configmap["baselayerpath"].(string), l, v)
@@ -2062,6 +2125,7 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 							break
 						}
 					}
+					**/
 				} else {
 					configmap["elf_loader"] = ld_new_path
 				}
@@ -2409,7 +2473,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		return nil, err
 	}
 	libs = append(libs, fmt.Sprintf("%s/.lpmxsys", currdir))
-
 	//******* important, here we do not use LD_LIBRARY_LPMX any longer, as we will directly use LD_LIBRARY_PATH inside container, and make fakechroot to generate LD_LIBRARY_PATH itself base on layers info.
 
 	//find from base layers
