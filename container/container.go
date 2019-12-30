@@ -2473,6 +2473,11 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		return nil, err
 	}
 	libs = append(libs, fmt.Sprintf("%s/.lpmxsys", currdir))
+
+	//20191230 we append patch folder path in a seperated env var indicating that patched existing ld.so related stuff
+	patchfolder := fmt.Sprintf("%s/patch", filepath.Dir(filepath.Dir(filepath.Dir(con.RootPath))))
+	env["FAKECHROOT_LDPatchPath"] = patchfolder
+
 	//******* important, here we do not use LD_LIBRARY_LPMX any longer, as we will directly use LD_LIBRARY_PATH inside container, and make fakechroot to generate LD_LIBRARY_PATH itself base on layers info.
 
 	//find from base layers
@@ -2612,13 +2617,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		} else {
 			env["LD_LIBRARY_PATH"] = strings.Join(libs, ":")
 		}
-
-		//if ld_library_val, ld_library_ok := env["LD_LIBRARY_LPMX"]; ld_library_ok {
-		//	env["LD_LIBRARY_LPMX"] = fmt.Sprintf("%s:%s", strings.Join(libs, ":"), ld_library_val)
-		//} else {
-		//	env["LD_LIBRARY_LPMX"] = strings.Join(libs, ":")
-		//}
-		//env["LD_LIBRARY_PATH"] = strings.Join(libs, ":")
 	}
 
 	if _, priv_switch_ok := con.SettingConf["fakechroot_priv_switch"]; priv_switch_ok {
