@@ -912,13 +912,37 @@ func AddVartoFile(env string, file string) *Error {
 }
 
 func GetHostOSInfo() (string, string, *Error) {
+	distributor := ""
+	release := ""
+
+	//test if centos-release
+	cout, cerr := Command("cat", "/etc/centos-release")
+	if cerr == nil && len(cout) > 0 {
+		arr := strings.Split(cout, " ")
+		if len(arr) > 0 {
+			distributor = arr[0]
+			release = arr[2]
+			return distributor, release, nil
+		}
+	}
+
+	//test if redhat-release
+	rout, rerr := Command("cat", "/etc/redhat-release")
+	if rerr == nil && len(rout) > 0 {
+		arr := strings.Split(rout, " ")
+		if len(arr) > 0 {
+			distributor = arr[0]
+			release = arr[2]
+			return distributor, release, nil
+		}
+	}
+
+	//use lsb_release as the fallback policy
 	output, err := Command("lsb_release", "-a")
 	if err != nil {
 		return "", "", err
 	}
 
-	distributor := ""
-	release := ""
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		if strings.HasPrefix(line, "Distributor ID:") {
@@ -929,9 +953,30 @@ func GetHostOSInfo() (string, string, *Error) {
 			release = strings.TrimSpace(strings.TrimPrefix(line, "Release:"))
 		}
 	}
-
 	return distributor, release, nil
 }
+
+//func GetHostOSInfo() (string, string, *Error) {
+//	output, err := Command("lsb_release", "-a")
+//	if err != nil {
+//		return "", "", err
+//	}
+//
+//	distributor := ""
+//	release := ""
+//	lines := strings.Split(output, "\n")
+//	for _, line := range lines {
+//		if strings.HasPrefix(line, "Distributor ID:") {
+//			distributor = strings.TrimSpace(strings.TrimPrefix(line, "Distributor ID:"))
+//		}
+//
+//		if strings.HasPrefix(line, "Release:") {
+//			release = strings.TrimSpace(strings.TrimPrefix(line, "Release:"))
+//		}
+//	}
+//
+//	return distributor, release, nil
+//}
 
 func GetProcessIdByName(name string) (bool, string, *Error) {
 	cmd_context := fmt.Sprintf("pgrep -u $USER %s", name)
