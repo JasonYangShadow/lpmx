@@ -1,30 +1,32 @@
 ![lpmx logo](./lpmx_small.PNG)
 
 # LPMX [![Build Status](https://travis-ci.com/JasonYangShadow/lpmx.svg?branch=master)](https://travis-ci.com/JasonYangShadow/lpmx) [![Gitter](https://badges.gitter.im/lpmx_container/community.svg)](https://gitter.im/lpmx_container/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=JasonYangShadow_lpmx&metric=alert_status)](https://sonarcloud.io/dashboard?id=JasonYangShadow_lpmx) [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=JasonYangShadow_lpmx&metric=coverage)](https://sonarcloud.io/dashboard?id=JasonYangShadow_lpmx) [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=JasonYangShadow_lpmx&metric=sqale_rating)](https://sonarcloud.io/dashboard?id=JasonYangShadow_lpmx) [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=JasonYangShadow_lpmx&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=JasonYangShadow_lpmx) 
-LPMX, i.e, Local Package Manager X, is a pure rootless and composable container system.
+LPMX, i.e, Local Package Manager X, is a pure rootless and composable process sandbox system providing chroot-like environment. It allows users to create Docker images based containers and install packages without root/sudo privilege required. 
 
-# Feature
-1. **Pure rootless**, root privilege(root/sudo) is not required in any stage. It runs completely inside user space, which is especially suiable for running containers in restricted environment such as Linux cluster, grid infrastructure, batch system and etc, where root privilege is not approved.
-2. **Understanding docker metadata**, LPMX could create containers via docker images available on docker hub.
-3. **Fake union file system(Fake Unionfs)**, LPMX implements its own simple rootless union file system, creating a union mount for different layers containing directories and files from differnt locations and forming a single coherent file system. Unlike existing implementations, i.e, fuse, overlay and etc, Fake Unionfs does not need pre-installation and modification on host OS.
-4. **Composability**, traditonal container systems do not provide efficient communication channels for applications running on host and containers. For example, 'app A' running inside container could not directly make a call to 'app B' running on host OS. However, LPMX is designed to provide this feature, which makes communication among applications running in different runtime environments become possible.
+[![LPMX DEMO](http://img.youtube.com/vi/_1XOLa1cKX4/0.jpg)](http://www.youtube.com/watch?v=_1XOLa1cKX4 "LPMX simple demo")
+
+# Features
+1. **Pure rootless**, root privilege(root/sudo) is not required in any stages. It runs completely inside user space, which is especially suitable for creating and running software in restricted environment such as Linux cluster, grid infrastructure, batch system and etc, where root privilege is not approved.
+2. **Understanding docker meta-data(Limited distros)**, LPMX could create containers via Docker images available on docker hub. Currently ubuntu and centos series are supported.
+3. **Fake union file system(Fake Unionfs)**, LPMX implements its own simple rootless union file system, creating a union mount for different layers containing directories and files from different locations and forming a single coherent file system. Unlike other existing implementations, i.e, fuse, overlay and etc, our Fake Unionfs does not require any pre-installation and bring modifications to host OS.
+4. **Composability**, traditional container systems(Docker, Singularity, Podman) do not provide efficient communication channels for applications running on host and containers. For example, 'app A' running inside container could not directly make a call to 'app B' running on host OS. However, LPMX is designed to provide this feature, which makes communication among applications running in different runtime environments become possible.
 5. **Dynamic management of environmental variables**, LPMX allows end-users to set environment variables dynamically without stopping containers, all settings come into effect immediately.
-6. **Designed for restricted runtime environment**, LPMX is designed for running containers in restricted runtime environments, such as root privilege is not approved or complete offline usage. LPMX supports complete offline initialinzation and deployment, which is especially suitable for scientific computing infrastructure.
-  
-# Examples with LPMX
-- Download and run containerized ubuntu 18.04 on old Linux OS on HPC, such as centos 5, then run programs with latest libraries available.
-- Create and run containerized ubuntu system locally, install any software inside, package and copy tar files to another machine with network access limited, then you get everything work as locally.
-- Run pipelines inside container, then make a call to host programs as you wish.
-- Install software inside container, expose them to host and call them as you wish.
-- Dynamically modify file path for loading data, open any files in any places through one unique file path.
+6. **Designed for restricted runtime environment**, LPMX is designed for running containers in restricted runtime environments, such as root privilege is not approved or complete off-line usage. LPMX supports complete off-line initialization and deployment, which is especially suitable for scientific computing infrastructure.
 
-# Quick run
+# Examples
+- Download and run newer ubuntu distros(ubuntu 14.04/16.04/18.04) on host with old OS, such as centos 6, then install and run newer software inside.
+- Package and deliver current created environment to another machine.
+- Run programs inside container, and then make a direct call to other programs on host.
+- Install packages inside container and expose them to host.
+- Open a file inside container through one unique file path, while can be mapped to any paths on host. 
+
+# Quick Run
 1. check out [release page](https://github.com/JasonYangShadow/lpmx/releases)
-2. chmod a+x lpmx && ./lpmx init
+2. chmod a+x Linux-x86_64-lpmx && ./Linux-x86_64-lpmx init
 
 For bash users, 'source ~/.bashrc' will add lpmx folder to PATH env
 
-# Compile LPMX from source code 
+# Compile LPMX 
 1. Make sure golang and [dep](https://github.com/golang/dep) are installed on your OS
 2. go get -v github.com/jasonyangshadow/lpmx
 3. cd $GOPATH/src/github.com/jasonyangshadow/lpmx
@@ -32,41 +34,23 @@ For bash users, 'source ~/.bashrc' will add lpmx folder to PATH env
 
 If there are any dependencies issues, try to execute 'dep ensure' inside project folder and then add vendor subfolder into $GOROOT var.
 
-# Compile Fakechroot from source code
-LPMX uses [customized fakechroot](https://github.com/jasonyangshadow/fakechroot) for trapping glibc system calls, if you want to compile fakechroot, please refer [Wiki](https://github.com/JasonYangShadow/lpmx/wiki#9-compile-fakechroot-and-its-dependencies-from-scratch)
+# Compile Fakechroot
+LPMX uses [customized fakechroot](https://github.com/jasonyangshadow/fakechroot) for trapping glibc functions(open, mkdir, symlink and etc), if you want to compile fakechroot, please refer this [Wiki](https://github.com/JasonYangShadow/lpmx/wiki#9-compile-fakechroot-and-its-dependencies-from-scratch)
 
+# Attention
 
-# How to use it
-- ### Download and Initialize
+**Only several host OS and Docker images are supported currently**
 
-    If you have network connection, only one binary program 'lpmx' is required, for end-users working under restricted network envrionments 'lpmx' and its dependency tarball are required, for details please check [Wiki](https://github.com/JasonYangShadow/lpmx/wiki)
-![Init](figures/Init.gif)
-- ### Search docker images and Download
+For supported host OS information, please refer this repository -> [https://github.com/JasonYangShadow/LPMXSettingRepository](https://github.com/JasonYangShadow/LPMXSettingRepository)
 
-    You could search both public and private docker images on docker hub.(Searching private images requires authentication)
-![DownloadImage](figures/DownloadImage.gif)
+Basically, LPMX supports centos/redhat (5.7, 6.7, 7) and ubuntu (12.04, 14.04, 16.04, 18.04, 19.04) as host OS. For containerized system, currently LPMX only supports running ubuntu (14.04/16.04).  
 
-- ### Create containers and Management
+**Busybox is not support!**
 
-    You could create pure rootless containers based on downloaded docker images and manage their lifecycles using LPMX.
-![ContainerManagement](figures/ContainerManagement.gif)  
+For more information please refer project's wiki page. 
 
-- ### Directly make a call to host application inside container
+# Related Projects
 
-    Advanced feature such as directly making a call to host application is also easy to achieve, just set environment var 'EXCLUDE_EXE' e.g. export EXCLUDE_EXE=/usr/bin/nano, inside containers. See detail in [Wiki](https://github.com/JasonYangShadow/lpmx/wiki).
-![CallToHost](figures/CallToHost.gif)
-
-- ### Directly make a call to container application from host
-
-    Advanced feature such as directly making a call to containerized application is also easy to achieve, just exit container and use 'lpmx expose' command.See detail in [Wiki](https://github.com/JasonYangShadow/lpmx/wiki).
-![CallToContainer](figures/CallToContainer.gif)
-
-- Dynamically manage environment variables to achieve advanced function
-
-    LPMX also supports dynamically setting envrionment variables through embedded memcache server with immediate effect. 
-![DynamicPriv](figures/DynamicPriv.gif)
-
-# Related projects
 - [Fakechroot](https://github.com/JasonYangShadow/fakechroot)
 - [LPM](https://lpm.bio/)
 - [udocker](https://github.com/indigo-dc/udocker)
