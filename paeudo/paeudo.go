@@ -116,8 +116,9 @@ func ShellEnvPid(sh string, env map[string]string, dir string, arg ...string) *E
 	}
 	err = cmd.Wait()
 	if err != nil {
-		cerr := ErrNew(err, "cmd wait error")
-		return cerr
+		LOGGER.WithFields(logrus.Fields{
+			"error": err,
+		}).Debug("cmd wait error")
 	}
 	return nil
 }

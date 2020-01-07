@@ -2343,8 +2343,8 @@ func Expose(id string, name string) *Error {
 							cerr := ErrNew(ferr, fmt.Sprintf("can not create exposed file %s", bdir))
 							return cerr
 						}
-						code := "#!/bin/bash\n" +
-							"lpmx resume " + id + " \"" + name + " " + "\"$@\"\"" +
+						code := "#!/bin/bash\n" + os.Args[0] +
+							" resume " + id + " \"" + name + " " + "$@\"" +
 							"\n"
 
 						fmt.Fprintf(f, code)
