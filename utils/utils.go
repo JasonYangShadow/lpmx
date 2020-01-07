@@ -921,7 +921,11 @@ func GetHostOSInfo() (string, string, *Error) {
 		arr := strings.Split(cout, " ")
 		if len(arr) > 0 {
 			distributor = arr[0]
-			release = arr[2]
+			for _, item := range arr {
+				if IsNumeric(item) {
+					release = item
+				}
+			}
 			return distributor, release, nil
 		}
 	}
@@ -932,7 +936,11 @@ func GetHostOSInfo() (string, string, *Error) {
 		arr := strings.Split(rout, " ")
 		if len(arr) > 0 {
 			distributor = arr[0]
-			release = arr[2]
+			for _, item := range arr {
+				if IsNumeric(item) {
+					release = item
+				}
+			}
 			return distributor, release, nil
 		}
 	}
@@ -1170,4 +1178,9 @@ func CompareVersion(str1, str2, delimeter string) (int, *Error) {
 	}
 
 	return 0, nil
+}
+
+func IsNumeric(s string) bool {
+	_, err := strconv.ParseFloat(s, 64)
+	return err == nil
 }
