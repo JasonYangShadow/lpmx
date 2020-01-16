@@ -2478,6 +2478,9 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	patchfolder := fmt.Sprintf("%s/patch", filepath.Dir(filepath.Dir(filepath.Dir(con.RootPath))))
 	env["FAKECHROOT_LDPatchPath"] = patchfolder
 
+	//20200115 we append fakechroot system library folder in a seperated env var
+	env["FAKECHROOT_SyslibPath"] = fmt.Sprintf("%s/.lpmxsys", currdir)
+
 	//******* important, here we do not use LD_LIBRARY_LPMX any longer, as we will directly use LD_LIBRARY_PATH inside container, and make fakechroot to generate LD_LIBRARY_PATH itself base on layers info.
 
 	//find from base layers
