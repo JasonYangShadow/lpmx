@@ -78,7 +78,7 @@ func GetFileLength(file string) (int64, *Error) {
 }
 
 func FileType(file string) (int8, *Error) {
-	fi, err := os.Stat(file)
+	fi, err := os.Lstat(file)
 	if err != nil {
 		cerr := ErrNew(ErrFileStat, fmt.Sprintf("os.stat %s error: %s", file, err.Error()))
 		return -1, cerr

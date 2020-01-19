@@ -37,6 +37,8 @@ var (
 	LD_LIBRARY_PATH_DEFAULT = []string{"lib", "lib64", "lib/x86_64-linux-gnu", "usr/lib/x86_64-linux-gnu", "usr/lib", "usr/local/lib", "usr/lib64", "usr/local/lib64"}
 	CACHE_FOLDER            = []string{"/var/cache/apt/archives"}
 	UNSTALL_FOLDER          = []string{".lpmxsys", "sync", "bin", ".docker", "package"}
+	//files copy excluded for patch folder in newly created container
+	EXCLUDE_FILES = []string{"ld.so"}
 )
 
 //located inside $/.lpmxsys/.info
@@ -2130,6 +2132,13 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 					configmap["elf_loader"] = ld_new_path
 				}
 
+				//20200117 we changed the way of loading patched ld.so and other dependencies, we directly make a directory in rw folder named lib, and put the other dependencies in it
+				new_lib_path := fmt.Sprintf("%s/rw/lib", rootfolder)
+				cerr := walkfsandcopy(fmt.Sprintf("%s/patch", filepath.Dir(filepath.Dir(rootfolder))), new_lib_path, EXCLUDE_FILES)
+				if cerr != nil {
+					return cerr
+				}
+
 				//add current user to /etc/passwd user gid to /etc/group
 				user, err := user.Current()
 				if err != nil {
@@ -3121,6 +3130,75 @@ func walkContainerRoot(con *Container) ([]string, []string, *Error) {
 		}
 	}
 	return bineries, libs, nil
+}
+
+func walkfsandcopy(src, dest string, excludes []string) *Error {
+	if !FolderExist(src) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("source folder: %s does not exist", src))
+		return cerr
+	}
+
+	if !FolderExist(dest) {
+		err := os.MkdirAll(dest, os.FileMode(FOLDER_MODE))
+		if err != nil {
+			cerr := ErrNew(err, fmt.Sprintf("could not create dest dir: %s", dest))
+			return cerr
+		}
+	}
+
+	err := filepath.Walk(src, func(path string, f os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if f.IsDir() && f.Name() == ".lpmx" {
+			return filepath.SkipDir
+		}
+		file_type, ferr := FileType(path)
+		if ferr != nil {
+			return ferr.Err
+		}
+
+		filename := filepath.Base(path)
+		bskip := false
+		for _, exclude := range excludes {
+			if filename == exclude {
+				bskip = true
+				break
+			}
+		}
+
+		if !bskip {
+			dest_file := fmt.Sprintf("%s/%s", dest, filename)
+			//if normal regular file, directly copy it to target folder
+			if file_type == TYPE_REGULAR {
+				_, cerr := CopyFile(path, dest_file)
+				if cerr != nil {
+					return cerr.Err
+				}
+			}
+			//if normal symlink file, create symlink file
+			if file_type == TYPE_SYMLINK {
+				link, lerr := os.Readlink(path)
+				if lerr != nil {
+					cerr := ErrNew(lerr, fmt.Sprintf("could not successfully resolve symlink: %s", path))
+					return cerr.Err
+				}
+				oerr := os.Symlink(link, dest_file)
+				if oerr != nil {
+					cerr := ErrNew(oerr, fmt.Sprintf("could not create symlink %s -> %s", dest_file, link))
+					return cerr.Err
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("filepath walk: %s encounters error", src))
+		return cerr
+	}
+	return nil
 }
 
 func walkSpecificDir(dir string) ([]string, *Error) {
