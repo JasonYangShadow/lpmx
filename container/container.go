@@ -1799,7 +1799,7 @@ func DockerDownload(name string, user string, pass string) *Error {
 				"err":    err,
 				"toPath": rdir,
 			}).Error("Download patch.tar.gz from github failure and could not rollback to default one")
-			return err
+			//return err
 		} else {
 			//if download success, we have to untar it
 			err = Untar(fmt.Sprintf("%s/patch.tar.gz", rdir), pdir)
