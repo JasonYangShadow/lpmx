@@ -37,8 +37,6 @@ var (
 	LD_LIBRARY_PATH_DEFAULT = []string{"lib", "lib64", "lib/x86_64-linux-gnu", "usr/lib/x86_64-linux-gnu", "usr/lib", "usr/local/lib", "usr/lib64", "usr/local/lib64"}
 	CACHE_FOLDER            = []string{"/var/cache/apt/archives"}
 	UNSTALL_FOLDER          = []string{".lpmxsys", "sync", "bin", ".docker", "package"}
-	//files copy excluded for patch folder in newly created container
-	EXCLUDE_FILES = []string{"ld.so"}
 )
 
 //located inside $/.lpmxsys/.info
@@ -1751,10 +1749,12 @@ func DockerDownload(name string, user string, pass string) *Error {
 		}
 		mdata["workspace"] = workspace
 
+		/**
 		patchfolder := fmt.Sprintf("%s/patch", mdata["rootdir"])
 		if !FolderExist(patchfolder) {
 			MakeDir(patchfolder)
 		}
+		**/
 
 		//extract layers
 		base := fmt.Sprintf("%s/.base", rootdir)
@@ -1790,6 +1790,8 @@ func DockerDownload(name string, user string, pass string) *Error {
 			return err
 		}
 
+		//20200120 disable downloading patched files, because we do not need it any longer
+		/**
 		//here we start downloading patch tar ball to rdir/patch folder
 		pdir := fmt.Sprintf("%s/patch", rdir)
 		//save patch.tar.gz into rdir and untar it to pdir
@@ -1800,6 +1802,9 @@ func DockerDownload(name string, user string, pass string) *Error {
 				"toPath": rdir,
 			}).Error("Download patch.tar.gz from github failure and could not rollback to default one")
 			//return err
+
+			//if we could not download patch.tar.gz from github, we have to patch ld.so inside layers
+			//
 		} else {
 			//if download success, we have to untar it
 			err = Untar(fmt.Sprintf("%s/patch.tar.gz", rdir), pdir)
@@ -1807,6 +1812,7 @@ func DockerDownload(name string, user string, pass string) *Error {
 				return err
 			}
 		}
+		**/
 
 		//add map to this image
 		doc.Images[name] = mdata
@@ -2091,6 +2097,10 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 					"ld_patched_path": ld_new_path,
 				}).Debug("layers sha256 list")
 				if !FileExist(ld_new_path) {
+					//update on 20200120 we do not need to rebuild ld.so again. As we found that __libc_start_main can be LD_PRELOAD and trapped before main function is called.
+					//will comment the following part of code
+
+					/**
 					ld_orig_path := fmt.Sprintf("%s/patch/ld.so", filepath.Dir(filepath.Dir(rootfolder)))
 					LOGGER.WithFields(logrus.Fields{
 						"ld_path": ld_orig_path,
@@ -2106,7 +2116,8 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 						cerr := ErrNew(err, fmt.Sprintf("could not patch target ld.so: %s", ld_orig_path))
 						return cerr
 					}
-					/**
+					**/
+					///**
 					for _, v := range LD {
 						for _, l := range strings.Split(configmap["layers"].(string), ":") {
 							ld_orig_path := fmt.Sprintf("%s/%s%s", configmap["baselayerpath"].(string), l, v)
@@ -2127,16 +2138,9 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 							break
 						}
 					}
-					**/
+					//**/
 				} else {
 					configmap["elf_loader"] = ld_new_path
-				}
-
-				//20200117 we changed the way of loading patched ld.so and other dependencies, we directly make a directory in rw folder named lib, and put the other dependencies in it
-				new_lib_path := fmt.Sprintf("%s/rw/lib", rootfolder)
-				cerr := walkfsandcopy(fmt.Sprintf("%s/patch", filepath.Dir(filepath.Dir(rootfolder))), new_lib_path, EXCLUDE_FILES)
-				if cerr != nil {
-					return cerr
 				}
 
 				//add current user to /etc/passwd user gid to /etc/group
@@ -2175,11 +2179,14 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 							}
 
 							passwd_patch = true
+							break
 						} else {
 							return c_err
 						}
 					}
+				}
 
+				for _, l := range strings.Split(configmap["layers"].(string), ":") {
 					group_path := fmt.Sprintf("%s/%s/etc/group", configmap["baselayerpath"].(string), l)
 					if _, err := os.Stat(group_path); err == nil {
 						new_group_path := fmt.Sprintf("%s/etc", configmap["dir"].(string))
@@ -2211,15 +2218,16 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 							}
 
 							group_patch = true
+							break
 						} else {
 							return c_err
 						}
 					}
+				}
 
-					if passwd_patch && group_patch {
-						//already finished patch return
-						break
-					}
+				if !passwd_patch || !group_patch {
+					cerr := ErrNew(ErrNExist, "could not find /etc/passwd or /etc/group to patch")
+					return cerr
 				}
 
 				//create tmp folder and create whiteout file for tmp
@@ -2483,9 +2491,11 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	}
 	libs = append(libs, fmt.Sprintf("%s/.lpmxsys", currdir))
 
+	/**
 	//20191230 we append patch folder path in a seperated env var indicating that patched existing ld.so related stuff
 	patchfolder := fmt.Sprintf("%s/patch", filepath.Dir(filepath.Dir(filepath.Dir(con.RootPath))))
 	env["FAKECHROOT_LDPatchPath"] = patchfolder
+	**/
 
 	//20200115 we append fakechroot system library folder in a seperated env var
 	env["FAKECHROOT_SyslibPath"] = fmt.Sprintf("%s/.lpmxsys", currdir)
