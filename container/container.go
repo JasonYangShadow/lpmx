@@ -1749,10 +1749,12 @@ func DockerDownload(name string, user string, pass string) *Error {
 		}
 		mdata["workspace"] = workspace
 
+		/**
 		patchfolder := fmt.Sprintf("%s/patch", mdata["rootdir"])
 		if !FolderExist(patchfolder) {
 			MakeDir(patchfolder)
 		}
+		**/
 
 		//extract layers
 		base := fmt.Sprintf("%s/.base", rootdir)
@@ -1788,6 +1790,8 @@ func DockerDownload(name string, user string, pass string) *Error {
 			return err
 		}
 
+		//20200120 disable downloading patched files, because we do not need it any longer
+		/**
 		//here we start downloading patch tar ball to rdir/patch folder
 		pdir := fmt.Sprintf("%s/patch", rdir)
 		//save patch.tar.gz into rdir and untar it to pdir
@@ -1797,7 +1801,10 @@ func DockerDownload(name string, user string, pass string) *Error {
 				"err":    err,
 				"toPath": rdir,
 			}).Error("Download patch.tar.gz from github failure and could not rollback to default one")
-			return err
+			//return err
+
+			//if we could not download patch.tar.gz from github, we have to patch ld.so inside layers
+			//
 		} else {
 			//if download success, we have to untar it
 			err = Untar(fmt.Sprintf("%s/patch.tar.gz", rdir), pdir)
@@ -1805,6 +1812,7 @@ func DockerDownload(name string, user string, pass string) *Error {
 				return err
 			}
 		}
+		**/
 
 		//add map to this image
 		doc.Images[name] = mdata
@@ -2089,6 +2097,10 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 					"ld_patched_path": ld_new_path,
 				}).Debug("layers sha256 list")
 				if !FileExist(ld_new_path) {
+					//update on 20200120 we do not need to rebuild ld.so again. As we found that __libc_start_main can be LD_PRELOAD and trapped before main function is called.
+					//will comment the following part of code
+
+					/**
 					ld_orig_path := fmt.Sprintf("%s/patch/ld.so", filepath.Dir(filepath.Dir(rootfolder)))
 					LOGGER.WithFields(logrus.Fields{
 						"ld_path": ld_orig_path,
@@ -2104,7 +2116,8 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 						cerr := ErrNew(err, fmt.Sprintf("could not patch target ld.so: %s", ld_orig_path))
 						return cerr
 					}
-					/**
+					**/
+					///**
 					for _, v := range LD {
 						for _, l := range strings.Split(configmap["layers"].(string), ":") {
 							ld_orig_path := fmt.Sprintf("%s/%s%s", configmap["baselayerpath"].(string), l, v)
@@ -2125,7 +2138,7 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 							break
 						}
 					}
-					**/
+					//**/
 				} else {
 					configmap["elf_loader"] = ld_new_path
 				}
@@ -2166,11 +2179,14 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 							}
 
 							passwd_patch = true
+							break
 						} else {
 							return c_err
 						}
 					}
+				}
 
+				for _, l := range strings.Split(configmap["layers"].(string), ":") {
 					group_path := fmt.Sprintf("%s/%s/etc/group", configmap["baselayerpath"].(string), l)
 					if _, err := os.Stat(group_path); err == nil {
 						new_group_path := fmt.Sprintf("%s/etc", configmap["dir"].(string))
@@ -2202,15 +2218,16 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 							}
 
 							group_patch = true
+							break
 						} else {
 							return c_err
 						}
 					}
+				}
 
-					if passwd_patch && group_patch {
-						//already finished patch return
-						break
-					}
+				if !passwd_patch || !group_patch {
+					cerr := ErrNew(ErrNExist, "could not find /etc/passwd or /etc/group to patch")
+					return cerr
 				}
 
 				//create tmp folder and create whiteout file for tmp
@@ -2343,8 +2360,8 @@ func Expose(id string, name string) *Error {
 							cerr := ErrNew(ferr, fmt.Sprintf("can not create exposed file %s", bdir))
 							return cerr
 						}
-						code := "#!/bin/bash\n" +
-							"lpmx resume " + id + " \"" + name + " " + "\"$@\"\"" +
+						code := "#!/bin/bash\n" + os.Args[0] +
+							" resume " + id + " \"" + name + " " + "$@\"" +
 							"\n"
 
 						fmt.Fprintf(f, code)
@@ -2474,9 +2491,14 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	}
 	libs = append(libs, fmt.Sprintf("%s/.lpmxsys", currdir))
 
+	/**
 	//20191230 we append patch folder path in a seperated env var indicating that patched existing ld.so related stuff
 	patchfolder := fmt.Sprintf("%s/patch", filepath.Dir(filepath.Dir(filepath.Dir(con.RootPath))))
 	env["FAKECHROOT_LDPatchPath"] = patchfolder
+	**/
+
+	//20200115 we append fakechroot system library folder in a seperated env var
+	env["FAKECHROOT_SyslibPath"] = fmt.Sprintf("%s/.lpmxsys", currdir)
 
 	//******* important, here we do not use LD_LIBRARY_LPMX any longer, as we will directly use LD_LIBRARY_PATH inside container, and make fakechroot to generate LD_LIBRARY_PATH itself base on layers info.
 
@@ -3118,6 +3140,75 @@ func walkContainerRoot(con *Container) ([]string, []string, *Error) {
 		}
 	}
 	return bineries, libs, nil
+}
+
+func walkfsandcopy(src, dest string, excludes []string) *Error {
+	if !FolderExist(src) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("source folder: %s does not exist", src))
+		return cerr
+	}
+
+	if !FolderExist(dest) {
+		err := os.MkdirAll(dest, os.FileMode(FOLDER_MODE))
+		if err != nil {
+			cerr := ErrNew(err, fmt.Sprintf("could not create dest dir: %s", dest))
+			return cerr
+		}
+	}
+
+	err := filepath.Walk(src, func(path string, f os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if f.IsDir() && f.Name() == ".lpmx" {
+			return filepath.SkipDir
+		}
+		file_type, ferr := FileType(path)
+		if ferr != nil {
+			return ferr.Err
+		}
+
+		filename := filepath.Base(path)
+		bskip := false
+		for _, exclude := range excludes {
+			if filename == exclude {
+				bskip = true
+				break
+			}
+		}
+
+		if !bskip {
+			dest_file := fmt.Sprintf("%s/%s", dest, filename)
+			//if normal regular file, directly copy it to target folder
+			if file_type == TYPE_REGULAR {
+				_, cerr := CopyFile(path, dest_file)
+				if cerr != nil {
+					return cerr.Err
+				}
+			}
+			//if normal symlink file, create symlink file
+			if file_type == TYPE_SYMLINK {
+				link, lerr := os.Readlink(path)
+				if lerr != nil {
+					cerr := ErrNew(lerr, fmt.Sprintf("could not successfully resolve symlink: %s", path))
+					return cerr.Err
+				}
+				oerr := os.Symlink(link, dest_file)
+				if oerr != nil {
+					cerr := ErrNew(oerr, fmt.Sprintf("could not create symlink %s -> %s", dest_file, link))
+					return cerr.Err
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("filepath walk: %s encounters error", src))
+		return cerr
+	}
+	return nil
 }
 
 func walkSpecificDir(dir string) ([]string, *Error) {
