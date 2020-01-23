@@ -42,7 +42,7 @@ var (
 //located inside $/.lpmxsys/.info
 type Sys struct {
 	RootDir      string // the abs path of folder .lpmxsys
-	BinaryDir    string // the folder cotnainers .lpmxsys and binaries
+	BinaryDir    string // the folder contains .lpmxsys and binaries
 	Containers   map[string]interface{}
 	LogPath      string
 	MemcachedPid string

@@ -3,6 +3,8 @@
 # LPMX [![Build Status](https://travis-ci.com/JasonYangShadow/lpmx.svg?branch=master)](https://travis-ci.com/JasonYangShadow/lpmx) [![Gitter](https://badges.gitter.im/lpmx_container/community.svg)](https://gitter.im/lpmx_container/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=JasonYangShadow_lpmx&metric=sqale_rating)](https://sonarcloud.io/dashboard?id=JasonYangShadow_lpmx) [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=JasonYangShadow_lpmx&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=JasonYangShadow_lpmx) 
 LPMX, i.e, Local Package Manager X, is a pure rootless and composable process sandbox system providing chroot-like environment. It allows users to create Docker images based containers and install packages without root/sudo privilege required. 
 
+Below is a basic demo of using LPMX:
+
 [![LPMX DEMO](http://img.youtube.com/vi/_1XOLa1cKX4/0.jpg)](http://www.youtube.com/watch?v=_1XOLa1cKX4 "LPMX simple demo")
 
 # Features
@@ -37,15 +39,11 @@ If there are any dependencies issues, try to execute 'dep ensure' inside project
 # Compile Fakechroot
 LPMX uses [customized fakechroot](https://github.com/jasonyangshadow/fakechroot) for trapping glibc functions(open, mkdir, symlink and etc), if you want to compile fakechroot, please refer this [Wiki](https://github.com/JasonYangShadow/lpmx/wiki#9-compile-fakechroot-and-its-dependencies-from-scratch)
 
-# Attention
+# Important Notice
 
 **Only several host OS and Docker images are supported currently**
 
-For supported host OS information, please refer this repository -> [https://github.com/JasonYangShadow/LPMXSettingRepository](https://github.com/JasonYangShadow/LPMXSettingRepository)
-
-Basically, LPMX supports centos/redhat (5.7, 6.7, 7) and ubuntu (12.04, 14.04, 16.04, 18.04, 19.04) as host OS. For containerized system, currently LPMX only supports running ubuntu (14.04/16.04).  
-
-**Busybox is not support!**
+Basically, LPMX supports centos/redhat (5.7, 6.7, 7) and ubuntu (12.04, 14.04, 16.04, 18.04, 19.04) as host OS. 
 
 For more information please refer project's wiki page. 
 
