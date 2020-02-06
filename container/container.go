@@ -811,6 +811,14 @@ func DockerPackage(name string, user string, pass string) *Error {
 	if err != nil {
 		return err
 	}
+	tempdir := fmt.Sprintf("%s/.temp", currdir)
+	//we delete temp dir if it exists at the end of the function
+	defer func() {
+		if FolderExist(tempdir) {
+			os.RemoveAll(tempdir)
+		}
+	}()
+
 	packagedir := fmt.Sprintf("%s/package", currdir)
 	if !FolderExist(packagedir) {
 		MakeDir(packagedir)
@@ -821,17 +829,57 @@ func DockerPackage(name string, user string, pass string) *Error {
 	if err != nil {
 		return err
 	}
+
+	//create temp dir for temp docinfo file
+	tdir, terr := CreateTempDir(tempdir)
+	if terr != nil {
+		return terr
+	}
+
 	if dvalue, dok := doc.Images[name]; dok {
 		if dmap, dmok := dvalue.(map[string]interface{}); dmok {
 			var filelist []string
 			filelist = append(filelist, dmap["config"].(string))
-			layers := strings.Split(dmap["layer_order"].(string), ":")
-			layer_base := dmap["image"].(string)
-			for _, layer := range layers {
-				layer = path.Base(layer)
-				filelist = append(filelist, fmt.Sprintf("%s/%s", layer_base, layer))
+			//here we check if orig_layer_order exists
+			var layers []string
+			if val, vok := dmap["orig_layer_order"]; vok {
+				layers = strings.Split(val.(string), ":")
+			} else {
+				layers = strings.Split(dmap["layer_order"].(string), ":")
 			}
-			filelist = append(filelist, fmt.Sprintf("%s/.info", dmap["rootdir"].(string)))
+			layer_base := dmap["image"].(string)
+
+			var docinfo DockerInfo
+			docinfo.Name = name
+			docinfo.LayersMap = make(map[string]int64)
+			var docinfo_layers []string
+
+			for _, layer := range layers {
+				sha256 := path.Base(layer)
+				//layer here is the format of sha256.tar.gz
+				docinfo_layers = append(docinfo_layers, sha256)
+				file_name := fmt.Sprintf("%s/%s", layer_base, sha256)
+				filelist = append(filelist, file_name)
+				size, serr := GetFileLength(file_name)
+				if serr != nil {
+					return serr
+				}
+				docinfo.LayersMap[sha256] = size
+			}
+			docinfo.Layers = strings.Join(docinfo_layers, ":")
+
+			dinfodata, _ := StructMarshal(docinfo)
+			err = WriteToFile(dinfodata, fmt.Sprintf("%s/.info", tdir))
+			if err != nil {
+				return err
+			}
+
+			filelist = append(filelist, fmt.Sprintf("%s/.info", tdir))
+			LOGGER.WithFields(logrus.Fields{
+				"docinfo":  docinfo,
+				"filelist": filelist,
+			}).Debug("DockerPackage docinfo and filelist to tar")
+
 			cerr := TarFiles(filelist, packagedir, name)
 			if cerr != nil {
 				return cerr
@@ -841,10 +889,8 @@ func DockerPackage(name string, user string, pass string) *Error {
 			return cerr
 		}
 	} else {
-		cerr := DockerDownload(name, user, pass)
-		if cerr != nil && cerr.Err != ErrExist {
-			return cerr
-		}
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("no such image: %s", name))
+		return cerr
 	}
 	return nil
 }
@@ -911,7 +957,7 @@ func DockerAdd(file string) *Error {
 		mdata := make(map[string]interface{})
 		mdata["rootdir"] = fmt.Sprintf("%s/%s/%s", doc.RootDir, tname, ttag)
 		mdata["config"] = fmt.Sprintf("%s/setting.yml", mdata["rootdir"])
-		mdata["image"] = fmt.Sprintf("%s/image", mdata["rootdir"])
+		mdata["image"] = fmt.Sprintf("%s/.image", rootdir)
 		image_dir, _ := mdata["image"].(string)
 
 		if !FolderExist(mdata["rootdir"].(string)) {
@@ -931,10 +977,12 @@ func DockerAdd(file string) *Error {
 				return cerr
 			}
 			lay_new_path := fmt.Sprintf("%s/%s", mdata["image"], lay)
-			err := os.Rename(lay_path, lay_new_path)
-			if err != nil {
-				cerr := ErrNew(err, fmt.Sprintf("could not move file %s to %s", lay_path, lay_new_path))
-				return cerr
+			if !FileExist(lay_new_path) {
+				err := os.Rename(lay_path, lay_new_path)
+				if err != nil {
+					cerr := ErrNew(err, fmt.Sprintf("could not move file %s to %s", lay_path, lay_new_path))
+					return cerr
+				}
 			}
 		}
 
@@ -965,7 +1013,7 @@ func DockerAdd(file string) *Error {
 		mdata["workspace"] = workspace
 
 		//extract layers
-		base := fmt.Sprintf("%s/base", mdata["rootdir"])
+		base := fmt.Sprintf("%s/.base", rootdir)
 		if !FolderExist(base) {
 			MakeDir(base)
 		}
@@ -977,11 +1025,10 @@ func DockerAdd(file string) *Error {
 			layerfolder := fmt.Sprintf("%s/%s", mdata["base"], k)
 			if !FolderExist(layerfolder) {
 				MakeDir(layerfolder)
-			}
-
-			err := Untar(tar_path, layerfolder)
-			if err != nil {
-				return err
+				err := Untar(tar_path, layerfolder)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -996,6 +1043,9 @@ func DockerAdd(file string) *Error {
 
 		doc.Images[docinfo.Name] = mdata
 
+		LOGGER.WithFields(logrus.Fields{
+			"doc": doc,
+		}).Debug("DockerAdd update image info")
 		ddata, _ := StructMarshal(doc)
 		cerr := WriteToFile(ddata, fmt.Sprintf("%s/.info", doc.RootDir))
 		if cerr != nil {
@@ -1085,10 +1135,8 @@ func DockerCommit(id, newname, newtag string) *Error {
 							if len(kv) > 0 {
 								v := strings.Split(kv, ":")
 								if len(v) == 2 && len(v[1]) > 0 {
-									s_folder := fmt.Sprintf("%s%s", con.RootPath, v[1])
-									if FolderExist(s_folder) {
-										RemoveAll(s_folder)
-									}
+									s_link := fmt.Sprintf("%s%s", con.RootPath, v[1])
+									os.RemoveAll(s_link)
 								}
 							}
 						}
@@ -1116,6 +1164,7 @@ func DockerCommit(id, newname, newtag string) *Error {
 					if temp_err != nil {
 						return temp_err
 					}
+					//tar rw layer
 					cerr := TarLayer(con.RootPath, temp_dir, con.Id, layers_full_path)
 					if cerr != nil {
 						return cerr
@@ -1139,22 +1188,23 @@ func DockerCommit(id, newname, newtag string) *Error {
 					}
 
 					//moving rw layer to base folder
-					rerr = os.Rename(con.RootPath, fmt.Sprintf("%s/%s", con.BaseLayerPath, shasum))
+					//here, target place has suffix of .tar.gz
+					rerr = os.Rename(con.RootPath, fmt.Sprintf("%s/%s.tar.gz", con.BaseLayerPath, shasum))
 					if rerr != nil {
 						cerr := ErrNew(rerr, fmt.Sprintf("could not rename(move): %s to %s", con.RootPath, fmt.Sprintf("%s/%s", con.BaseLayerPath, shasum)))
 						return cerr
 					}
 
 					//create new symlink
-					new_symlink_path := fmt.Sprintf("%s/%s", filepath.Dir(con.RootPath), shasum)
-					old_symlink_path := fmt.Sprintf("%s/%s", con.BaseLayerPath, shasum)
+					new_symlink_path := fmt.Sprintf("%s/%s.tar.gz", filepath.Dir(con.RootPath), shasum)
+					old_symlink_path := fmt.Sprintf("%s/%s.tar.gz", con.BaseLayerPath, shasum)
 					rerr = os.Symlink(old_symlink_path, new_symlink_path)
 					if rerr != nil {
 						cerr := ErrNew(rerr, fmt.Sprintf("could not symlink: %s to %s", old_symlink_path, new_symlink_path))
 						return cerr
 					}
 
-					//moving workspace and copyting setting.yml to new place
+					//moving workspace and copying setting.yml to new place
 					docker_path := filepath.Dir(con.BaseLayerPath)
 					new_workspace_path := fmt.Sprintf("%s/%s/%s/workspace", docker_path, newname, newtag)
 					if !FolderExist(new_workspace_path) {
@@ -1220,7 +1270,7 @@ func DockerCommit(id, newname, newtag string) *Error {
 					f.Close()
 
 					//step 4: modify container info
-					new_layers := []string{"rw", shasum}
+					new_layers := []string{"rw", fmt.Sprintf("%s.tar.gz", shasum)}
 					new_layers = append(new_layers, strings.Split(con.Layers, ":")[1:]...)
 					con.Layers = strings.Join(new_layers, ":")
 
@@ -1245,7 +1295,7 @@ func DockerCommit(id, newname, newtag string) *Error {
 					mdata["rootdir"] = fmt.Sprintf("%s/%s/%s", docker_path, newname, newtag)
 					mdata["config"] = con.SettingPath
 					mdata["image"] = fmt.Sprintf("%s/.image", docker_path)
-					//get old layer map
+					//get old layer map to update new image info
 					image_map := doc.Images[old_imagebase]
 					if image_map != nil {
 						if map_interface, map_ok := image_map.(map[string]interface{}); map_ok {
@@ -1254,9 +1304,16 @@ func DockerCommit(id, newname, newtag string) *Error {
 								if serr != nil {
 									return serr
 								}
-								old_map[fmt.Sprintf("%s/%s", mdata["image"].(string), shasum)] = size
-								mdata["layer"] = old_map
-								mdata["layer_order"] = fmt.Sprintf("%s:%s", map_interface["layer_order"].(string), fmt.Sprintf("%s/%s", mdata["image"].(string), shasum))
+								//here we clone the original map
+								clone_map := CopyMap(old_map)
+								clone_map[fmt.Sprintf("%s/%s.tar.gz", mdata["image"].(string), shasum)] = size
+								mdata["layer"] = clone_map
+								mdata["layer_order"] = fmt.Sprintf("%s:%s", map_interface["layer_order"].(string), fmt.Sprintf("%s/%s.tar.gz", mdata["image"].(string), shasum))
+
+								//check if orig_layer_order exists
+								if val, ok := map_interface["orig_layer_order"]; ok {
+									mdata["orig_layer_order"] = fmt.Sprintf("%s:%s", val.(string), fmt.Sprintf("%s/%s.tar.gz", mdata["image"].(string), shasum))
+								}
 							} else {
 								cerr := ErrNew(ErrType, fmt.Sprintf("doc.Image.Layer type is not right, actual: %T, want: map[string]interface{}", map_interface))
 								return cerr
@@ -1272,7 +1329,8 @@ func DockerCommit(id, newname, newtag string) *Error {
 					doc.Images[fmt.Sprintf("%s:%s", newname, newtag)] = mdata
 					mddata, _ := StructMarshal(doc)
 					LOGGER.WithFields(logrus.Fields{
-						"doc": doc,
+						"doc":        doc,
+						"write_path": fmt.Sprintf("%s/.info", doc.RootDir),
 					}).Debug("DockerCommit, update image info")
 					cerr = WriteToFile(mddata, fmt.Sprintf("%s/.info", doc.RootDir))
 					if cerr != nil {
@@ -1298,7 +1356,8 @@ func DockerCommit(id, newname, newtag string) *Error {
 					docinfo.Layers = strings.Join(layersorder, ":")
 
 					LOGGER.WithFields(logrus.Fields{
-						"docinfo": docinfo,
+						"docinfo":    docinfo,
+						"write_path": fmt.Sprintf("%s/.info", mdata["rootdir"].(string)),
 					}).Debug("DockerCommit, update docinfo info")
 					dinfodata, _ := StructMarshal(docinfo)
 					err = WriteToFile(dinfodata, fmt.Sprintf("%s/.info", mdata["rootdir"].(string)))
@@ -1392,7 +1451,7 @@ func DockerMerge(name, user, pass string) *Error {
 	for _, k := range layer_order {
 		k = path.Base(k)
 		tar_path := fmt.Sprintf("%s/%s", image_dir, k)
-		err := Untar(tar_path, tmpdir)
+		err := UntarLayer(tar_path, tmpdir)
 		if err != nil {
 			return err
 		}
@@ -1412,6 +1471,7 @@ func DockerMerge(name, user, pass string) *Error {
 	}
 
 	//tar folder to tarball
+	LOGGER.Info("Start merging layers...please wait")
 	target_name := RandomString(10)
 	terr = TarLayer(tmpdir, image_dir, target_name, nil)
 	if terr != nil {
@@ -1425,8 +1485,8 @@ func DockerMerge(name, user, pass string) *Error {
 	}
 
 	//rename folder and file
-	new_folder_name := fmt.Sprintf("%s/%s", mdata["base"].(string), sha256)
-	new_image_name := fmt.Sprintf("%s/%s", mdata["image"].(string), sha256)
+	new_folder_name := fmt.Sprintf("%s/%s.tar.gz", mdata["base"].(string), sha256)
+	new_image_name := fmt.Sprintf("%s/%s.tar.gz", mdata["image"].(string), sha256)
 	rerr := Rename(tmpdir, new_folder_name)
 	if rerr != nil {
 		return rerr
@@ -1445,6 +1505,11 @@ func DockerMerge(name, user, pass string) *Error {
 	//new layer name : size
 	ret[new_image_name] = size
 	mdata["layer"] = ret
+	//20200204 here we add backup of original layers order info in order for later package command
+
+	mdata["orig_layer_order"] = strings.Join(layer_order, ":")
+
+	//then we set new layer_order
 	mdata["layer_order"] = new_image_name
 
 	//add docker info file(.info)
@@ -1466,6 +1531,9 @@ func DockerMerge(name, user, pass string) *Error {
 	docinfo.LayersMap = layersmap
 	docinfo.Layers = sha256
 
+	LOGGER.WithFields(logrus.Fields{
+		"doc": docinfo,
+	}).Debug("DockerMerge, update image info")
 	dinfodata, _ := StructMarshal(docinfo)
 	err = WriteToFile(dinfodata, fmt.Sprintf("%s/.info", mdata["rootdir"].(string)))
 	if err != nil {
@@ -1476,6 +1544,9 @@ func DockerMerge(name, user, pass string) *Error {
 	//change name here
 	new_name := fmt.Sprintf("%s-merge", name)
 	doc.Images[new_name] = mdata
+	LOGGER.WithFields(logrus.Fields{
+		"docinfo": doc,
+	}).Debug("DockerMerge, update docinfo info")
 	ddata, _ := StructMarshal(doc)
 	err = WriteToFile(ddata, fmt.Sprintf("%s/.info", doc.RootDir))
 	if err != nil {
@@ -1731,10 +1802,9 @@ func DockerDownload(name string, user string, pass string) *Error {
 			layer_sha = append(layer_sha, path.Base(layer))
 		}
 		docinfo.Layers = strings.Join(layer_sha, ":")
-
 		LOGGER.WithFields(logrus.Fields{
 			"docinfo": docinfo,
-		}).Debug("DockerDownload debug, docinfo debug")
+		}).Debug("DockerDownload debug, add docinfo")
 
 		dinfodata, _ := StructMarshal(docinfo)
 		err = WriteToFile(dinfodata, fmt.Sprintf("%s/.info", mdata["rootdir"].(string)))
@@ -1817,6 +1887,9 @@ func DockerDownload(name string, user string, pass string) *Error {
 		//add map to this image
 		doc.Images[name] = mdata
 
+		LOGGER.WithFields(logrus.Fields{
+			"doc": doc,
+		}).Debug("DockerDownload debug, add image info to global images")
 		ddata, _ := StructMarshal(doc)
 		err = WriteToFile(ddata, fmt.Sprintf("%s/.info", doc.RootDir))
 		if err != nil {
@@ -2242,7 +2315,7 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 				}
 				return nil
 			}
-		}
+		} //if image exists inside doc data structure
 		cerr := ErrNew(ErrNExist, fmt.Sprintf("image %s doesn't exist", name))
 		return cerr
 	}

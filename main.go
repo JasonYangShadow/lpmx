@@ -19,7 +19,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-1.3"
+	VERSION = "alpha-1.4"
 )
 
 func checkCompleteness() *Error {
@@ -345,10 +345,16 @@ func main() {
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			var err *Error
+			LOGGER.Info(fmt.Sprintf("Start downloading %s", args[0]))
+			err = DockerDownload(args[0], DockerDownloadUser, DockerDownloadPass)
+			if err != nil && err.Err != ErrExist {
+				LOGGER.Fatal(err.Error())
+				return
+			}
 			if DockerDownloadMerge {
+				//then create merged image secondly
+				LOGGER.Info(fmt.Sprintf("Start merging %s", args[0]))
 				err = DockerMerge(args[0], DockerDownloadUser, DockerDownloadPass)
-			} else {
-				err = DockerDownload(args[0], DockerDownloadUser, DockerDownloadPass)
 			}
 			if err != nil {
 				LOGGER.Fatal(err.Error())

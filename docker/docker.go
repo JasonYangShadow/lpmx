@@ -429,6 +429,20 @@ func DownloadLayers(username string, pass string, name string, tag string, folde
 			folder = strings.TrimSuffix(folder, "/")
 		}
 		filename := folder + "/" + strings.TrimPrefix(dig.String(), "sha256:") + ".tar.gz"
+
+		//if file exists, we skip to next file
+		if FileExist(filename) {
+			if size, err := GetFileSize(filename); err == nil {
+				if size == element.Size {
+					data[filename] = element.Size
+					layer_order = append(layer_order, filename)
+					fmt.Println(fmt.Sprintf("File %s exists, skip...", filepath.Base(filename)))
+					continue
+				}
+			}
+		}
+
+		//else not exist
 		to, err := os.Create(filename)
 		if err != nil {
 			cerr := ErrNew(err, fmt.Sprintf("create file %s failure", filename))

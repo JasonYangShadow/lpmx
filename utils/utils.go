@@ -666,60 +666,26 @@ func TarLayer(src_folder string, target_folder string, target_name string, layer
 			return nil
 		}
 
-		//if symlink
+		//process symlink seperately
 		mode := fi.Mode()
 		if mode&os.ModeSymlink != 0 {
 			link, err := os.Readlink(file)
 			if err != nil {
 				return err
 			}
-			for _, layer_path := range layers {
-				if strings.HasPrefix(link, layer_path) {
-					//let's create another symlink instead of this real one
-					//step 1 : rename real one
-					//step 2 : create new fake one with the same name
-					//step 3 : remove new fake one and restore old.one
-					err := os.Rename(file, fmt.Sprintf("%s.tar.old", file))
-					if err != nil {
-						return err
-					}
-					relative_path, err := filepath.Rel(link, layer_path)
-					if err != nil {
-						return err
-					}
-					if relative_path == "." {
-						relative_path = "/"
-					} else {
-						relative_path = fmt.Sprintf("/%s", relative_path)
-					}
 
-					err = os.Symlink(relative_path, file)
-					new_fi, err := os.Lstat(file)
-					if err != nil {
-						return err
-					}
-					//new header
-					header, err := tar.FileInfoHeader(new_fi, fi.Name())
-					if err != nil {
-						return err
-					}
-					header.Name = strings.TrimPrefix(file, src_folder)
-					if err := tw.WriteHeader(header); err != nil {
-						return err
-					}
+			LOGGER.WithFields(logrus.Fields{
+				"link": link,
+				"file": file,
+			}).Debug("TarLayer symlink process")
 
-					//remove fake file and restore original one
-					err = os.Remove(file)
-					if err != nil {
-						return err
-					}
-					err = os.Rename(fmt.Sprintf("%s.tar.old", file), file)
-					if err != nil {
-						return err
-					}
-					//done
-					return nil
-				}
+			header, err := tar.FileInfoHeader(fi, link)
+			if err != nil {
+				return err
+			}
+			header.Name = strings.TrimPrefix(file, src_folder)
+			if err := tw.WriteHeader(header); err != nil {
+				return err
 			}
 		}
 
@@ -754,6 +720,166 @@ func TarLayer(src_folder string, target_folder string, target_name string, layer
 	}
 	return nil
 
+}
+
+func UntarLayer(file string, folder string) *Error {
+	if !FileExist(file) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("file %s does not exist", file))
+		return cerr
+	}
+
+	r, err := os.Open(file)
+	if err != nil {
+		cerr := ErrNew(ErrFileIO, fmt.Sprintf("open file %s failure", file))
+		return cerr
+	}
+	defer r.Close()
+
+	var tr *tar.Reader
+	ext := filepath.Ext(file)
+	if strings.ToLower(ext) == ".tar" {
+		tr = tar.NewReader(r)
+	} else if strings.ToLower(ext) == ".gz" && filepath.Ext(strings.TrimSuffix(strings.ToLower(file), ".gz")) == ".tar" {
+		gzr, err := gzip.NewReader(r)
+		if err != nil {
+			cerr := ErrNew(err, fmt.Sprintf("gzip open file %s failure", file))
+			return cerr
+		}
+		defer gzr.Close()
+
+		tr = tar.NewReader(gzr)
+
+	} else {
+		cerr := ErrNew(ErrMismatch, fmt.Sprintf("%s file is neither tar.gz file nor tar file", file))
+		return cerr
+	}
+
+	for {
+		header, err := tr.Next()
+
+		switch {
+		case err == io.EOF:
+			return nil
+
+		case err != nil:
+			cerr := ErrNew(err, "reading tar header errors")
+			return cerr
+
+		case header == nil:
+			continue
+		}
+
+		if !strings.HasSuffix(folder, "/") {
+			folder = folder + "/"
+		}
+		target := filepath.Join(folder, header.Name)
+
+		switch header.Typeflag {
+
+		// if it's a dir and it doesn't exist create it
+		case tar.TypeDir:
+			if _, err := os.Stat(target); err != nil {
+				if err := os.MkdirAll(target, 0755); err != nil {
+					cerr := ErrNew(err, "untar making dir error")
+					return cerr
+				}
+			}
+
+		case tar.TypeReg:
+			t_file_mode := os.FileMode(header.Mode)
+			//here we check file mode, if file does not have at least rw mode, we change it
+			//fixing "permission denied" error on cluster
+			permission := permbits.FileMode(t_file_mode)
+			if !(permission.UserRead() && permission.UserWrite()) {
+				permission.SetUserRead(true)
+				permission.SetUserWrite(true)
+				permbits.UpdateFileMode(&t_file_mode, permission)
+			}
+
+			//check if the file is white-out file
+			if strings.HasPrefix(filepath.Base(target), ".wh") {
+				file_name := strings.TrimPrefix(filepath.Base(target), ".wh.")
+				file_to_delete := fmt.Sprintf("%s/%s", filepath.Dir(target), file_name)
+				LOGGER.WithFields(logrus.Fields{
+					"file_to_delete":    file_to_delete,
+					"wh_file_to_delete": target,
+				}).Debug("UntarLayer regular file deletion")
+				os.RemoveAll(file_to_delete)
+				//remove .wh file
+				os.RemoveAll(target)
+			} else {
+				//20200204 adds trucate option
+				f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR|os.O_TRUNC, t_file_mode)
+				if err != nil {
+					cerr := ErrNew(err, fmt.Sprintf("untar create file %s error", target))
+					return cerr
+				}
+
+				// copy over contents
+				if _, err := io.Copy(f, tr); err != nil {
+					cerr := ErrNew(err, "untar copying file content error")
+					return cerr
+				}
+
+				f.Close()
+			}
+
+		case tar.TypeSymlink:
+			//if linkname is absolute path should be linked to the same layer
+			//target here is symlink, header.Linkname points the target to be linked.
+			//target -> header.Linkname
+
+			//os.Symlink(oldname <- to be linked, newname <- link)
+			//fmt.Printf("-----symlink---- %s, %s, %s\n", header.Linkname, folder, target)
+			if strings.HasPrefix(filepath.Base(target), ".wh") {
+				//remove Linkname
+				link_path := filepath.Join(folder, header.Linkname)
+				if strings.HasPrefix(filepath.Base(link_path), ".wh") {
+					file_name := strings.TrimPrefix(filepath.Base(link_path), ".wh.")
+					file_to_delete := fmt.Sprintf("%s/%s", filepath.Dir(link_path), file_name)
+					LOGGER.WithFields(logrus.Fields{
+						"file":         file_to_delete,
+						"wh_file":      link_path,
+						"orig_wh_file": target,
+					}).Debug("UntarLayer symlink file deletion")
+					//remove linked file
+					os.RemoveAll(file_to_delete)
+					//remove link itself
+					os.RemoveAll(link_path)
+				}
+				//remove link
+				os.RemoveAll(target)
+			} else {
+				os.Symlink(header.Linkname, target)
+			}
+
+			//we should avoid of creating hard link
+		case tar.TypeLink:
+			//fmt.Printf("-----hardlink---- %s, %s, %s\n", header.Linkname, folder, target)
+			//only works on linking to the file inside the same folder
+			if strings.HasPrefix(filepath.Base(target), ".wh") {
+				//remove Linkname
+				link_path := filepath.Join(folder, header.Linkname)
+				if strings.HasPrefix(filepath.Base(link_path), ".wh") {
+					file_name := strings.TrimPrefix(filepath.Base(link_path), ".wh.")
+					file_to_delete := fmt.Sprintf("%s/%s", filepath.Dir(link_path), file_name)
+					LOGGER.WithFields(logrus.Fields{
+						"file":         file_to_delete,
+						"wh_file":      link_path,
+						"orig_wh_file": target,
+					}).Debug("UntarLayer link file deletion")
+					//remove linked file
+					os.RemoveAll(file_to_delete)
+					//remove link itself
+					os.RemoveAll(link_path)
+				}
+				//remove link
+				os.RemoveAll(target)
+			} else {
+				os.Symlink(header.Linkname, target)
+			}
+		}
+	}
 }
 
 func Untar(file string, folder string) *Error {
@@ -809,7 +935,7 @@ func Untar(file string, folder string) *Error {
 
 		switch header.Typeflag {
 
-		// if its a dir and it doesn't exist create it
+		// if it's a dir and it doesn't exist create it
 		case tar.TypeDir:
 			if _, err := os.Stat(target); err != nil {
 				if err := os.MkdirAll(target, 0755); err != nil {
@@ -1183,4 +1309,18 @@ func CompareVersion(str1, str2, delimeter string) (int, *Error) {
 func IsNumeric(s string) bool {
 	_, err := strconv.ParseFloat(s, 64)
 	return err == nil
+}
+
+func CopyMap(m map[string]interface{}) map[string]interface{} {
+	cp := make(map[string]interface{})
+	for k, v := range m {
+		vm, ok := v.(map[string]interface{})
+		if ok {
+			cp[k] = CopyMap(vm)
+		} else {
+			cp[k] = v
+		}
+	}
+
+	return cp
 }
