@@ -19,7 +19,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-1.4"
+	VERSION = "alpha-1.5"
 )
 
 func checkCompleteness() *Error {
@@ -84,57 +84,6 @@ func main() {
 			}
 		},
 	}
-
-	var RunSource string
-	var RunConfig string
-	var RunPassive bool
-	var runCmd = &cobra.Command{
-		Use:   "run",
-		Short: "run container based on specific directory",
-		Long:  "run command is the basic command of lpmx, which is used for initializing, creating and running container based on specific directory",
-		Args:  cobra.ExactArgs(0),
-		PreRun: func(cmd *cobra.Command, args []string) {
-			err := checkCompleteness()
-			if err != nil {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-			err = CheckAndStartMemcache()
-			if err != nil && err.Err != ErrNExist {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-			if err != nil && err.Err == ErrNExist {
-				LOGGER.Warn("memcached related components are missing, functions may not work properly")
-			}
-		},
-		Run: func(cmd *cobra.Command, args []string) {
-			RunSource, _ = filepath.Abs(RunSource)
-			if RunConfig != "" {
-				RunConfig, _ = filepath.Abs(RunConfig)
-			} else {
-				config_path := fmt.Sprintf("%s/setting.yml", RunSource)
-				if FileExist(config_path) {
-					RunConfig = config_path
-				} else {
-					LOGGER.Fatal("can't locate the setting.yml in source folder")
-					return
-				}
-			}
-			configmap := make(map[string]interface{})
-			configmap["dir"] = RunSource
-			configmap["config"] = RunConfig
-			configmap["passive"] = RunPassive
-			err := Run(&configmap)
-			if err != nil {
-				LOGGER.Fatal(err.Error())
-			}
-		},
-	}
-	runCmd.Flags().StringVarP(&RunSource, "source", "s", "", "required")
-	runCmd.MarkFlagRequired("source")
-	runCmd.Flags().StringVarP(&RunConfig, "config", "c", "", "optional(if the setting.yml exists in source folder, then you don't need to specify the path)")
-	runCmd.Flags().BoolVarP(&RunPassive, "passive", "p", false, "optional")
 
 	var GetId string
 	var GetName string
@@ -489,6 +438,37 @@ func main() {
 	dockerCreateCmd.Flags().StringVarP(&DockerCreateName, "name", "n", "", "optional")
 	dockerCreateCmd.Flags().StringVarP(&DockerCreateVolume, "volume", "v", "", "optional")
 
+	var DockerRunVolume string
+	var dockerRunCmd = &cobra.Command{
+		Use:   "fastrun",
+		Short: "run container in a fast way without switching into shell",
+		Long:  "docker run sub-command is the advanced command of lpmx, which is used for fast running the container created from Docker image",
+		Args:  cobra.ExactArgs(2),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := checkCompleteness()
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+			err = CheckAndStartMemcache()
+			if err != nil && err.Err != ErrNExist {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+			if err != nil && err.Err == ErrNExist {
+				LOGGER.Warn("memcached related components are missing, functions may not work properly")
+			}
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			err := DockerFastRun(args[0], DockerRunVolume, args[1])
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+		},
+	}
+	dockerRunCmd.Flags().StringVarP(&DockerRunVolume, "volume", "v", "", "optional")
+
 	var dockerDeleteCmd = &cobra.Command{
 		Use:   "delete",
 		Short: "delete the local docker images",
@@ -646,7 +626,7 @@ func main() {
 		Short: "docker command",
 		Long:  "docker command is the advanced comand of lpmx, which is used for executing docker related commands",
 	}
-	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd, dockerPackageCmd, dockerAddCmd, dockerCommitCmd, dockerLoadCmd)
+	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd, dockerPackageCmd, dockerAddCmd, dockerCommitCmd, dockerLoadCmd, dockerRunCmd)
 
 	var ExposeId string
 	var ExposeName string

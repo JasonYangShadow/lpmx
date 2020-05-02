@@ -85,11 +85,13 @@ func ShellEnvPid(sh string, env map[string]string, dir string, arg ...string) *E
 	cmd := exec.Command(shpath, args...)
 	var envstrs []string
 	for key, value := range env {
+		/**
 		if len(arg) > 0 {
 			if key == "FAKECHROOT_EXCLUDE_PATH" {
 				value = value + ":/home"
 			}
 		}
+		**/
 		envstr := fmt.Sprintf("%s=%s", key, value)
 		envstrs = append(envstrs, envstr)
 	}
@@ -140,11 +142,13 @@ func ShellEnv(sh string, env map[string]string, dir string, arg ...string) *Erro
 		cmd := exec.Command(shpath, args...)
 		var envstrs []string
 		for key, value := range env {
+			/**
 			if len(arg) > 0 {
 				if key == "FAKECHROOT_EXCLUDE_PATH" {
 					value = value + ":/home"
 				}
 			}
+			**/
 			envstr := fmt.Sprintf("%s=%s", key, value)
 			envstrs = append(envstrs, envstr)
 		}

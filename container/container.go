@@ -2057,271 +2057,28 @@ func DockerReset(name string) *Error {
 	return err
 }
 
-func DockerCreate(name string, container_name string, volume_map string) *Error {
-	currdir, err := GetCurrDir()
+func DockerFastRun(name string, volume_map string, command string) *Error {
+	configmap, err := generateContainer(name, "", volume_map)
 	if err != nil {
 		return err
 	}
-	rootdir := fmt.Sprintf("%s/.docker", currdir)
-	var doc Docker
-	err = unmarshalObj(rootdir, &doc)
-	if err == nil {
-		if val, ok := doc.Images[name]; ok {
-			if vval, vok := val.(map[string]interface{}); vok {
-				//base is LPMX/.docker/.base
-				base, _ := vval["base"].(string)
-				workspace, _ := vval["workspace"].(string)
-				config, _ := vval["config"].(string)
-				layers, _ := vval["layer_order"].(string)
-				//randomly generate id
-				id := RandomString(IDLENGTH)
-				//rootfolder is the folder containing ld.so.path, rw and other layers symlinks
-				rootfolder := fmt.Sprintf("%s/%s", workspace, id)
-				if !FolderExist(rootfolder) {
-					_, err := MakeDir(rootfolder)
-					if err != nil {
-						return err
-					}
-				}
-
-				//create symlink folder for different layers
-				var keys []string
-				for _, k := range strings.Split(layers, ":") {
-					k = path.Base(k)
-					src_path := fmt.Sprintf("%s/%s", base, k)
-					target_path := fmt.Sprintf("%s/%s", rootfolder, k)
-					err := os.Symlink(src_path, target_path)
-					if err != nil {
-						cerr := ErrNew(err, fmt.Sprintf("can't create symlink from path: %s to %s", src_path, target_path))
-						return cerr
-					}
-					keys = append(keys, k)
-				}
-				keys = append(keys, "rw")
-				configmap := make(map[string]interface{})
-				configmap["dir"] = fmt.Sprintf("%s/rw", rootfolder)
-				if !FolderExist(configmap["dir"].(string)) {
-					_, err := MakeDir(configmap["dir"].(string))
-					if err != nil {
-						return err
-					}
-				}
-				configmap["parent_dir"] = rootfolder
-
-				configmap["config"] = config
-				configmap["passive"] = false
-				configmap["id"] = id
-				configmap["image"] = name
-				configmap["docker"] = true
-				LOGGER.WithFields(logrus.Fields{
-					"keys":   keys,
-					"layers": layers,
-				}).Debug("layers sha256 list")
-				reverse_keys := ReverseStrArray(keys)
-				configmap["layers"] = strings.Join(reverse_keys, ":")
-				configmap["baselayerpath"] = base
-				configmap["container_name"] = container_name
-
-				//dealing with sync folder/volume problem
-				//add default sync folder firstly if not exists
-				var sync_folder []string
-				default_sync_folder := fmt.Sprintf("%s/sync/%s", currdir, id)
-				if !FolderExist(default_sync_folder) {
-					oerr := os.MkdirAll(default_sync_folder, os.FileMode(FOLDER_MODE))
-					if oerr != nil {
-						cerr := ErrNew(oerr, fmt.Sprintf("could not mkdir %s", default_sync_folder))
-						return cerr
-					}
-				}
-				if !strings.Contains(volume_map, default_sync_folder) {
-					volume_map = fmt.Sprintf("%s:/lpmx;%s", default_sync_folder, volume_map)
-				}
-				//add user defined ones
-				for _, volume := range strings.Split(volume_map, ";") {
-					if len(volume) > 0 {
-						v := strings.Split(volume, ":")
-						if !FolderExist(v[0]) {
-							continue
-						} else {
-							v_abs := fmt.Sprintf("%s/rw%s", rootfolder, v[1])
-							if FolderExist(v_abs) {
-								continue
-							} else {
-								serr := os.Symlink(v[0], v_abs)
-								if serr != nil {
-									cerr := ErrNew(serr, fmt.Sprintf("could not symlink, oldpath: %s, newpath: %s", v[0], v_abs))
-									return cerr
-								}
-								sync_folder = append(sync_folder, v[0])
-							}
-						}
-					}
-				}
-				configmap["sync_ori_folder"] = volume_map
-				configmap["sync_folder"] = strings.Join(sync_folder, ":")
-				if len(sync_folder) == 1 {
-					configmap["sync_folder"] = strings.TrimSuffix(configmap["sync_folder"].(string), ":")
-				}
-
-				//patch ld.so
-				//update on 20191223 we downloaded patch.tar.gz from github and we need to patch ld.so included inside this tar ball rather than using the one inside container
-				ld_new_path := fmt.Sprintf("%s/ld.so.patch", rootfolder)
-				LOGGER.WithFields(logrus.Fields{
-					"ld_patched_path": ld_new_path,
-				}).Debug("layers sha256 list")
-				if !FileExist(ld_new_path) {
-					//update on 20200120 we do not need to rebuild ld.so again. As we found that __libc_start_main can be LD_PRELOAD and trapped before main function is called.
-					//will comment the following part of code
-
-					/**
-					ld_orig_path := fmt.Sprintf("%s/patch/ld.so", filepath.Dir(filepath.Dir(rootfolder)))
-					LOGGER.WithFields(logrus.Fields{
-						"ld_path": ld_orig_path,
-					}).Debug("DockerCreate prepares patching target ld.so")
-					_, err := os.Stat(ld_orig_path)
-					if err == nil {
-						perr := Patchldso(ld_orig_path, ld_new_path)
-						if perr != nil {
-							return perr
-						}
-						configmap["elf_loader"] = ld_new_path
-					} else {
-						cerr := ErrNew(err, fmt.Sprintf("could not patch target ld.so: %s", ld_orig_path))
-						return cerr
-					}
-					**/
-					///**
-					for _, v := range LD {
-						for _, l := range strings.Split(configmap["layers"].(string), ":") {
-							ld_orig_path := fmt.Sprintf("%s/%s%s", configmap["baselayerpath"].(string), l, v)
-
-							LOGGER.WithFields(logrus.Fields{
-								"ld_path": ld_orig_path,
-							}).Debug("layers sha256 list")
-							if _, err := os.Stat(ld_orig_path); err == nil {
-								err := Patchldso(ld_orig_path, ld_new_path)
-								if err != nil {
-									return err
-								}
-								configmap["elf_loader"] = ld_new_path
-								break
-							}
-						}
-						if _, ok := configmap["elf_loader"]; ok {
-							break
-						}
-					}
-					//**/
-				} else {
-					configmap["elf_loader"] = ld_new_path
-				}
-
-				//add current user to /etc/passwd user gid to /etc/group
-				user, err := user.Current()
-				if err != nil {
-					cerr := ErrNew(err, "can't get current user info")
-					return cerr
-				}
-
-				LOGGER.WithFields(logrus.Fields{
-					"configmap": configmap,
-				}).Debug("configmap info debugging before copy and create /etc/passwd and /etc/group")
-
-				uname := user.Username
-				uid := user.Uid
-				gid := user.Gid
-				passwd_patch := false
-				group_patch := false
-				for _, l := range strings.Split(configmap["layers"].(string), ":") {
-					passwd_path := fmt.Sprintf("%s/%s/etc/passwd", configmap["baselayerpath"].(string), l)
-					if _, err := os.Stat(passwd_path); err == nil {
-						new_passwd_path := fmt.Sprintf("%s/etc", configmap["dir"].(string))
-						os.MkdirAll(new_passwd_path, os.FileMode(FOLDER_MODE))
-						ret, c_err := CopyFile(passwd_path, fmt.Sprintf("%s/passwd", new_passwd_path))
-						if ret && c_err == nil {
-							f, err := os.OpenFile(fmt.Sprintf("%s/passwd", new_passwd_path), os.O_APPEND|os.O_WRONLY, os.ModeAppend)
-							if err != nil {
-								cerr := ErrNew(err, fmt.Sprintf("%s/passwd", new_passwd_path))
-								return cerr
-							}
-							defer f.Close()
-							_, err = f.WriteString(fmt.Sprintf("%s:x:%s:%s:%s:/home/%s:/bin/bash\n", uname, uid, uid, uname, uname))
-							if err != nil {
-								cerr := ErrNew(err, fmt.Sprintf("%s/passwd", new_passwd_path))
-								return cerr
-							}
-
-							passwd_patch = true
-							break
-						} else {
-							return c_err
-						}
-					}
-				}
-
-				for _, l := range strings.Split(configmap["layers"].(string), ":") {
-					group_path := fmt.Sprintf("%s/%s/etc/group", configmap["baselayerpath"].(string), l)
-					if _, err := os.Stat(group_path); err == nil {
-						new_group_path := fmt.Sprintf("%s/etc", configmap["dir"].(string))
-						os.MkdirAll(new_group_path, os.FileMode(FOLDER_MODE))
-						ret, c_err := CopyFile(group_path, fmt.Sprintf("%s/group", new_group_path))
-						if ret && c_err == nil {
-							f, err := os.OpenFile(fmt.Sprintf("%s/group", new_group_path), os.O_APPEND|os.O_WRONLY, os.ModeAppend)
-							if err != nil {
-								cerr := ErrNew(err, fmt.Sprintf("%s/group", new_group_path))
-								return cerr
-							}
-							defer f.Close()
-							_, err = f.WriteString(fmt.Sprintf("%s:x:%s\n", uname, gid))
-							if err != nil {
-								cerr := ErrNew(err, fmt.Sprintf("%s/group", new_group_path))
-								return cerr
-							}
-
-							host_f, err := os.OpenFile("/etc/group", os.O_RDONLY, 0400)
-							if err == nil {
-								scanner := bufio.NewScanner(host_f)
-								for scanner.Scan() {
-									content := scanner.Text()
-									if strings.HasSuffix(content, fmt.Sprintf(":%s", uname)) {
-										f.WriteString(fmt.Sprintf("%s\n", content))
-									}
-								}
-								host_f.Close()
-							}
-
-							group_patch = true
-							break
-						} else {
-							return c_err
-						}
-					}
-				}
-
-				if !passwd_patch || !group_patch {
-					cerr := ErrNew(ErrNExist, "could not find /etc/passwd or /etc/group to patch")
-					return cerr
-				}
-
-				//create tmp folder and create whiteout file for tmp
-				os.MkdirAll(fmt.Sprintf("%s/tmp", configmap["dir"].(string)), os.FileMode(FOLDER_MODE))
-				f, _ := os.Create(fmt.Sprintf("%s/.wh.tmp", configmap["dir"].(string)))
-				f.Close()
-
-				//run container
-				r_err := Run(&configmap)
-				if r_err != nil {
-					return r_err
-				}
-				return nil
-			}
-		} //if image exists inside doc data structure
-		cerr := ErrNew(ErrNExist, fmt.Sprintf("image %s doesn't exist", name))
-		return cerr
+	id := (*configmap)["id"].(string)
+	err = Run(configmap, command)
+	//remove container
+	if err != nil {
+		err = Destroy(id)
+		return err
 	}
-	if err.Err == ErrNExist {
-		err.AddMsg(fmt.Sprintf("image %s does not exist, you may need to download it firstly", name))
+	err = Destroy(id)
+	return err
+}
+
+func DockerCreate(name string, container_name string, volume_map string) *Error {
+	configmap, err := generateContainer(name, container_name, volume_map)
+	if err != nil {
+		return err
 	}
+	err = Run(configmap)
 	return err
 }
 
@@ -2766,6 +2523,12 @@ func (con *Container) bashShell(args ...string) *Error {
 			KillProcessByPid(faked_str[1])
 		}()
 
+		LOGGER.WithFields(logrus.Fields{
+			"shell":    con.UserShell,
+			"env":      env,
+			"rootpath": con.RootPath,
+			"args":     args,
+		}).Debug("bashShell debug, before shellenvpid is called")
 		cerr := ShellEnvPid(con.UserShell, env, con.RootPath, args...)
 		if cerr != nil {
 			return cerr
@@ -3198,6 +2961,279 @@ func (con *Container) startRPCService(port int) *Error {
 /**
 private functions
 **/
+
+//this function will generate necessary info and save it to file. This function should work properly in order to create a container
+/**
+name: image name and tag
+container_name: optional container name
+volume_map: a volume map for container
+command: command to run inside container
+**/
+func generateContainer(name string, container_name string, volume_map string) (*map[string]interface{}, *Error) {
+	currdir, err := GetCurrDir()
+	if err != nil {
+		return nil, err
+	}
+	rootdir := fmt.Sprintf("%s/.docker", currdir)
+	var doc Docker
+	err = unmarshalObj(rootdir, &doc)
+	if err == nil {
+		if val, ok := doc.Images[name]; ok {
+			if vval, vok := val.(map[string]interface{}); vok {
+				//base is LPMX/.docker/.base
+				base, _ := vval["base"].(string)
+				workspace, _ := vval["workspace"].(string)
+				config, _ := vval["config"].(string)
+				layers, _ := vval["layer_order"].(string)
+				//randomly generate id
+				id := RandomString(IDLENGTH)
+				//rootfolder is the folder containing ld.so.path, rw and other layers symlinks
+				rootfolder := fmt.Sprintf("%s/%s", workspace, id)
+				if !FolderExist(rootfolder) {
+					_, err := MakeDir(rootfolder)
+					if err != nil {
+						return nil, err
+					}
+				}
+
+				//create symlink folder for different layers
+				var keys []string
+				for _, k := range strings.Split(layers, ":") {
+					k = path.Base(k)
+					src_path := fmt.Sprintf("%s/%s", base, k)
+					target_path := fmt.Sprintf("%s/%s", rootfolder, k)
+					err := os.Symlink(src_path, target_path)
+					if err != nil {
+						cerr := ErrNew(err, fmt.Sprintf("can't create symlink from path: %s to %s", src_path, target_path))
+						return nil, cerr
+					}
+					keys = append(keys, k)
+				}
+				keys = append(keys, "rw")
+				configmap := make(map[string]interface{})
+				configmap["dir"] = fmt.Sprintf("%s/rw", rootfolder)
+				if !FolderExist(configmap["dir"].(string)) {
+					_, err := MakeDir(configmap["dir"].(string))
+					if err != nil {
+						return nil, err
+					}
+				}
+				configmap["parent_dir"] = rootfolder
+
+				configmap["config"] = config
+				configmap["passive"] = false
+				configmap["id"] = id
+				configmap["image"] = name
+				configmap["docker"] = true
+				LOGGER.WithFields(logrus.Fields{
+					"keys":   keys,
+					"layers": layers,
+				}).Debug("layers sha256 list")
+				reverse_keys := ReverseStrArray(keys)
+				configmap["layers"] = strings.Join(reverse_keys, ":")
+				configmap["baselayerpath"] = base
+				configmap["container_name"] = container_name
+
+				//dealing with sync folder/volume problem
+				//add default sync folder firstly if not exists
+				var sync_folder []string
+				default_sync_folder := fmt.Sprintf("%s/sync/%s", currdir, id)
+				if !FolderExist(default_sync_folder) {
+					oerr := os.MkdirAll(default_sync_folder, os.FileMode(FOLDER_MODE))
+					if oerr != nil {
+						cerr := ErrNew(oerr, fmt.Sprintf("could not mkdir %s", default_sync_folder))
+						return nil, cerr
+					}
+				}
+				if !strings.Contains(volume_map, default_sync_folder) {
+					volume_map = fmt.Sprintf("%s:/lpmx;%s", default_sync_folder, volume_map)
+				}
+				//add user defined ones
+				for _, volume := range strings.Split(volume_map, ";") {
+					if len(volume) > 0 {
+						v := strings.Split(volume, ":")
+						if !FolderExist(v[0]) {
+							continue
+						} else {
+							v_abs := fmt.Sprintf("%s/rw%s", rootfolder, v[1])
+							if FolderExist(v_abs) {
+								continue
+							} else {
+								serr := os.Symlink(v[0], v_abs)
+								if serr != nil {
+									cerr := ErrNew(serr, fmt.Sprintf("could not symlink, oldpath: %s, newpath: %s", v[0], v_abs))
+									return nil, cerr
+								}
+								sync_folder = append(sync_folder, v[0])
+							}
+						}
+					}
+				}
+				configmap["sync_ori_folder"] = volume_map
+				configmap["sync_folder"] = strings.Join(sync_folder, ":")
+				if len(sync_folder) == 1 {
+					configmap["sync_folder"] = strings.TrimSuffix(configmap["sync_folder"].(string), ":")
+				}
+
+				//patch ld.so
+				//update on 20191223 we downloaded patch.tar.gz from github and we need to patch ld.so included inside this tar ball rather than using the one inside container
+				ld_new_path := fmt.Sprintf("%s/ld.so.patch", rootfolder)
+				LOGGER.WithFields(logrus.Fields{
+					"ld_patched_path": ld_new_path,
+				}).Debug("layers sha256 list")
+				if !FileExist(ld_new_path) {
+					//update on 20200120 we do not need to rebuild ld.so again. As we found that __libc_start_main can be LD_PRELOAD and trapped before main function is called.
+					//will comment the following part of code
+
+					/**
+					ld_orig_path := fmt.Sprintf("%s/patch/ld.so", filepath.Dir(filepath.Dir(rootfolder)))
+					LOGGER.WithFields(logrus.Fields{
+						"ld_path": ld_orig_path,
+					}).Debug("DockerCreate prepares patching target ld.so")
+					_, err := os.Stat(ld_orig_path)
+					if err == nil {
+						perr := Patchldso(ld_orig_path, ld_new_path)
+						if perr != nil {
+							return perr
+						}
+						configmap["elf_loader"] = ld_new_path
+					} else {
+						cerr := ErrNew(err, fmt.Sprintf("could not patch target ld.so: %s", ld_orig_path))
+						return cerr
+					}
+					**/
+					///**
+					for _, v := range LD {
+						for _, l := range strings.Split(configmap["layers"].(string), ":") {
+							ld_orig_path := fmt.Sprintf("%s/%s%s", configmap["baselayerpath"].(string), l, v)
+
+							LOGGER.WithFields(logrus.Fields{
+								"ld_path": ld_orig_path,
+							}).Debug("layers sha256 list")
+							if _, err := os.Stat(ld_orig_path); err == nil {
+								err := Patchldso(ld_orig_path, ld_new_path)
+								if err != nil {
+									return nil, err
+								}
+								configmap["elf_loader"] = ld_new_path
+								break
+							}
+						}
+						if _, ok := configmap["elf_loader"]; ok {
+							break
+						}
+					}
+					//**/
+				} else {
+					configmap["elf_loader"] = ld_new_path
+				}
+
+				//add current user to /etc/passwd user gid to /etc/group
+				user, err := user.Current()
+				if err != nil {
+					cerr := ErrNew(err, "can't get current user info")
+					return nil, cerr
+				}
+
+				LOGGER.WithFields(logrus.Fields{
+					"configmap": configmap,
+				}).Debug("configmap info debugging before copy and create /etc/passwd and /etc/group")
+
+				uname := user.Username
+				uid := user.Uid
+				gid := user.Gid
+				passwd_patch := false
+				group_patch := false
+				for _, l := range strings.Split(configmap["layers"].(string), ":") {
+					passwd_path := fmt.Sprintf("%s/%s/etc/passwd", configmap["baselayerpath"].(string), l)
+					if _, err := os.Stat(passwd_path); err == nil {
+						new_passwd_path := fmt.Sprintf("%s/etc", configmap["dir"].(string))
+						os.MkdirAll(new_passwd_path, os.FileMode(FOLDER_MODE))
+						ret, c_err := CopyFile(passwd_path, fmt.Sprintf("%s/passwd", new_passwd_path))
+						if ret && c_err == nil {
+							f, err := os.OpenFile(fmt.Sprintf("%s/passwd", new_passwd_path), os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+							if err != nil {
+								cerr := ErrNew(err, fmt.Sprintf("%s/passwd", new_passwd_path))
+								return nil, cerr
+							}
+							defer f.Close()
+							_, err = f.WriteString(fmt.Sprintf("%s:x:%s:%s:%s:/home/%s:/bin/bash\n", uname, uid, uid, uname, uname))
+							if err != nil {
+								cerr := ErrNew(err, fmt.Sprintf("%s/passwd", new_passwd_path))
+								return nil, cerr
+							}
+
+							passwd_patch = true
+							break
+						} else {
+							return nil, c_err
+						}
+					}
+				}
+
+				for _, l := range strings.Split(configmap["layers"].(string), ":") {
+					group_path := fmt.Sprintf("%s/%s/etc/group", configmap["baselayerpath"].(string), l)
+					if _, err := os.Stat(group_path); err == nil {
+						new_group_path := fmt.Sprintf("%s/etc", configmap["dir"].(string))
+						os.MkdirAll(new_group_path, os.FileMode(FOLDER_MODE))
+						ret, c_err := CopyFile(group_path, fmt.Sprintf("%s/group", new_group_path))
+						if ret && c_err == nil {
+							f, err := os.OpenFile(fmt.Sprintf("%s/group", new_group_path), os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+							if err != nil {
+								cerr := ErrNew(err, fmt.Sprintf("%s/group", new_group_path))
+								return nil, cerr
+							}
+							defer f.Close()
+							_, err = f.WriteString(fmt.Sprintf("%s:x:%s\n", uname, gid))
+							if err != nil {
+								cerr := ErrNew(err, fmt.Sprintf("%s/group", new_group_path))
+								return nil, cerr
+							}
+
+							host_f, err := os.OpenFile("/etc/group", os.O_RDONLY, 0400)
+							if err == nil {
+								scanner := bufio.NewScanner(host_f)
+								for scanner.Scan() {
+									content := scanner.Text()
+									if strings.HasSuffix(content, fmt.Sprintf(":%s", uname)) {
+										f.WriteString(fmt.Sprintf("%s\n", content))
+									}
+								}
+								host_f.Close()
+							}
+
+							group_patch = true
+							break
+						} else {
+							return nil, c_err
+						}
+					}
+				}
+
+				if !passwd_patch || !group_patch {
+					cerr := ErrNew(ErrNExist, "could not find /etc/passwd or /etc/group to patch")
+					return nil, cerr
+				}
+
+				//create tmp folder and create whiteout file for tmp
+				os.MkdirAll(fmt.Sprintf("%s/tmp", configmap["dir"].(string)), os.FileMode(FOLDER_MODE))
+				f, _ := os.Create(fmt.Sprintf("%s/.wh.tmp", configmap["dir"].(string)))
+				f.Close()
+
+				//run container
+				return &configmap, nil
+			}
+		} //if image exists inside doc data structure
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("image %s doesn't exist", name))
+		return nil, cerr
+	}
+	if err.Err == ErrNExist {
+		err.AddMsg(fmt.Sprintf("image %s does not exist, you may need to download it firstly", name))
+	}
+	return nil, err
+
+}
+
 func walkContainerRoot(con *Container) ([]string, []string, *Error) {
 	var libs []string
 	var bineries []string
