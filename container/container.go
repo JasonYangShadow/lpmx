@@ -1665,10 +1665,12 @@ func DockerLoad(file string) *Error {
 		}
 		mdata["workspace"] = workspace
 
+		/**
 		patchfolder := fmt.Sprintf("%s/patch", mdata["rootdir"])
 		if !FolderExist(patchfolder) {
 			MakeDir(patchfolder)
 		}
+		**/
 
 		//extract layers
 		base := fmt.Sprintf("%s/.base", rootdir)
@@ -1704,6 +1706,7 @@ func DockerLoad(file string) *Error {
 			return err
 		}
 
+		/**
 		//here we start downloading patch tar ball to rdir/patch folder
 		pdir := fmt.Sprintf("%s/patch", rdir)
 		//save patch.tar.gz into rdir and untar it to pdir
@@ -1721,6 +1724,7 @@ func DockerLoad(file string) *Error {
 				return err
 			}
 		}
+		**/
 
 		//add map to this image
 		doc.Images[name] = mdata
