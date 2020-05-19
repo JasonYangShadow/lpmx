@@ -2086,7 +2086,7 @@ func DockerCreate(name string, container_name string, volume_map string) *Error 
 	return err
 }
 
-func DockerDelete(name string) *Error {
+func DockerDelete(name string, permernant bool) *Error {
 	currdir, err := GetCurrDir()
 	if err != nil {
 		return err
@@ -2100,7 +2100,6 @@ func DockerDelete(name string) *Error {
 		for key, value := range sys.Containers {
 			if vval, vok := value.(map[string]interface{}); vok {
 				config_path := vval["ConfigPath"].(string)
-
 				var con Container
 				err = unmarshalObj(config_path, &con)
 				if err != nil {
@@ -2126,6 +2125,27 @@ func DockerDelete(name string) *Error {
 	if err == nil {
 		if val, ok := doc.Images[name]; ok {
 			if vval, vok := val.(map[string]interface{}); vok {
+				if permernant {
+					//we need to delete image files and folder info
+					image_dir := vval["image"].(string)
+					base_dir := vval["base"].(string)
+					layer_order := vval["layer_order"].(string)
+					for _, layer := range strings.Split(layer_order, ":") {
+						layer_name := filepath.Base(layer)
+						LOGGER.WithFields(logrus.Fields{
+							"folder to delete": fmt.Sprintf("%s/%s", base_dir, layer_name),
+							"file to delete":   fmt.Sprintf("%s/%s", image_dir, layer_name),
+						}).Debug("Docker delete info")
+						_, rerr := RemoveAll(fmt.Sprintf("%s/%s", image_dir, layer_name))
+						if rerr != nil {
+							return rerr
+						}
+						_, rerr = RemoveAll(fmt.Sprintf("%s/%s", base_dir, layer_name))
+						if rerr != nil {
+							return rerr
+						}
+					}
+				}
 				dir, _ := vval["rootdir"].(string)
 				rok, rerr := RemoveAll(dir)
 				if rok {
@@ -2147,7 +2167,7 @@ func DockerDelete(name string) *Error {
 	return err
 }
 
-func Expose(id string, name string) *Error {
+func Expose(id string, path string, name string) *Error {
 	currdir, err := GetCurrDir()
 	if err != nil {
 		return err
@@ -2168,11 +2188,11 @@ func Expose(id string, name string) *Error {
 						if err != nil {
 							return err
 						}
-						if !strings.Contains(con.ExposeExe, name) {
+						if !strings.Contains(con.ExposeExe, path) {
 							if con.ExposeExe == "" {
-								con.ExposeExe = name
+								con.ExposeExe = path
 							} else {
-								con.ExposeExe = fmt.Sprintf("%s:%s", con.ExposeExe, name)
+								con.ExposeExe = fmt.Sprintf("%s:%s", con.ExposeExe, path)
 							}
 						}
 
@@ -2184,7 +2204,7 @@ func Expose(id string, name string) *Error {
 							}
 						}
 
-						bname := filepath.Base(name)
+						bname := name
 						bdir := fmt.Sprintf("%s/%s", bindir, bname)
 						if FileExist(bdir) {
 							RemoveFile(bdir)
@@ -2195,7 +2215,7 @@ func Expose(id string, name string) *Error {
 							return cerr
 						}
 						code := "#!/bin/bash\n" + os.Args[0] +
-							" resume " + id + " \"" + name + " " + "$@\"" +
+							" resume " + id + " \"" + path + " " + "$@\"" +
 							"\n"
 
 						fmt.Fprintf(f, code)

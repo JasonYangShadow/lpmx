@@ -19,7 +19,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-1.4"
+	VERSION = "alpha-1.5"
 )
 
 func checkCompleteness() *Error {
@@ -469,6 +469,7 @@ func main() {
 	}
 	dockerRunCmd.Flags().StringVarP(&DockerRunVolume, "volume", "v", "", "optional")
 
+	var DockerDeletePermernant bool
 	var dockerDeleteCmd = &cobra.Command{
 		Use:   "delete",
 		Short: "delete the local docker images",
@@ -482,7 +483,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := DockerDelete(args[0])
+			err := DockerDelete(args[0], DockerDeletePermernant)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -492,6 +493,7 @@ func main() {
 			}
 		},
 	}
+	dockerDeleteCmd.Flags().BoolVarP(&DockerDeletePermernant, "permernant", "p", false, "permernantly delete all layers of the target image(optional)")
 
 	var dockerSearchCmd = &cobra.Command{
 		Use:   "search",
@@ -629,6 +631,7 @@ func main() {
 	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd, dockerPackageCmd, dockerAddCmd, dockerCommitCmd, dockerLoadCmd, dockerRunCmd)
 
 	var ExposeId string
+	var ExposePath string
 	var ExposeName string
 	var exposeCmd = &cobra.Command{
 		Use:   "expose",
@@ -643,7 +646,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Expose(ExposeId, ExposeName)
+			err := Expose(ExposeId, ExposePath, ExposeName)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -655,6 +658,8 @@ func main() {
 	}
 	exposeCmd.Flags().StringVarP(&ExposeId, "id", "i", "", "required")
 	exposeCmd.MarkFlagRequired("id")
+	exposeCmd.Flags().StringVarP(&ExposePath, "path", "p", "", "required")
+	exposeCmd.MarkFlagRequired("path")
 	exposeCmd.Flags().StringVarP(&ExposeName, "name", "n", "", "required")
 	exposeCmd.MarkFlagRequired("name")
 
