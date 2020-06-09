@@ -19,7 +19,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-1.5"
+	VERSION = "alpha-1.6"
 )
 
 func checkCompleteness() *Error {
@@ -320,7 +320,7 @@ func main() {
 
 	var dockerAddCmd = &cobra.Command{
 		Use:   "add",
-		Short: "add the local docker image to system",
+		Short: "add the exported image to system",
 		Long:  "docker add sub-command is one advanced command of lpmx, which is used for adding packaged docker image to lpmx system",
 		Args:  cobra.ExactArgs(1),
 		PreRun: func(cmd *cobra.Command, args []string) {
@@ -428,7 +428,7 @@ func main() {
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
-			err := DockerCreate(args[0], DockerCreateName, DockerCreateVolume)
+			err := CommonCreate(args[0], DockerCreateName, DockerCreateVolume)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -460,7 +460,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := DockerFastRun(args[0], DockerRunVolume, args[1])
+			err := CommonFastRun(args[0], DockerRunVolume, args[1])
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -483,7 +483,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := DockerDelete(args[0], DockerDeletePermernant)
+			err := CommonDelete(args[0], DockerDeletePermernant)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -530,7 +530,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := DockerList()
+			err := CommonList("Docker")
 			if err != nil {
 				LOGGER.Error(err.Error())
 				return
@@ -626,9 +626,159 @@ func main() {
 	var dockerCmd = &cobra.Command{
 		Use:   "docker",
 		Short: "docker command",
-		Long:  "docker command is the advanced comand of lpmx, which is used for executing docker related commands",
+		Long:  "docker command is the advanced command of lpmx, which is used for executing docker related commands",
 	}
 	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd, dockerPackageCmd, dockerAddCmd, dockerCommitCmd, dockerLoadCmd, dockerRunCmd)
+
+	var SingularityLoadName string
+	var SingularityLoadTag string
+	var singularityLoadCmd = &cobra.Command{
+		Use:   "load",
+		Short: "load local sif image",
+		Long:  "singularity load sub-command is the advanced command of lpmx, which is used for loading sif image.",
+		Args:  cobra.ExactArgs(1),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := checkCompleteness()
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			err := SingularityLoad(args[0], SingularityLoadName, SingularityLoadTag)
+			if err != nil {
+				LOGGER.Error(err.Error())
+				return
+			} else {
+				LOGGER.Info("DONE")
+				return
+			}
+		},
+	}
+	singularityLoadCmd.Flags().StringVarP(&SingularityLoadName, "name", "n", "", "required")
+	singularityLoadCmd.MarkFlagRequired("name")
+	singularityLoadCmd.Flags().StringVarP(&SingularityLoadTag, "tag", "t", "", "required")
+	singularityLoadCmd.MarkFlagRequired("tag")
+
+	var SingularityCreateName string
+	var SingularityCreateVolume string
+	var singularityCreateCmd = &cobra.Command{
+		Use:   "create",
+		Short: "initialize the local singularity images",
+		Long:  "singularity create sub-command is the advanced command of lpmx, which is used for initializing and running the sif image",
+		Args:  cobra.ExactArgs(1),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := checkCompleteness()
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+			err = CheckAndStartMemcache()
+			if err != nil && err.Err != ErrNExist {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+
+			if err != nil && err.Err == ErrNExist {
+				LOGGER.Warn("memcached related components are missing, functions may not work properly")
+			}
+		},
+
+		Run: func(cmd *cobra.Command, args []string) {
+			err := CommonCreate(args[0], SingularityCreateName, SingularityCreateVolume)
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+		},
+	}
+	singularityCreateCmd.Flags().StringVarP(&SingularityCreateName, "name", "n", "", "optional")
+	singularityCreateCmd.Flags().StringVarP(&SingularityCreateVolume, "volume", "v", "", "optional")
+
+	var SingularityDeletePermernant bool
+	var singularityDeleteCmd = &cobra.Command{
+		Use:   "delete",
+		Short: "delete the local singularity images",
+		Long:  "singularity delete sub-command is the advanced command of lpmx, which is used for deleting the singularity image",
+		Args:  cobra.ExactArgs(1),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := checkCompleteness()
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			err := CommonDelete(args[0], SingularityDeletePermernant)
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			} else {
+				LOGGER.Info("DONE")
+				return
+			}
+		},
+	}
+	singularityDeleteCmd.Flags().BoolVarP(&SingularityDeletePermernant, "permernant", "p", false, "permernantly delete all layers of the target image(optional)")
+
+	var singularityListCmd = &cobra.Command{
+		Use:   "list",
+		Short: "list local singularity images",
+		Long:  "singularity list sub-command is the advanced command of lpmx, which is used for listing local singularity images",
+		Args:  cobra.ExactArgs(0),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := checkCompleteness()
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			err := CommonList("Singularity")
+			if err != nil {
+				LOGGER.Error(err.Error())
+				return
+			}
+		},
+	}
+
+	var SingularityRunVolume string
+	var singularityRunCmd = &cobra.Command{
+		Use:   "fastrun",
+		Short: "run container in a fast way without switching into shell",
+		Long:  "singularity run sub-command is the advanced command of lpmx, which is used for fast running the container created from singularity image",
+		Args:  cobra.ExactArgs(2),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := checkCompleteness()
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+			err = CheckAndStartMemcache()
+			if err != nil && err.Err != ErrNExist {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+			if err != nil && err.Err == ErrNExist {
+				LOGGER.Warn("memcached related components are missing, functions may not work properly")
+			}
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			err := CommonFastRun(args[0], DockerRunVolume, args[1])
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+		},
+	}
+	singularityRunCmd.Flags().StringVarP(&SingularityRunVolume, "volume", "v", "", "optional")
+
+	var singularityCmd = &cobra.Command{
+		Use:   "singularity",
+		Short: "singularity command",
+		Long:  "singularity command is the advanced command of lpmx, which is used for executing singularity related commands",
+	}
+	singularityCmd.AddCommand(singularityLoadCmd, singularityCreateCmd, singularityDeleteCmd, singularityListCmd, singularityRunCmd)
 
 	var ExposeId string
 	var ExposePath string
@@ -814,6 +964,6 @@ func main() {
 		Use:   "lpmx",
 		Short: "lpmx rootless container",
 	}
-	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, setCmd, resumeCmd, getCmd, dockerCmd, exposeCmd, uninstallCmd, versionCmd, downloadCmd, updateCmd)
+	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, setCmd, resumeCmd, getCmd, dockerCmd, singularityCmd, exposeCmd, uninstallCmd, versionCmd, downloadCmd, updateCmd)
 	rootCmd.Execute()
 }
