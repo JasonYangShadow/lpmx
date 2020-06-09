@@ -135,6 +135,14 @@
   revision = "1efae4548023f60d7a172fead76cccf194cf45de"
 
 [[projects]]
+  digest = "1:274f67cb6fed9588ea2521ecdac05a6d62a8c51c074c1fccc6a49a40ba80e925"
+  name = "github.com/satori/go.uuid"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "f58768cc1a7a7e77a3bd49e98cdd21419399b6a3"
+  version = "v1.2.0"
+
+[[projects]]
   digest = "1:87c2e02fb01c27060ccc5ba7c5a407cc91147726f8f40b70cceeedbc52b1f3a8"
   name = "github.com/sirupsen/logrus"
   packages = ["."]
@@ -192,6 +200,14 @@
   pruneopts = "UT"
   revision = "6d33b5a963d922d182c91e8a1c88d81fd150cfd4"
   version = "v1.3.1"
+
+[[projects]]
+  digest = "1:e5cbb07a17113f2fd6b8d0b0af9a0cadb16fc2c76d97ae91801fc1f12ea18dde"
+  name = "github.com/sylabs/sif"
+  packages = ["pkg/sif"]
+  pruneopts = "UT"
+  revision = "c1a6ee8fa049b9138d13a46c0b51a3e72a24fbbd"
+  version = "v1.0.9"
 
 [[projects]]
   digest = "1:3810ea14d85aabc511e032f8c817e4f2276af72ea4346f223725e0aaaf1f5c10"
@@ -287,6 +303,7 @@
     "github.com/sirupsen/logrus",
     "github.com/spf13/cobra",
     "github.com/spf13/viper",
+    "github.com/sylabs/sif/pkg/sif",
     "github.com/vmihailenco/msgpack",
   ]
   solver-name = "gps-cdcl"
