@@ -19,11 +19,11 @@ var (
 )
 
 const (
-	VERSION = "alpha-1.6"
+	VERSION = "alpha-1.6.1"
 )
 
 func checkCompleteness() *Error {
-	dir, err := GetCurrDir()
+	dir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}

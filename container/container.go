@@ -43,7 +43,6 @@ var (
 //located inside $/.lpmxsys/.info
 type Sys struct {
 	RootDir      string // the abs path of folder .lpmxsys
-	BinaryDir    string // the folder contains .lpmxsys and binaries
 	Containers   map[string]interface{}
 	LogPath      string
 	MemcachedPid string
@@ -145,7 +144,7 @@ func (server *RPC) RPCDelete(req Request, res *Response) error {
 }
 
 func Init(reset bool, deppath string) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -161,7 +160,6 @@ func Init(reset bool, deppath string) *Error {
 	}
 
 	sys.RootDir = config
-	sys.BinaryDir = currdir
 	sys.LogPath = fmt.Sprintf("%s/log", sys.RootDir)
 
 	defer func() {
@@ -272,7 +270,7 @@ func Init(reset bool, deppath string) *Error {
 }
 
 func Uninstall() *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -294,7 +292,7 @@ func Uninstall() *Error {
 }
 
 func Update() *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -393,7 +391,7 @@ func Update() *Error {
 }
 
 func List() *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -502,7 +500,7 @@ func RPCDelete(ip string, port string, pid int) (*Response, *Error) {
 }
 
 func Resume(id string, args ...string) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -562,7 +560,7 @@ func Resume(id string, args ...string) *Error {
 }
 
 func Destroy(id string) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -704,7 +702,7 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 }
 
 func Get(id string, name string) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -732,7 +730,7 @@ func Get(id string, name string) *Error {
 }
 
 func Set(id string, tp string, name string, value string) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -792,7 +790,7 @@ func DockerSearch(name string) ([]string, *Error) {
 }
 
 func DockerPackage(name string, user string, pass string) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -885,7 +883,7 @@ func DockerAdd(file string) *Error {
 		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does not exist", file))
 		return cerr
 	}
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -1042,7 +1040,7 @@ func DockerAdd(file string) *Error {
 }
 
 func DockerCommit(id, newname, newtag string) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -1373,7 +1371,7 @@ func DockerCommit(id, newname, newtag string) *Error {
 }
 
 func DockerMerge(name, user, pass string) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -1543,7 +1541,7 @@ func DockerMerge(name, user, pass string) *Error {
 }
 
 func SingularityLoad(file string, name string, tag string) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -1700,7 +1698,7 @@ func SingularityLoad(file string, name string, tag string) *Error {
 }
 
 func DockerLoad(file string) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -1883,7 +1881,7 @@ func DockerLoad(file string) *Error {
 }
 
 func DockerDownload(name string, user string, pass string) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -2049,7 +2047,7 @@ func DockerDownload(name string, user string, pass string) *Error {
 }
 
 func DockerPush(user string, pass string, name string, tag string, id string) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -2142,7 +2140,7 @@ func DockerPush(user string, pass string, name string, tag string, id string) *E
 }
 
 func CommonList(imagetype string) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -2170,7 +2168,7 @@ func DockerReset(name string) *Error {
 	if !strings.Contains(name, ":") {
 		name = name + ":latest"
 	}
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -2238,7 +2236,7 @@ func CommonCreate(name string, container_name string, volume_map string) *Error 
 
 //delete image
 func CommonDelete(name string, permernant bool) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -2319,7 +2317,7 @@ func CommonDelete(name string, permernant bool) *Error {
 }
 
 func Expose(id string, path string, name string) *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -2486,7 +2484,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	//set default LD_LIBRARY_LPMX
 	var libs []string
 	//add libmemcached and other libs
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return nil, err
 	}
@@ -2818,7 +2816,7 @@ func (con *Container) patchBineries() *Error {
 }
 
 func (con *Container) appendToSys() *Error {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
@@ -3115,7 +3113,7 @@ volume_map: a volume map for container
 command: command to run inside container
 **/
 func generateContainer(name, container_name, volume_map string) (*map[string]interface{}, *Error) {
-	currdir, err := GetCurrDir()
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return nil, err
 	}

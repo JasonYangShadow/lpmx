@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"os/user"
 
 	. "github.com/JasonYangShadow/lpmx/error"
 	. "github.com/JasonYangShadow/lpmx/log"
@@ -1009,6 +1010,30 @@ func GetCurrDir() (string, *Error) {
 	return "", cerr
 }
 
+func GetConfigDir() (string, *Error){
+    curr, cerr := GetCurrDir()
+    if cerr != nil{
+        return "", cerr
+    }
+    var config string
+    //if lpmx is installed in system path, we do not have permission to create .lpmxsys/.lpmxdata
+    if(strings.HasPrefix(curr, "/usr/bin") || strings.HasPrefix(curr, "/usr/local/bin") || strings.HasPrefix(curr, "/bin") || strings.HasPrefix(curr, "/sbin")){
+        user, err := user.Current()
+        if err != nil{
+            cerr := ErrNew(err, "could not get current user")
+            return "", cerr
+        }
+        if user.Uid == "0"{
+            cerr := ErrNew(ErrPermissionRoot, "should not use root to start LPMX")
+            return "", cerr
+        }
+        config = user.HomeDir
+    }else{
+        config = curr
+    }
+    return config, nil
+}
+
 func AddVartoFile(env string, file string) *Error {
 	perm, err := GetFilePermission(file)
 	if err != nil {
@@ -1175,7 +1200,7 @@ func CheckCompleteness(folder string, checklist []string) *Error {
 
 func CheckAndStartMemcache() *Error {
 	if ok, _, _ := GetProcessIdByName("memcached"); !ok {
-		currdir, err := GetCurrDir()
+		currdir, err := GetConfigDir()
 		if err != nil {
 			return err
 		}

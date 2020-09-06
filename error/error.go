@@ -27,6 +27,7 @@ var (
 	ErrZero             = errors.New("size 0 error")
 	ErrPidLive          = errors.New("pid file still lives")
 	ErrOperation        = errors.New("operations can not be done")
+	ErrPermissionRoot   = errors.New("should not use root")
 )
 
 type Error struct {
