@@ -1,0 +1,46 @@
+# nfpm example config file
+#
+# check https://nfpm.goreleaser.com/configuration for detailed usage
+#
+name: "lpmx"
+arch: "amd64"
+platform: "linux"
+version: "v1.6.1-alpha"
+section: "utils"
+priority: "extra"
+# replaces:
+# - foobar
+# provides:
+# - bar
+# depends:
+# - foo
+# - bar
+# recommends:
+# - whatever
+# suggests:
+# - something-else
+# conflicts:
+# - not-foo
+# - not-bar
+maintainer: "Jason Yang <jasonyangshadow@gmail.com>"
+description: |
+    A rootless composable container system.
+# vendor: "FooBarCorp"
+homepage: "https://github.com/jasonyangshadow/lpmx"
+license: "Apache-2.0"
+changelog: "changelog.yml"
+files:
+  ./build/linux/x86_64/lpmx: "/usr//bin/lpmx"
+# config_files:
+#   ./foobar.conf: "/etc/foobar.conf"
+# symlinks:
+#   /sbin/foo: "/usr/local/bin/foo"
+# overrides:
+#   rpm:
+#     scripts:
+#       preinstall: ./scripts/preinstall.sh
+#       postremove: ./scripts/postremove.sh
+#   deb:
+#     scripts:
+#       postinstall: ./scripts/postinstall.sh
+#       preremove: ./scripts/preremove.sh

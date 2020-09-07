@@ -6,6 +6,15 @@ for GOOS in linux; do
         mkdir -p build/$GOOS/$GOARCH
         if [ $GOARCH = "x86_64" ];then
           env GOOS=$GOOS GOARCH="amd64" go build -v -o build/$GOOS/$GOARCH/lpmx
+        #generate log first
+          if [ -x "$(command -v chglog)" ];then
+              chglog init
+          fi
+        #generate deb/rpm pacakges
+          if [ -x "$(command -v nfpm)" ];then
+              nfpm pkg --packager deb --target build/$GOOS/$GOARCH/lpmx.deb
+              nfpm pkg --packager rpm --target build/$GOOS/$GOARCH/lpmx.rpm
+          fi
         fi
      done
 done
