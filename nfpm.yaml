@@ -30,7 +30,7 @@ homepage: "https://github.com/jasonyangshadow/lpmx"
 license: "Apache-2.0"
 changelog: "changelog.yml"
 files:
-  ./build/linux/x86_64/lpmx: "/usr//bin/lpmx"
+  ./build/linux/x86_64/lpmx: "/usr/bin/lpmx"
 # config_files:
 #   ./foobar.conf: "/etc/foobar.conf"
 # symlinks:
