@@ -2650,23 +2650,32 @@ func (con *Container) bashShell(args ...string) *Error {
 	}
 
 	if FolderExist(con.RootPath) {
-		//we need to start faked-sysv firstly
-		faked_sysv := fmt.Sprintf("%s/faked-sysv", con.SysDir)
-		foutput, ferr := Command(faked_sysv)
-		if ferr != nil {
-			LOGGER.WithFields(logrus.Fields{
-				"ouput": ferr.Err.Error(),
-				"param": faked_sysv,
-			}).Error("faked-sysv starts error")
-			return ferr
-		}
-		faked_str := strings.Split(foutput, ":")
-		env["FAKEROOTKEY"] = faked_str[0]
+		//here we firstly check if FAKECHROOTKEY is already set, meaning that we are inside fakeroot env as fakeroot does not support nested call
+		fakerootkey, fok := os.LookupEnv("FAKEROOTKEY")
+		if !fok {
+			//we need to start faked-sysv firstly
+			faked_sysv := fmt.Sprintf("%s/faked-sysv", con.SysDir)
+			foutput, ferr := Command(faked_sysv)
+			if ferr != nil {
+				LOGGER.WithFields(logrus.Fields{
+					"ouput": ferr.Err.Error(),
+					"param": faked_sysv,
+				}).Error("faked-sysv starts error")
+				return ferr
+			}
+			faked_str := strings.Split(foutput, ":")
+			env["FAKEROOTKEY"] = faked_str[0]
+			env["FAKEROOTPID"] = faked_str[1]
 
-		defer func() {
-			fmt.Sprintf("cleanning up faked-sysv with pid: %s\n", faked_str[1])
-			KillProcessByPid(faked_str[1])
-		}()
+            //only when we created faked-sysv instance then we need to kill it, otherwise we wait
+			defer func() {
+				fmt.Sprintf("cleanning up faked-sysv with pid: %s\n", faked_str[1])
+				KillProcessByPid(faked_str[1])
+			}()
+		} else {
+			env["FAKEROOTKEY"] = fakerootkey
+			env["FAKEROOTPID"] = os.Getenv("FAKEROOTPID")
+		}
 
 		LOGGER.WithFields(logrus.Fields{
 			"shell":    con.UserShell,

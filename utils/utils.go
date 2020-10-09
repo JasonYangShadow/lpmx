@@ -56,6 +56,14 @@ func FileExist(file string) bool {
 	return false
 }
 
+func RegularFileExist(file string) bool {
+    ftype, err := FileType(file)
+    if err == nil && (ftype == TYPE_REGULAR) {
+        return true
+    }
+    return false
+}
+
 func FolderExist(folder string) bool {
 	ftype, err := FileType(folder)
 	if err == nil && ftype == TYPE_DIR {
@@ -1002,7 +1010,7 @@ func GetCurrDir() (string, *Error) {
 	searchPaths = append(searchPaths, strings.Split(os.Getenv("PATH"), ":")...)
 	for _, path := range searchPaths {
 		p := fmt.Sprintf("%s/%s", path, filename)
-		if FileExist(p) {
+		if RegularFileExist(p) {
 			return path, nil
 		}
 	}
@@ -1138,7 +1146,12 @@ func GetHostOSInfo() (string, string, *Error) {
 //}
 
 func GetProcessIdByName(name string) (bool, string, *Error) {
-	cmd_context := fmt.Sprintf("pgrep -u $USER %s", name)
+    //get current pid
+    out_uid, oerr := CommandBash(fmt.Sprintf("cat /proc/self/loginuid"))
+    if oerr!= nil{
+        return false, "", oerr
+    }
+	cmd_context := fmt.Sprintf("pgrep -U %s %s", out_uid, name)
 	out, err := CommandBash(cmd_context)
 	if err != nil {
 		return false, "", err

@@ -5,7 +5,7 @@
 name: "lpmx"
 arch: "amd64"
 platform: "linux"
-version: "v1.6.1-alpha"
+version: "v1.6.2-alpha"
 section: "utils"
 priority: "extra"
 # replaces:
@@ -30,7 +30,7 @@ homepage: "https://github.com/jasonyangshadow/lpmx"
 license: "Apache-2.0"
 changelog: "changelog.yml"
 files:
-  ./build/linux/x86_64/lpmx: "/usr/bin/lpmx"
+  ./build/linux/x86_64/Linux-x86_64-lpmx: "/usr/bin/lpmx"
 # config_files:
 #   ./foobar.conf: "/etc/foobar.conf"
 # symlinks:
