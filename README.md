@@ -16,7 +16,7 @@ Below is a basic demo of using LPMX:
 6. **Designed for restricted runtime environment**, LPMX is designed for running containers in restricted runtime environments, such as root privilege is not approved or complete off-line usage. LPMX supports complete off-line initialization and deployment, which is especially suitable for scientific computing infrastructure.
 
 A graphic abstract shows differences between our system and other existing implementations.
-![graphc abstract](figure/abstract.png)
+![graphc abstract](figures/abstract.png)
 
 The root differences between our system and other rootless systems via using the LD_PRELOAD mechanism are that:
 1. Our system supports composability, i.e, can isolate processes while allows them to make direct calls (exec) to other processes in the host or in other containers, therefore, eliminating the dependency hell issues.
