@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"os"
 
 	. "github.com/JasonYangShadow/lpmx/container"
 	. "github.com/JasonYangShadow/lpmx/error"
@@ -20,7 +20,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-1.6.2"
+	VERSION = "alpha-1.6.3"
 )
 
 func checkCompleteness() *Error {
@@ -40,9 +40,9 @@ func checkCompleteness() *Error {
 	}
 
 	for _, e := range os.Environ() {
-        pair := strings.SplitN(e, "=", 2)
-        LOGGER.Debug(fmt.Sprintf("%s = %s", pair[0], pair[1]))
-    }
+		pair := strings.SplitN(e, "=", 2)
+		LOGGER.Debug(fmt.Sprintf("%s = %s", pair[0], pair[1]))
+	}
 	return nil
 }
 

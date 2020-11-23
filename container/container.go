@@ -93,6 +93,7 @@ type Image struct {
 //used for offline image installation, located inside $/.lpmxdata/image/tag/.info
 type ImageInfo struct {
 	Name      string
+	ImageType string
 	LayersMap map[string]int64 //map containing layers and their sizes
 	Layers    string           //should be original order, used for extraction
 }
@@ -834,6 +835,7 @@ func DockerPackage(name string, user string, pass string) *Error {
 
 			var docinfo ImageInfo
 			docinfo.Name = name
+			docinfo.ImageType = "Docker"
 			docinfo.LayersMap = make(map[string]int64)
 			var docinfo_layers []string
 
@@ -941,7 +943,7 @@ func DockerAdd(file string) *Error {
 		mdata["rootdir"] = fmt.Sprintf("%s/%s/%s", doc.RootDir, tname, ttag)
 		mdata["config"] = fmt.Sprintf("%s/setting.yml", mdata["rootdir"])
 		mdata["image"] = fmt.Sprintf("%s/.image", rootdir)
-		mdata["imagetype"] = "LPMX"
+		mdata["imagetype"] = "Docker"
 		image_dir, _ := mdata["image"].(string)
 
 		if !FolderExist(mdata["rootdir"].(string)) {
@@ -1309,6 +1311,7 @@ func DockerCommit(id, newname, newtag string) *Error {
 					}
 					mdata["workspace"] = fmt.Sprintf("%s/workspace", mdata["rootdir"])
 					mdata["base"] = fmt.Sprintf("%s/.base", docker_path)
+					mdata["imagetype"] = "Docker"
 
 					doc.Images[fmt.Sprintf("%s:%s", newname, newtag)] = mdata
 					mddata, _ := StructMarshal(doc)
@@ -1324,6 +1327,7 @@ func DockerCommit(id, newname, newtag string) *Error {
 					//start adding docinfo
 					var docinfo ImageInfo
 					docinfo.Name = fmt.Sprintf("%s:%s", newname, newtag)
+					docinfo.ImageType = "Docker"
 					// layer_order is absolute path
 					docinfo.LayersMap = make(map[string]int64)
 					if mdata["layer"] != nil {
@@ -1507,6 +1511,7 @@ func DockerMerge(name, user, pass string) *Error {
 
 	var docinfo ImageInfo
 	docinfo.Name = name
+	docinfo.ImageType = "Docker"
 	layersmap := make(map[string]int64)
 	//sha256:size
 	for k, v := range ret {
@@ -1620,6 +1625,7 @@ func SingularityLoad(file string, name string, tag string) *Error {
 		}
 		var siginfo ImageInfo
 		siginfo.Name = full_name
+		siginfo.ImageType = "Sigularity"
 		// layer_order is absolute path
 		//siginfo layers map should remove absolute path of host
 		layersmap := make(map[string]int64)
@@ -1776,6 +1782,7 @@ func DockerLoad(file string) *Error {
 		}
 		var docinfo ImageInfo
 		docinfo.Name = name
+		docinfo.ImageType = "Docker"
 		// layer_order is absolute path
 		//docinfo layers map should remove absolute path of host
 		layersmap := make(map[string]int64)
@@ -1936,6 +1943,7 @@ func DockerDownload(name string, user string, pass string) *Error {
 		}
 		var docinfo ImageInfo
 		docinfo.Name = name
+		docinfo.ImageType = "Docker"
 		// layer_order is absolute path
 		//docinfo layers map should remove absolute path of host
 		layersmap := make(map[string]int64)
@@ -2667,7 +2675,7 @@ func (con *Container) bashShell(args ...string) *Error {
 			env["FAKEROOTKEY"] = faked_str[0]
 			env["FAKEROOTPID"] = faked_str[1]
 
-            //only when we created faked-sysv instance then we need to kill it, otherwise we wait
+			//only when we created faked-sysv instance then we need to kill it, otherwise we wait
 			defer func() {
 				fmt.Sprintf("cleanning up faked-sysv with pid: %s\n", faked_str[1])
 				KillProcessByPid(faked_str[1])
