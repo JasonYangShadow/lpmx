@@ -33,7 +33,7 @@ const (
 )
 
 var (
-	ELFOP                   = []string{"add_allow_priv", "remove_allow_priv", "add_deny_priv", "remove_deny_priv", "add_map", "remove_map"}
+	ELFOP                   = []string{"add_allow_priv", "remove_allow_priv", "add_deny_priv", "remove_deny_priv", "add_map", "remove_map", "add_exec", "remove_exec"}
 	LD                      = []string{"/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2", "/lib/ld.so", "/lib64/ld-linux-x86-64.so.2", "/lib/x86_64-linux-gnu/ld-linux-x86-64.so.1", "/lib64/ld-linux-x86-64.so.1", "/lib/ld-linux.so.2", "/lib/ld-linux.so.1"}
 	LD_LIBRARY_PATH_DEFAULT = []string{"lib", "lib64", "lib/x86_64-linux-gnu", "usr/lib/x86_64-linux-gnu", "usr/lib", "usr/local/lib", "usr/lib64", "usr/local/lib64"}
 	CACHE_FOLDER            = []string{"/var/cache/apt/archives"}
@@ -713,11 +713,12 @@ func Get(id string, name string) *Error {
 
 	if err == nil {
 		if _, ok := sys.Containers[id]; ok {
-			fmt.Println(fmt.Sprintf("|%-s|%-30s|%-20s|%-20s|%-10s|", "ContainerID", "PROGRAM", "ALLOW_PRIVILEGES", "DENY_PRIVILEGES", "REMAP"))
+			fmt.Println(fmt.Sprintf("|%-s|%-30s|%-20s|%-20s|%-10s|%-20s|", "ContainerID", "PROGRAM", "ALLOW_PRIVILEGES", "DENY_PRIVILEGES", "REMAP", "ExecMap"))
 			a_val, _ := getPrivilege(id, name, sys.MemcachedPid, true)
 			d_val, _ := getPrivilege(id, name, sys.MemcachedPid, false)
 			m_val, _ := getMap(id, name, sys.MemcachedPid)
-			fmt.Println(fmt.Sprintf("|%-s|%-30s|%-20s|%-20s|%-10s|", id, name, a_val, d_val, m_val))
+			e_val, _ := getExec(id, name, sys.MemcachedPid)
+			fmt.Println(fmt.Sprintf("|%-s|%-30s|%-20s|%-20s|%-10s|%-20s|", id, name, a_val, d_val, m_val, e_val))
 		} else {
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
 			return cerr
@@ -744,6 +745,13 @@ func Set(id string, tp string, name string, value string) *Error {
 			if _, vok := v.(map[string]interface{}); vok {
 				tp = strings.ToLower(strings.TrimSpace(tp))
 				switch tp {
+				case ELFOP[6], ELFOP[7]:
+					{
+						err := setExec(id, tp, name, value, sys.MemcachedPid)
+						if err != nil {
+							return err
+						}
+					}
 				case ELFOP[4], ELFOP[5]:
 					{
 						err := setMap(id, tp, name, value, sys.MemcachedPid)
@@ -2324,7 +2332,7 @@ func CommonDelete(name string, permernant bool) *Error {
 	return err
 }
 
-func Expose(id string, path string, name string) *Error {
+func Expose(id string, ipath string, name string) *Error {
 	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
@@ -2345,11 +2353,11 @@ func Expose(id string, path string, name string) *Error {
 						if err != nil {
 							return err
 						}
-						if !strings.Contains(con.ExposeExe, path) {
+						if !strings.Contains(con.ExposeExe, ipath) {
 							if con.ExposeExe == "" {
-								con.ExposeExe = path
+								con.ExposeExe = ipath
 							} else {
-								con.ExposeExe = fmt.Sprintf("%s:%s", con.ExposeExe, path)
+								con.ExposeExe = fmt.Sprintf("%s:%s", con.ExposeExe, ipath)
 							}
 						}
 
@@ -2371,8 +2379,11 @@ func Expose(id string, path string, name string) *Error {
 							cerr := ErrNew(ferr, fmt.Sprintf("can not create exposed file %s", bdir))
 							return cerr
 						}
-						code := "#!/bin/bash\n" + os.Args[0] +
-							" resume " + id + " \"" + path + " " + "$@\"" +
+
+						ppath := fmt.Sprintf("%s/%s", currdir, os.Args[0])
+						ppath = path.Clean(ppath)
+						code := "#!/bin/bash\n" + ppath +
+							" resume " + id + " \"" + ipath + " " + "$@\"" +
 							"\n"
 
 						fmt.Fprintf(f, code)
@@ -3602,6 +3613,41 @@ func getPrivilege(id string, name string, server string, allow bool) (string, *E
 	return str, nil
 }
 
+func setExec(id, tp, name, value, server string) *Error {
+	mem, err := MInitServers(server)
+	if err != nil {
+		return err
+	}
+
+	if tp == ELFOP[6] {
+		err := mem.MUpdateStrValue(fmt.Sprintf("exec:%s:%s", id, name), value)
+		if err != nil {
+			return err
+		}
+	}
+
+	if tp == ELFOP[7] {
+		err := mem.MDeleteByKey(fmt.Sprintf("exec:%s:%s", id, name))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func getExec(id, name, server string) (string, *Error) {
+	mem, err := MInitServers(server)
+	if err != nil {
+		return "", err
+	}
+
+	str, err := mem.MGetStrValue(fmt.Sprintf("exec:%s:%s", id, name))
+	if err != nil {
+		return "", err
+	}
+	return str, nil
+}
+
 func setMap(id string, tp string, name string, value string, server string) *Error {
 	mem, err := MInitServers(server)
 	if err != nil {
@@ -3613,7 +3659,9 @@ func setMap(id string, tp string, name string, value string, server string) *Err
 		if err != nil {
 			return err
 		}
-	} else {
+	}
+
+	if tp == ELFOP[5] {
 		err := mem.MDeleteByKey(fmt.Sprintf("map:%s:%s", id, name))
 		if err != nil {
 			return err

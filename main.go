@@ -899,12 +899,6 @@ func main() {
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
-			if !strings.Contains(SetVal, ":") {
-				LOGGER.WithFields(logrus.Fields{
-					"value": SetVal,
-				}).Fatal("the program value you input does not have ':', the format should be 'file1:replace_file1;file2:replace_file2'")
-				return
-			}
 			err := Set(SetId, SetType, SetProg, SetVal)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
@@ -919,12 +913,11 @@ func main() {
 	}
 	setCmd.Flags().StringVarP(&SetId, "id", "i", "", "required(container id, you can get the id by command 'lpmx list')")
 	setCmd.MarkFlagRequired("id")
-	setCmd.Flags().StringVarP(&SetType, "type", "t", "", "required('add_map','remove_map')")
+	setCmd.Flags().StringVarP(&SetType, "type", "t", "", "required('add_map','remove_map','add_exec', 'remove_exec')")
 	setCmd.MarkFlagRequired("type")
-	setCmd.Flags().StringVarP(&SetProg, "name", "n", "", "required(should be the name of libc 'system calls wrapper')")
+	setCmd.Flags().StringVarP(&SetProg, "name", "n", "", "required(should be the name of libc 'system calls wrapper' or mapped program path)")
 	setCmd.MarkFlagRequired("name")
-	setCmd.Flags().StringVarP(&SetVal, "value", "v", "", "required(value(file1:replace_file1;file2:repalce_file2;)) ")
-	setCmd.MarkFlagRequired("value")
+	setCmd.Flags().StringVarP(&SetVal, "value", "v", "", "required in add mode(value(file1:replace_file1;file2:repalce_file2;) or a mapped path) while optional in remove mode")
 
 	var uninstallCmd = &cobra.Command{
 		Use:   "uninstall",
