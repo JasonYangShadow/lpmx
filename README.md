@@ -7,6 +7,14 @@ Below is a basic demo of using LPMX:
 
 [![LPMX DEMO](http://img.youtube.com/vi/_1XOLa1cKX4/0.jpg)](http://www.youtube.com/watch?v=_1XOLa1cKX4 "LPMX simple demo")
 
+# Online Tutorial Session
+If you are interested in LPMX and want an online tutorial session, please fill in this [Online Tutorial Request Form](https://forms.gle/6tUYdMmMSo6nDv916), I will contact you. (English will be used).
+
+# A Tiny LPMX Manual
+I have created a [tiny LPMX manual](https://github.com/JasonYangShadow/lpmx/wiki/LPMX%20Manual.pdf) containing figures and descriptions of the main features of LPMX, it will be updated at anytime.
+
+You can also check the [wiki page](https://github.com/JasonYangShadow/lpmx/wiki)
+
 # Features
 1. **Pure rootless**, root privilege(root/sudo) is not required in any stages. It runs completely inside user space, which is especially suitable for creating and running software in a restricted environment such as Linux cluster, grid infrastructure, batch system and etc, where root privilege is not approved.
 2. **Understanding docker meta-data(Limited distros)**, LPMX could create containers via Docker images available on docker hub. Currently ubuntu and centos series are supported. Besides, the latest release also has experimental support for the Singularity image, see wiki for more details.
