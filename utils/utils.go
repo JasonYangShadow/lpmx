@@ -11,11 +11,11 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-	"os/user"
 
 	. "github.com/JasonYangShadow/lpmx/error"
 	. "github.com/JasonYangShadow/lpmx/log"
@@ -57,11 +57,11 @@ func FileExist(file string) bool {
 }
 
 func RegularFileExist(file string) bool {
-    ftype, err := FileType(file)
-    if err == nil && (ftype == TYPE_REGULAR) {
-        return true
-    }
-    return false
+	ftype, err := FileType(file)
+	if err == nil && (ftype == TYPE_REGULAR) {
+		return true
+	}
+	return false
 }
 
 func FolderExist(folder string) bool {
@@ -1004,9 +1004,19 @@ func ReverseStrArray(input []string) []string {
 }
 
 func GetCurrDir() (string, *Error) {
-	arg_path, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	filename := filepath.Base(os.Args[0])
-	searchPaths := []string{arg_path, "."}
+	exepath, eerr := os.Executable()
+	if eerr != nil {
+		cerr := ErrNew(eerr, "could not determine current executable path")
+		return "", cerr
+	}
+	cwd, werr := filepath.Abs(filepath.Dir(exepath))
+	if werr != nil {
+		cerr := ErrNew(werr, fmt.Sprintf("could not resolve current path: %s for cwd", exepath))
+		return "", cerr
+	}
+	searchPaths := []string{cwd}
+	//lpmx will search current cwd as well as system PATH
 	searchPaths = append(searchPaths, strings.Split(os.Getenv("PATH"), ":")...)
 	for _, path := range searchPaths {
 		p := fmt.Sprintf("%s/%s", path, filename)
@@ -1018,28 +1028,28 @@ func GetCurrDir() (string, *Error) {
 	return "", cerr
 }
 
-func GetConfigDir() (string, *Error){
-    curr, cerr := GetCurrDir()
-    if cerr != nil{
-        return "", cerr
-    }
-    var config string
-    //if lpmx is installed in system path, we do not have permission to create .lpmxsys/.lpmxdata
-    if(strings.HasPrefix(curr, "/usr/bin") || strings.HasPrefix(curr, "/usr/local/bin") || strings.HasPrefix(curr, "/bin") || strings.HasPrefix(curr, "/sbin")){
-        user, err := user.Current()
-        if err != nil{
-            cerr := ErrNew(err, "could not get current user")
-            return "", cerr
-        }
-        if user.Uid == "0"{
-            cerr := ErrNew(ErrPermissionRoot, "should not use root to start LPMX")
-            return "", cerr
-        }
-        config = user.HomeDir
-    }else{
-        config = curr
-    }
-    return config, nil
+func GetConfigDir() (string, *Error) {
+	curr, cerr := GetCurrDir()
+	if cerr != nil {
+		return "", cerr
+	}
+	var config string
+	//if lpmx is installed in system path, we do not have permission to create .lpmxsys/.lpmxdata
+	if strings.HasPrefix(curr, "/usr/bin") || strings.HasPrefix(curr, "/usr/local/bin") || strings.HasPrefix(curr, "/bin") || strings.HasPrefix(curr, "/sbin") {
+		user, err := user.Current()
+		if err != nil {
+			cerr := ErrNew(err, "could not get current user")
+			return "", cerr
+		}
+		if user.Uid == "0" {
+			cerr := ErrNew(ErrPermissionRoot, "should not use root to start LPMX")
+			return "", cerr
+		}
+		config = user.HomeDir
+	} else {
+		config = curr
+	}
+	return config, nil
 }
 
 func AddVartoFile(env string, file string) *Error {
@@ -1146,11 +1156,11 @@ func GetHostOSInfo() (string, string, *Error) {
 //}
 
 func GetProcessIdByName(name string) (bool, string, *Error) {
-    //get current pid
-    out_uid, oerr := CommandBash(fmt.Sprintf("cat /proc/self/loginuid"))
-    if oerr!= nil{
-        return false, "", oerr
-    }
+	//get current pid
+	out_uid, oerr := CommandBash(fmt.Sprintf("cat /proc/self/loginuid"))
+	if oerr != nil {
+		return false, "", oerr
+	}
 	cmd_context := fmt.Sprintf("pgrep -U %s %s", out_uid, name)
 	out, err := CommandBash(cmd_context)
 	if err != nil {
