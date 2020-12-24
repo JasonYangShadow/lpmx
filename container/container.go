@@ -775,7 +775,7 @@ func Set(id string, tp string, name string, value string) *Error {
 					}
 					return nil
 				default:
-					err_new := ErrNew(ErrType, "tp should be one of 'add_allow_priv','remove_allow_priv','add_deny_priv','remove_deny_priv','add_map','remove_map'}")
+					err_new := ErrNew(ErrType, "tp should be one of 'add_exec','remove_exec','add_map','remove_map'")
 					return err_new
 				}
 
@@ -2641,6 +2641,10 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 
 	if _, fakechroot_debug_ok := con.SettingConf["fakechroot_debug"]; fakechroot_debug_ok {
 		env["FAKECHROOT_DEBUG"] = "TRUE"
+	}
+
+	if _, fakechroot_exec_switch := con.SettingConf["fakechroot_exec_switch"]; fakechroot_exec_switch {
+		env["FAKECHROOT_EXEC_SWITCH"] = "TRUE"
 	}
 
 	if ldso_path, ldso_ok := con.SettingConf["fakechroot_elfloader"]; ldso_ok {
