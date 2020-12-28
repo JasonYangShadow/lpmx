@@ -20,7 +20,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-1.6.3"
+	VERSION = "alpha-1.7"
 )
 
 func checkCompleteness() *Error {
@@ -93,6 +93,7 @@ func main() {
 
 	var GetId string
 	var GetName string
+	var GetMode bool
 	var getCmd = &cobra.Command{
 		Use:   "get",
 		Short: "get settings from memcache server",
@@ -112,7 +113,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Get(GetId, GetName)
+			err := Get(GetId, GetName, GetMode)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -123,6 +124,7 @@ func main() {
 	getCmd.MarkFlagRequired("id")
 	getCmd.Flags().StringVarP(&GetName, "name", "n", "", "required")
 	getCmd.MarkFlagRequired("name")
+	getCmd.Flags().BoolVarP(&GetMode, "filecache", "c", false, "use FileCaache rather than Memcached(optional)")
 
 	var DownloadSource string
 	var downloadCmd = &cobra.Command{
@@ -311,7 +313,7 @@ func main() {
 				LOGGER.Info(fmt.Sprintf("Start merging %s", args[0]))
 				err = DockerMerge(args[0], DockerDownloadUser, DockerDownloadPass)
 			}
-			if err != nil {
+			if err != nil && err != ErrExist {
 				LOGGER.Fatal(err.Error())
 				return
 			} else {
@@ -411,6 +413,7 @@ func main() {
 
 	var DockerCreateName string
 	var DockerCreateVolume string
+	var DockerCreateEngine string
 	var dockerCreateCmd = &cobra.Command{
 		Use:   "create",
 		Short: "initialize the local docker images",
@@ -434,7 +437,7 @@ func main() {
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonCreate(args[0], DockerCreateName, DockerCreateVolume)
+			err := CommonCreate(args[0], DockerCreateName, DockerCreateVolume, DockerCreateEngine)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -443,8 +446,10 @@ func main() {
 	}
 	dockerCreateCmd.Flags().StringVarP(&DockerCreateName, "name", "n", "", "optional")
 	dockerCreateCmd.Flags().StringVarP(&DockerCreateVolume, "volume", "v", "", "optional")
+	dockerCreateCmd.Flags().StringVarP(&DockerCreateEngine, "engine", "e", "", "use engine(optional)")
 
 	var DockerRunVolume string
+	var DockerRunMode string
 	var dockerRunCmd = &cobra.Command{
 		Use:   "fastrun",
 		Short: "run container in a fast way without switching into shell",
@@ -466,7 +471,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonFastRun(args[0], DockerRunVolume, args[1])
+			err := CommonFastRun(args[0], DockerRunVolume, args[1], DockerRunMode)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -474,6 +479,7 @@ func main() {
 		},
 	}
 	dockerRunCmd.Flags().StringVarP(&DockerRunVolume, "volume", "v", "", "optional")
+	dockerRunCmd.Flags().StringVarP(&DockerRunMode, "engine", "e", "", "use engine(optional)")
 
 	var DockerDeletePermernant bool
 	var dockerDeleteCmd = &cobra.Command{
@@ -652,7 +658,7 @@ func main() {
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			err := SingularityLoad(args[0], SingularityLoadName, SingularityLoadTag)
-			if err != nil {
+			if err != nil && err != ErrExist {
 				LOGGER.Error(err.Error())
 				return
 			} else {
@@ -668,6 +674,7 @@ func main() {
 
 	var SingularityCreateName string
 	var SingularityCreateVolume string
+	var SingularityCreateEngine string
 	var singularityCreateCmd = &cobra.Command{
 		Use:   "create",
 		Short: "initialize the local singularity images",
@@ -691,7 +698,7 @@ func main() {
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonCreate(args[0], SingularityCreateName, SingularityCreateVolume)
+			err := CommonCreate(args[0], SingularityCreateName, SingularityCreateVolume, SingularityCreateEngine)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -700,6 +707,7 @@ func main() {
 	}
 	singularityCreateCmd.Flags().StringVarP(&SingularityCreateName, "name", "n", "", "optional")
 	singularityCreateCmd.Flags().StringVarP(&SingularityCreateVolume, "volume", "v", "", "optional")
+	singularityCreateCmd.Flags().StringVarP(&SingularityCreateEngine, "engine", "e", "", "use engine(optional)")
 
 	var SingularityDeletePermernant bool
 	var singularityDeleteCmd = &cobra.Command{
@@ -749,6 +757,7 @@ func main() {
 	}
 
 	var SingularityRunVolume string
+	var SingularityRunMode string
 	var singularityRunCmd = &cobra.Command{
 		Use:   "fastrun",
 		Short: "run container in a fast way without switching into shell",
@@ -770,7 +779,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonFastRun(args[0], DockerRunVolume, args[1])
+			err := CommonFastRun(args[0], DockerRunVolume, args[1], SingularityRunMode)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -778,6 +787,7 @@ func main() {
 		},
 	}
 	singularityRunCmd.Flags().StringVarP(&SingularityRunVolume, "volume", "v", "", "optional")
+	singularityRunCmd.Flags().StringVarP(&SingularityRunMode, "engine", "e", "", "use engine(optional)")
 
 	var singularityCmd = &cobra.Command{
 		Use:   "singularity",
@@ -819,6 +829,7 @@ func main() {
 	exposeCmd.Flags().StringVarP(&ExposeName, "name", "n", "", "required")
 	exposeCmd.MarkFlagRequired("name")
 
+	var ResumeEngine bool
 	var resumeCmd = &cobra.Command{
 		Use:   "resume",
 		Short: "resume the registered container",
@@ -842,13 +853,14 @@ func main() {
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Resume(args[0], args[1:]...)
+			err := Resume(args[0], ResumeEngine, args[1:]...)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
 			}
 		},
 	}
+	resumeCmd.Flags().BoolVarP(&ResumeEngine, "resumeengine", "r", false, "resume batch engine support(optional)")
 
 	var destroyCmd = &cobra.Command{
 		Use:   "destroy",
@@ -880,6 +892,7 @@ func main() {
 	var SetType string
 	var SetProg string
 	var SetVal string
+	var SetMode bool
 	var setCmd = &cobra.Command{
 		Use:   "set",
 		Short: "set environment variables for container",
@@ -899,7 +912,7 @@ func main() {
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Set(SetId, SetType, SetProg, SetVal)
+			err := Set(SetId, SetType, SetProg, SetVal, SetMode)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -918,6 +931,7 @@ func main() {
 	setCmd.Flags().StringVarP(&SetProg, "name", "n", "", "required(should be the name of libc 'system calls wrapper' or mapped program path)")
 	setCmd.MarkFlagRequired("name")
 	setCmd.Flags().StringVarP(&SetVal, "value", "v", "", "required in add mode(value(file1:replace_file1;file2:repalce_file2;) or a mapped path) while optional in remove mode")
+	setCmd.Flags().BoolVarP(&SetMode, "filecache", "c", false, "use FileCache rather than Memcached(optional)")
 
 	var uninstallCmd = &cobra.Command{
 		Use:   "uninstall",

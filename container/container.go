@@ -16,6 +16,7 @@ import (
 	. "github.com/JasonYangShadow/lpmx/docker"
 	. "github.com/JasonYangShadow/lpmx/elf"
 	. "github.com/JasonYangShadow/lpmx/error"
+	. "github.com/JasonYangShadow/lpmx/filecache"
 	. "github.com/JasonYangShadow/lpmx/log"
 	. "github.com/JasonYangShadow/lpmx/memcache"
 	. "github.com/JasonYangShadow/lpmx/msgpack"
@@ -38,6 +39,7 @@ var (
 	LD_LIBRARY_PATH_DEFAULT = []string{"lib", "lib64", "lib/x86_64-linux-gnu", "usr/lib/x86_64-linux-gnu", "usr/lib", "usr/local/lib", "usr/lib64", "usr/local/lib64"}
 	CACHE_FOLDER            = []string{"/var/cache/apt/archives"}
 	UNSTALL_FOLDER          = []string{".lpmxsys", "sync", "bin", ".lpmxdata", "package"}
+	ENGINE_TYPE             = []string{"SGE"}
 )
 
 //located inside $/.lpmxsys/.info
@@ -76,6 +78,7 @@ type Container struct {
 	Pid                 int
 	DataSyncFolder      string //sync folder with host
 	DataSyncMap         string //sync folder mapping info(host:contain)
+	Engine              string //engine type used on the host
 }
 
 type RPC struct {
@@ -500,7 +503,7 @@ func RPCDelete(ip string, port string, pid int) (*Response, *Error) {
 	return &res, nil
 }
 
-func Resume(id string, args ...string) *Error {
+func Resume(id string, engine bool, args ...string) *Error {
 	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
@@ -535,7 +538,12 @@ func Resume(id string, args ...string) *Error {
 					configmap["sync_folder"] = con.DataSyncFolder
 					configmap["sync_ori_folder"] = con.DataSyncMap
 					configmap["imagetype"] = con.BaseType
+					configmap["engine"] = con.Engine
 
+					//only if the user explicitly set enable_engine, then we skip enabling it
+					if engine {
+						configmap["enable_engine"] = "true"
+					}
 					err := Run(&configmap, args...)
 					if err != nil {
 						return err
@@ -614,6 +622,9 @@ func Destroy(id string) *Error {
 }
 
 func Run(configmap *map[string]interface{}, args ...string) *Error {
+	//this map is used for dynamically controlling the generation of env vars
+	envmap := make(map[string]string)
+
 	//dir is rw folder of container
 	dir, _ := (*configmap)["dir"].(string)
 	config, _ := (*configmap)["config"].(string)
@@ -635,10 +646,16 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 	con.RootPath = dir
 	con.ConfigPath = rootdir
 	con.SettingPath = config
+	con.Engine = (*configmap)["engine"].(string)
 	if (*configmap)["container_name"] == nil {
 		(*configmap)["container_name"] = ""
 	}
 	con.ContainerName = (*configmap)["container_name"].(string)
+
+	//enable batch engine if needed
+	if _, eok := (*configmap)["enable_engine"]; eok {
+		envmap["engine"] = "TRUE"
+	}
 
 	defer func() {
 		con.Pid = -1
@@ -692,7 +709,7 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 			err.AddMsg("append to sys info error")
 			return err
 		}
-		err = con.bashShell(args...)
+		err = con.bashShell(envmap, args...)
 		if err != nil {
 			err.AddMsg("starting bash shell encounters error")
 			return err
@@ -702,7 +719,7 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 	return nil
 }
 
-func Get(id string, name string) *Error {
+func Get(id string, name string, mode bool) *Error {
 	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
@@ -717,7 +734,7 @@ func Get(id string, name string) *Error {
 			a_val, _ := getPrivilege(id, name, sys.MemcachedPid, true)
 			d_val, _ := getPrivilege(id, name, sys.MemcachedPid, false)
 			m_val, _ := getMap(id, name, sys.MemcachedPid)
-			e_val, _ := getExec(id, name, sys.MemcachedPid)
+			e_val, _ := getExec(id, name, sys.MemcachedPid, mode)
 			fmt.Println(fmt.Sprintf("|%-s|%-30s|%-20s|%-20s|%-10s|%-20s|", id, name, a_val, d_val, m_val, e_val))
 		} else {
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
@@ -731,7 +748,7 @@ func Get(id string, name string) *Error {
 	return err
 }
 
-func Set(id string, tp string, name string, value string) *Error {
+func Set(id string, tp string, name string, value string, mode bool) *Error {
 	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
@@ -747,7 +764,7 @@ func Set(id string, tp string, name string, value string) *Error {
 				switch tp {
 				case ELFOP[6], ELFOP[7]:
 					{
-						err := setExec(id, tp, name, value, sys.MemcachedPid)
+						err := setExec(id, tp, name, value, sys.MemcachedPid, mode)
 						if err != nil {
 							return err
 						}
@@ -2224,8 +2241,8 @@ func DockerReset(name string) *Error {
 	return err
 }
 
-func CommonFastRun(name string, volume_map string, command string) *Error {
-	configmap, err := generateContainer(name, "", volume_map)
+func CommonFastRun(name, volume_map, command, engine string) *Error {
+	configmap, err := generateContainer(name, "", volume_map, engine)
 	if err != nil {
 		return err
 	}
@@ -2241,8 +2258,8 @@ func CommonFastRun(name string, volume_map string, command string) *Error {
 }
 
 //create container based on images
-func CommonCreate(name string, container_name string, volume_map string) *Error {
-	configmap, err := generateContainer(name, container_name, volume_map)
+func CommonCreate(name, container_name, volume_map, engine string) *Error {
+	configmap, err := generateContainer(name, container_name, volume_map, engine)
 	if err != nil {
 		return err
 	}
@@ -2483,7 +2500,7 @@ func (con *Container) refreshElf(key string, value []string, prog string) *Error
 	return nil
 }
 
-func (con *Container) genEnv() (map[string]string, *Error) {
+func (con *Container) genEnv(envmap map[string]string) (map[string]string, *Error) {
 	env := make(map[string]string)
 	env["ContainerId"] = con.Id
 	env["ContainerRoot"] = con.RootPath
@@ -2499,6 +2516,7 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 	env["FAKED_MODE"] = "unknown-is-root"
 	env["BaseType"] = con.BaseType
 	env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	env["ContainerConfigPath"] = con.ConfigPath
 
 	//set default LD_LIBRARY_LPMX
 	var libs []string
@@ -2635,18 +2653,6 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		}
 	}
 
-	if _, priv_switch_ok := con.SettingConf["fakechroot_priv_switch"]; priv_switch_ok {
-		env["FAKECHROOT_PRIV_SWITCH"] = "TRUE"
-	}
-
-	if _, fakechroot_debug_ok := con.SettingConf["fakechroot_debug"]; fakechroot_debug_ok {
-		env["FAKECHROOT_DEBUG"] = "TRUE"
-	}
-
-	if _, fakechroot_exec_switch := con.SettingConf["fakechroot_exec_switch"]; fakechroot_exec_switch {
-		env["FAKECHROOT_EXEC_SWITCH"] = "TRUE"
-	}
-
 	if ldso_path, ldso_ok := con.SettingConf["fakechroot_elfloader"]; ldso_ok {
 		elfloader_path, err := GuessPathContainer(filepath.Dir(con.RootPath), strings.Split(con.Layers, ":"), ldso_path.(string), true)
 		if err != nil {
@@ -2659,14 +2665,58 @@ func (con *Container) genEnv() (map[string]string, *Error) {
 		env["FAKECHROOT_EXCLUDE_EX_PATH"] = ep_path.(string)
 	}
 
-	if _, fakechroot_ok := os.LookupEnv("FAKECHROOT_DEBUG"); fakechroot_ok {
-		env["FAKECHROOT_DEBUG"] = "TRUE"
+	//add all FAKECHROOT_ environment variables to LPMX
+	for _, str := range os.Environ() {
+		if strings.HasPrefix(str, "FAKECHROOT_") {
+			values := strings.Split(str, "=")
+			env[values[0]] = values[1]
+		}
+	}
+
+	//write host env vars into the file
+	env_path := fmt.Sprintf("%s/.env", con.ConfigPath)
+	if FileExist(env_path) {
+		RemoveFile(env_path)
+	}
+	envs := []string{"placer"}
+	for _, str := range os.Environ() {
+		if strings.Contains(str, "{") || strings.Contains(str, "}") || strings.Contains(str, "(") || strings.Contains(str, ")") || !strings.Contains(str, "=") {
+			continue
+		}
+		envs = append(envs, str)
+	}
+	envs[0] = strconv.Itoa(len(envs) - 1)
+	ofile, _ := os.Create(env_path)
+	defer ofile.Close()
+	writer := bufio.NewWriter(ofile)
+	for _, line := range envs {
+		fmt.Fprintln(writer, line)
+	}
+	writer.Flush()
+
+	//process engine type
+	if _, vok := envmap["engine"]; vok && con.Engine != "" {
+		env["FAKECHROOT_ENGINE"] = "TRUE"
+		env["FAKECHROOT_ENGINE_TYPE"] = con.Engine
+		for _, str := range os.Environ() {
+			if strings.HasPrefix(str, con.Engine) {
+				values := strings.Split(str, "=")
+				env[values[0]] = values[1]
+			}
+		}
+
+		//add exclude paths
+		paths := strings.Split(env["FAKECHROOT_EXCLUDE_PATH"], ":")
+		if sk, sok := os.LookupEnv(fmt.Sprintf("%s_ROOT", con.Engine)); sok {
+			paths = append(paths, sk)
+			env["FAKECHROOT_EXCLUDE_PATH"] = strings.Join(paths, ":")
+		}
 	}
 	return env, nil
 }
 
-func (con *Container) bashShell(args ...string) *Error {
-	env, err := con.genEnv()
+func (con *Container) bashShell(envmap map[string]string, args ...string) *Error {
+	env, err := con.genEnv(envmap)
 
 	if err != nil {
 		return err
@@ -2872,6 +2922,7 @@ func (con *Container) appendToSys() *Error {
 			cmap["DataSyncFolder"] = con.DataSyncFolder
 			cmap["DataSyncMap"] = con.DataSyncMap
 			cmap["BaseType"] = con.BaseType
+			cmap["Engine"] = con.Engine
 			sys.Containers[con.Id] = cmap
 		} else {
 			vvalue, vok := value.(map[string]interface{})
@@ -3144,7 +3195,7 @@ container_name: optional container name
 volume_map: a volume map for container
 command: command to run inside container
 **/
-func generateContainer(name, container_name, volume_map string) (*map[string]interface{}, *Error) {
+func generateContainer(name, container_name, volume_map, engine string) (*map[string]interface{}, *Error) {
 	currdir, err := GetConfigDir()
 	if err != nil {
 		return nil, err
@@ -3209,6 +3260,12 @@ func generateContainer(name, container_name, volume_map string) (*map[string]int
 				configmap["layers"] = strings.Join(reverse_keys, ":")
 				configmap["baselayerpath"] = base
 				configmap["container_name"] = container_name
+				if _, fok := FindStrinArray(engine, ENGINE_TYPE); fok {
+					//set engine type
+					configmap["engine"] = strings.ToUpper(engine)
+					//enable engine
+					configmap["enable_engine"] = "True"
+				}
 
 				//dealing with sync folder/volume problem
 				//add default sync folder firstly if not exists
@@ -3617,39 +3674,110 @@ func getPrivilege(id string, name string, server string, allow bool) (string, *E
 	return str, nil
 }
 
-func setExec(id, tp, name, value, server string) *Error {
-	mem, err := MInitServers(server)
-	if err != nil {
-		return err
-	}
-
-	if tp == ELFOP[6] {
-		err := mem.MUpdateStrValue(fmt.Sprintf("exec:%s:%s", id, name), value)
+func setExec(id, tp, name, value, server string, mode bool) *Error {
+	if mode {
+		//read config location
+		currdir, err := GetConfigDir()
 		if err != nil {
 			return err
 		}
-	}
-
-	if tp == ELFOP[7] {
-		err := mem.MDeleteByKey(fmt.Sprintf("exec:%s:%s", id, name))
+		var sys Sys
+		rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+		err = unmarshalObj(rootdir, &sys)
 		if err != nil {
 			return err
+		}
+		if v, ok := sys.Containers[id]; ok {
+			if vval, vok := v.(map[string]interface{}); vok {
+				configpath := vval["ConfigPath"].(string)
+				filepath := fmt.Sprintf("%s/.execmap", configpath)
+				fc, ferr := FInitServer(filepath)
+				if ferr != nil {
+					return ferr
+				}
+
+				if tp == ELFOP[6] {
+					ferr = fc.FSetValue(name, value)
+					if ferr != nil {
+						return ferr
+					}
+				}
+
+				if tp == ELFOP[7] {
+					ferr = fc.FDeleteByKey(name)
+					if ferr != nil {
+						return ferr
+					}
+				}
+
+			}
+		}
+	} else {
+		mem, err := MInitServers(server)
+		if err != nil {
+			return err
+		}
+
+		if tp == ELFOP[6] {
+			err := mem.MUpdateStrValue(fmt.Sprintf("exec:%s:%s", id, name), value)
+			if err != nil {
+				return err
+			}
+		}
+
+		if tp == ELFOP[7] {
+			err := mem.MDeleteByKey(fmt.Sprintf("exec:%s:%s", id, name))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func getExec(id, name, server string) (string, *Error) {
-	mem, err := MInitServers(server)
-	if err != nil {
-		return "", err
+func getExec(id, name, server string, mode bool) (string, *Error) {
+	if mode {
+		//read config location
+		currdir, err := GetConfigDir()
+		if err != nil {
+			return "", err
+		}
+		var sys Sys
+		rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+		err = unmarshalObj(rootdir, &sys)
+		if err != nil {
+			return "", err
+		}
+		if v, ok := sys.Containers[id]; ok {
+			if vval, vok := v.(map[string]interface{}); vok {
+				configpath := vval["ConfigPath"].(string)
+				filepath := fmt.Sprintf("%s/.execmap", configpath)
+				fc, ferr := FInitServer(filepath)
+				if ferr != nil {
+					return "", ferr
+				}
+
+				str, serr := fc.FGetStrValue(name)
+				if serr != nil {
+					return "", serr
+				}
+				return str, nil
+			}
+		}
+	} else {
+		mem, err := MInitServers(server)
+		if err != nil {
+			return "", err
+		}
+
+		str, err := mem.MGetStrValue(fmt.Sprintf("exec:%s:%s", id, name))
+		if err != nil {
+			return "", err
+		}
+		return str, nil
 	}
 
-	str, err := mem.MGetStrValue(fmt.Sprintf("exec:%s:%s", id, name))
-	if err != nil {
-		return "", err
-	}
-	return str, nil
+	return "", nil
 }
 
 func setMap(id string, tp string, name string, value string, server string) *Error {
