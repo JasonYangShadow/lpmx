@@ -2562,6 +2562,10 @@ func (con *Container) genEnv(envmap map[string]string) (map[string]string, *Erro
 	//set default FAKECHROOT_CMD_SUBSET
 	env["FAKECHROOT_CMD_SUBST"] = "/sbin/ldconfig.real=/bin/true:/sbin/insserv=/bin/true:/sbin/ldconfig=/bin/true:/usr/bin/ischroot=/bin/true:/usr/bin/mkfifo=/bin/true"
 
+	//pass current executable to libfakechroot.so so that when external exe are triggered, they might need the current executable location
+	exe_path, _ := os.Executable()
+	env["LPMX_EXECUTABLE"] = exe_path
+
 	//export env
 	if data, data_ok := con.SettingConf["export_env"]; data_ok {
 		if d1, o1 := data.([]interface{}); o1 {
