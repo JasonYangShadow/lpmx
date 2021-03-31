@@ -69,3 +69,8 @@ For more information please refer the project's wiki page.
 - [Fakechroot](https://github.com/JasonYangShadow/fakechroot)
 - [LPM](https://lpm.bio/)
 - [udocker](https://github.com/indigo-dc/udocker)
+
+# Acknowledgement
+Computations were partially performed on the NIG supercomputer at ROIS National Institute of Genetics.
+
+https://gc.hgc.jp
