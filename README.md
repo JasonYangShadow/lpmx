@@ -26,6 +26,10 @@ The below video shows how to dynamically inject applications inside other LPMX c
 
 [![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/kf94-rmOFYA/0.jpg)](https://www.youtube.com/watch?v=kf94-rmOFYAE)
 
+And a gif showing injecting an exposed samtool into another container
+
+![samtool](https://user-images.githubusercontent.com/2051711/100324168-301dd600-300a-11eb-9170-5457613b0db4.gif)
+
 See [wiki](https://github.com/JasonYangShadow/lpmx/wiki) for more details.
 
 # Examples
