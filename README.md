@@ -1,8 +1,7 @@
 ![lpmx logo](./lpmx_small.PNG)
 
 # LPMX [![Build Status](https://travis-ci.com/JasonYangShadow/lpmx.svg?branch=master)](https://travis-ci.com/JasonYangShadow/lpmx) [![Gitter](https://badges.gitter.im/lpmx_container/community.svg)](https://gitter.im/lpmx_container/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=JasonYangShadow_lpmx&metric=sqale_rating)](https://sonarcloud.io/dashboard?id=JasonYangShadow_lpmx) [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=JasonYangShadow_lpmx&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=JasonYangShadow_lpmx) 
-LPMX, i.e, Local Package Manager X, is a **pure rootless composable** container system.  
-It helps researchers run genome analysis tools via existing Docker or Singularity (Experimental) images without root/sudo privilege required. Besides, researchers can benefit composability feature, e.g. call host qsub command to submit a job inside container.  
+LPMX, i.e, Local Package Manager X, is a **pure rootless composable** container system. It helps researchers run genome analysis tools via existing Docker or Singularity (Experimental) images without root/sudo privilege required. Besides, researchers can benefit composability feature, e.g. call host qsub command to submit a job inside container.  
 
 # Features
 1. **Pure Rootless**, root privilege is not required at any stage, including installation, launching containers, creation of images. It is suitable for Linux clusters, where users do not have root permission.
