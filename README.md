@@ -52,6 +52,28 @@ Below is a basic demo of using LPMX:
 
 [![LPMX DEMO](http://img.youtube.com/vi/_1XOLa1cKX4/0.jpg)](http://www.youtube.com/watch?v=_1XOLa1cKX4 "LPMX simple demo")
 
+# Common commands
+1. List existing containers with their container ids, status and other info
+   ```
+   ./lpmx list
+   ```
+2. Download Docker image from Docker Hub
+   ```
+   ./lpmx docker download ubuntu:16.04
+   ```
+3. Create container with binding volumes via Docker image
+   ```
+   ./lpmx docker create -v /host_path:/container_path -n name ubuntu:16.04
+   ```
+4. Delete container
+   ```
+   ./lpmx destroy container_id(which can be found by calling list command #1)
+   ```
+5. Resume container
+   ```
+   ./lpmx resume container_id(which can be found by calling list command #1)
+   ```
+
 # Limitations
 1. Only Linux(x86-64) systems are supported. (**Windows/Mac OS** are not supported)
 2. **NON-GLIBC** based distros(For host OS and container images) are not supported, because our fakechroot only wraps functions inside GNU C Library(glibc), so both host OS and container images should be Glibc-based. For example, LPMX does not support Alpine Linux
