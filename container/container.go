@@ -394,7 +394,7 @@ func Update() *Error {
 	return cerr
 }
 
-func List() *Error {
+func List(ListName string) *Error {
 	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
@@ -406,6 +406,10 @@ func List() *Error {
 		fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", "ContainerID", "ContainerName", "Status", "PID", "RPC", "BaseType", "Image"))
 		for k, v := range sys.Containers {
 			if cmap, ok := v.(map[string]interface{}); ok {
+				//filter with name
+				if cmap["ContainerName"].(string) != "" && ListName != "" && cmap["ContainerName"].(string) != ListName {
+					continue
+				}
 				//get each container location
 				root := path.Dir(cmap["RootPath"].(string))
 
@@ -733,7 +737,7 @@ func Get(id string, name string, mode bool) *Error {
 			fmt.Println(fmt.Sprintf("|%-s|%-30s|%-20s|%-20s|%-10s|%-20s|", "ContainerID", "PROGRAM", "ALLOW_PRIVILEGES", "DENY_PRIVILEGES", "REMAP", "ExecMap"))
 			a_val, _ := getPrivilege(id, name, sys.MemcachedPid, true)
 			d_val, _ := getPrivilege(id, name, sys.MemcachedPid, false)
-			m_val, _ := getMap(id, name, sys.MemcachedPid)
+			m_val, _ := getMap(id, name, sys.MemcachedPid, mode)
 			e_val, _ := getExec(id, name, sys.MemcachedPid, mode)
 			fmt.Println(fmt.Sprintf("|%-s|%-30s|%-20s|%-20s|%-10s|%-20s|", id, name, a_val, d_val, m_val, e_val))
 		} else {
@@ -771,7 +775,7 @@ func Set(id string, tp string, name string, value string, mode bool) *Error {
 					}
 				case ELFOP[4], ELFOP[5]:
 					{
-						err := setMap(id, tp, name, value, sys.MemcachedPid)
+						err := setMap(id, tp, name, value, sys.MemcachedPid, mode)
 						if err != nil {
 							return err
 						}
@@ -2241,12 +2245,20 @@ func DockerReset(name string) *Error {
 	return err
 }
 
-func CommonFastRun(name, volume_map, command, engine string) *Error {
+func CommonFastRun(name, volume_map, command, engine, execmaps string) *Error {
 	configmap, err := generateContainer(name, "", volume_map, engine)
 	if err != nil {
 		return err
 	}
 	id := (*configmap)["id"].(string)
+	if len(execmaps) > 0 {
+		for _, s := range strings.Split(execmaps, ":") {
+			k, v := strings.Split(s, "=")[0], strings.Split(s, "=")[1]
+			if len(k) > 0 && len(v) > 0 {
+				setExec(id, ELFOP[6], k, v, "", false)
+			}
+		}
+	}
 	err = Run(configmap, command)
 	//remove container
 	if err != nil {
@@ -2258,10 +2270,18 @@ func CommonFastRun(name, volume_map, command, engine string) *Error {
 }
 
 //create container based on images
-func CommonCreate(name, container_name, volume_map, engine string) *Error {
+func CommonCreate(name, container_name, volume_map, engine, execmaps string) *Error {
 	configmap, err := generateContainer(name, container_name, volume_map, engine)
 	if err != nil {
 		return err
+	}
+	if len(execmaps) > 0 {
+		for _, s := range strings.Split(execmaps, ":") {
+			k, v := strings.Split(s, "=")[0], strings.Split(s, "=")[1]
+			if len(k) > 0 && len(v) > 0 {
+				setExec((*configmap)["id"].(string), ELFOP[6], k, v, "", false)
+			}
+		}
 	}
 	err = Run(configmap)
 	return err
@@ -3679,7 +3699,7 @@ func getPrivilege(id string, name string, server string, allow bool) (string, *E
 }
 
 func setExec(id, tp, name, value, server string, mode bool) *Error {
-	if mode {
+	if !mode {
 		//read config location
 		currdir, err := GetConfigDir()
 		if err != nil {
@@ -3784,37 +3804,107 @@ func getExec(id, name, server string, mode bool) (string, *Error) {
 	return "", nil
 }
 
-func setMap(id string, tp string, name string, value string, server string) *Error {
-	mem, err := MInitServers(server)
-	if err != nil {
-		return err
-	}
-
-	if tp == ELFOP[4] {
-		err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", id, name), value)
+func setMap(id string, tp string, name string, value string, server string, mode bool) *Error {
+	if !mode {
+		//read config location
+		currdir, err := GetConfigDir()
 		if err != nil {
 			return err
 		}
-	}
-
-	if tp == ELFOP[5] {
-		err := mem.MDeleteByKey(fmt.Sprintf("map:%s:%s", id, name))
+		var sys Sys
+		rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+		err = unmarshalObj(rootdir, &sys)
 		if err != nil {
 			return err
+		}
+		if v, ok := sys.Containers[id]; ok {
+			if vval, vok := v.(map[string]interface{}); vok {
+				configpath := vval["ConfigPath"].(string)
+				filepath := fmt.Sprintf("%s/.mapmap", configpath)
+				fc, ferr := FInitServer(filepath)
+				if ferr != nil {
+					return ferr
+				}
+
+				if tp == ELFOP[4] {
+					ferr = fc.FSetValue(name, value)
+					if ferr != nil {
+						return ferr
+					}
+				}
+
+				if tp == ELFOP[5] {
+					ferr = fc.FDeleteByKey(name)
+					if ferr != nil {
+						return ferr
+					}
+				}
+
+			}
+		}
+	} else {
+		mem, err := MInitServers(server)
+		if err != nil {
+			return err
+		}
+
+		if tp == ELFOP[4] {
+			err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", id, name), value)
+			if err != nil {
+				return err
+			}
+		}
+
+		if tp == ELFOP[5] {
+			err := mem.MDeleteByKey(fmt.Sprintf("map:%s:%s", id, name))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
 }
 
-func getMap(id string, name string, server string) (string, *Error) {
-	mem, err := MInitServers(server)
-	if err != nil {
-		return "", err
-	}
+func getMap(id string, name string, server string, mode bool) (string, *Error) {
+	if mode {
+		//read config location
+		currdir, err := GetConfigDir()
+		if err != nil {
+			return "", err
+		}
+		var sys Sys
+		rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+		err = unmarshalObj(rootdir, &sys)
+		if err != nil {
+			return "", err
+		}
+		if v, ok := sys.Containers[id]; ok {
+			if vval, vok := v.(map[string]interface{}); vok {
+				configpath := vval["ConfigPath"].(string)
+				filepath := fmt.Sprintf("%s/.mapmap", configpath)
+				fc, ferr := FInitServer(filepath)
+				if ferr != nil {
+					return "", ferr
+				}
 
-	str, err := mem.MGetStrValue(fmt.Sprintf("map:%s:%s", id, name))
-	if err != nil {
-		return "", err
+				str, serr := fc.FGetStrValue(name)
+				if serr != nil {
+					return "", serr
+				}
+				return str, nil
+			}
+		}
+	} else {
+		mem, err := MInitServers(server)
+		if err != nil {
+			return "", err
+		}
+
+		str, err := mem.MGetStrValue(fmt.Sprintf("map:%s:%s", id, name))
+		if err != nil {
+			return "", err
+		}
+		return str, nil
 	}
-	return str, nil
+	return "", nil
 }
