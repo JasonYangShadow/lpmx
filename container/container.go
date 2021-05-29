@@ -79,6 +79,7 @@ type Container struct {
 	DataSyncFolder      string //sync folder with host
 	DataSyncMap         string //sync folder mapping info(host:contain)
 	Engine              string //engine type used on the host
+	Execmaps            string //executables mapping info
 }
 
 type RPC struct {
@@ -656,6 +657,12 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 	}
 	con.ContainerName = (*configmap)["container_name"].(string)
 
+	//save execmaps
+	if _, eok := (*configmap)["execmaps"]; eok {
+		con.Execmaps = (*configmap)["execmaps"].(string)
+		envmap["execmaps"] = (*configmap)["execmaps"].(string)
+	}
+
 	//enable batch engine if needed
 	if _, eok := (*configmap)["enable_engine"]; eok {
 		envmap["engine"] = "TRUE"
@@ -693,6 +700,15 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 		err := con.setupContainer()
 		if err != nil {
 			return err
+		}
+	}
+
+	//here we need to inject executable mapping info
+	if len(con.Execmaps) > 0 {
+		for _, item := range strings.Split(con.Execmaps, ":") {
+			k := strings.Split(item, "=")[0]
+			v := strings.Split(item, "=")[1]
+			setExec(con.Id, ELFOP[6], v, k, "", false)
 		}
 	}
 
@@ -2252,12 +2268,7 @@ func CommonFastRun(name, volume_map, command, engine, execmaps string) *Error {
 	}
 	id := (*configmap)["id"].(string)
 	if len(execmaps) > 0 {
-		for _, s := range strings.Split(execmaps, ":") {
-			k, v := strings.Split(s, "=")[0], strings.Split(s, "=")[1]
-			if len(k) > 0 && len(v) > 0 {
-				setExec(id, ELFOP[6], k, v, "", false)
-			}
-		}
+		(*configmap)["execmaps"] = execmaps
 	}
 	err = Run(configmap, command)
 	//remove container
@@ -2276,12 +2287,7 @@ func CommonCreate(name, container_name, volume_map, engine, execmaps string) *Er
 		return err
 	}
 	if len(execmaps) > 0 {
-		for _, s := range strings.Split(execmaps, ":") {
-			k, v := strings.Split(s, "=")[0], strings.Split(s, "=")[1]
-			if len(k) > 0 && len(v) > 0 {
-				setExec((*configmap)["id"].(string), ELFOP[6], k, v, "", false)
-			}
-		}
+		(*configmap)["execmaps"] = execmaps
 	}
 	err = Run(configmap)
 	return err
@@ -2537,6 +2543,9 @@ func (con *Container) genEnv(envmap map[string]string) (map[string]string, *Erro
 	env["BaseType"] = con.BaseType
 	env["PATH"] = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 	env["ContainerConfigPath"] = con.ConfigPath
+	if len(con.Execmaps) > 0 {
+		env["FAKECHROOT_EXEC_SWITCH"] = "true"
+	}
 
 	//set default LD_LIBRARY_LPMX
 	var libs []string
