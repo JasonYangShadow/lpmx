@@ -17,15 +17,21 @@ wget -O lpmx https://github.com/JasonYangShadow/lpmx/blob/master/build/linux/x86
 
 chmod a+x lpmx && ./lpmx init
 
+#download common Linux distro from Docker hub
 ./lpmx docker download ubuntu:16.04
 
 #echo hello world
 ./lpmx docker fastrun ubuntu:16.04 "echo 'hello world'"
 
+#download common genomic analysis tools from Docker hub
 ./lpmx docker download evolbioinfo/minimap2:v2.17
 
 #run minimap2
 ./lpmx docker fastrun evolbioinfo/minimap2:v2.17 "minimap2"
+
+#run executables inside host/other containers from current container
+#mapping host installed /usr/bin/vim into container /bin/vim, so that container can also run vim as if it exists, the /usr/bin/vim can also any exposed tools by LPMX
+./lpmx docker fastrun -m /usr/bin/vim=/bin/vim evolbioinfo/minimap2:v2.17 "vim"
 ```
 
 That's it!
@@ -53,9 +59,9 @@ Below is a basic demo of using LPMX:
 [![LPMX DEMO](http://img.youtube.com/vi/_1XOLa1cKX4/0.jpg)](http://www.youtube.com/watch?v=_1XOLa1cKX4 "LPMX simple demo")
 
 # Common commands
-1. List existing containers with their container ids, status and other info
+1. List existing containers with their container ids, status and other info(also with name filter)
    ```
-   ./lpmx list
+   ./lpmx list -n name
    ```
 2. Download Docker image from Docker Hub
    ```
