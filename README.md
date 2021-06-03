@@ -1,17 +1,19 @@
 ![lpmx logo](./lpmx_small.PNG)
 
 # LPMX [![Build Status](https://travis-ci.com/JasonYangShadow/lpmx.svg?branch=master)](https://travis-ci.com/JasonYangShadow/lpmx) [![Gitter](https://badges.gitter.im/lpmx_container/community.svg)](https://gitter.im/lpmx_container/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge) [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=JasonYangShadow_lpmx&metric=sqale_rating)](https://sonarcloud.io/dashboard?id=JasonYangShadow_lpmx) [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=JasonYangShadow_lpmx&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=JasonYangShadow_lpmx) 
-LPMX, i.e, Local Package Manager X, is a **pure rootless composable** container system. It helps researchers run genome analysis tools via existing Docker or Singularity (Experimental) images without root/sudo privilege required. Besides, researchers can benefit composability feature, e.g. call host qsub command to submit a job inside container.  
+LPMX, i.e, Local Package Manager X, is a **pure rootless composable** container system. It helps researchers run genome analysis tools via existing Docker or Singularity (experimental) images without root/sudo privilege required. Besides, researchers can benefit from composability, e.g. allowing one to write a pipeline consisting tools from different containers.
 
 # Why should I use containers?
-In the bioinformatics world, [Bioconda](https://bioconda.github.io) is the best tool for setting up genome analysis tools, but conflicting tools(requiring conflicting dependencies, e.g. Python2 & Python3) inside a genomics analysis pipeline can not be set up successfully due to the fact that conflicting dependencies can not be installed inside a single namespace. For example, [Manta](https://github.com/Illumina/manta) stills requires Python2, installing a pipeline consisting of Manta and other Python3 based tools will corrupt. Container virtualization technologies can solve this problem by isolating each tool into a container. [Singularity](https://sylabs.io/singularity/) gains so much attractiveness recently, Singularity is used widely in High-Performance Computing infrastructures and helps accelerate genomics research. 
+In bioinformatics, [Bioconda](https://bioconda.github.io) 
+is a repository containing popular bioinformatics tools and allows users to install binaries of these tools rather than compiling them from scratch. But conflicting tools (requiring conflicting dependencies, e.g. Python2 & Python3) inside a genome analysis pipeline can not be set up successfully because Bioconda can not install them inside a single namespace. For example, [Manta](https://github.com/Illumina/manta) still requires Python2, so  installing a pipeline consisting of Manta and other Python3-based tools will fail. Bioconda moved the burden of resolving the dependency hell from users to developers. But we need to further eliminate the burden for developers.
+Container virtualization can solve this problem by isolating each tool into a container. 
 
 # Why should I use LPMX?
-Traditional container systems lack **composability**, which prevents tools running in different environments(host & containers) from communicating. For example, if we use Singularity to containerize the Canu tool, Canu will not be able to call host commands, e.g. call qsub to submit jobs. It can be solved only if we do modifications to either the Canu tool itself or the container engine, such as adding a network communication adapter, which is usually unachievable. 
+[Singularity](https://sylabs.io/singularity/), a popular tool for container virtualization in science, is getting more and more popular recently. However, Singularity lacks **composability**. For example, we have a GATK container and a minimap2 container (both of which are created by somebody else than us), if we want to containerize a custom pipeline utilizing the existing containers, we need to write a substantial amount of code to bridge the custom pipeline and the containers (GATK & minimap2). 
 
-LPMX provides both isolation and composability. LPMX can isolate tools like Singularity does but also allow tools to make direct calls to other tools at the same time. 
+To this end, LPMX provides composability. With LPMX, we can compose existing container images to create a custom pipeline container without writing a large amount of glue code.
 
-Besides, you can directly use existing Docker and Singularity images with LPMX without root privilege, which is safe and convenient. You can also install software inside the container as you commonly do.
+Besides, you can directly use existing Docker and Singularity images with LPMX without root privilege, which is safe and convenient. You can also install software inside containers as you commonly do on your laptop.
 
 # Features
 1. **Pure Rootless**, root privilege is not required at any stage, including installation, launching containers, creation of images. It is suitable for Linux clusters, where users do not have root permission.
@@ -114,6 +116,10 @@ If you are interested in LPMX and want an online tutorial session, please fill i
 - [LPM](https://lpm.bio/)
 - [udocker](https://github.com/indigo-dc/udocker)
 - [Singularity](https://sylabs.io/singularity)
+
+# Preprint
+- bioRxiv (coming soon!)
+- [Vagrant Box](https://app.vagrantup.com/jasonyangshadow/boxes/benchmark_ubuntu1804) containing experiment setup for reproducibility
 
 # Acknowledgements
 - Computations were partially performed on the NIG supercomputer at ROIS National Institute of Genetics. https://gc.hgc.jp
