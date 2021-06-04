@@ -24,26 +24,72 @@ Besides, you can directly use existing Docker and Singularity images with LPMX w
 6. **Easy to access GPGPU resource**, LPMX provides end-users an easy way to access the host GPGPU resource. An example is here [https://github.com/JasonYangShadow/lpmx/wiki/GPGPU](https://github.com/JasonYangShadow/lpmx/wiki/GPGPU)
 
 # Quick Run
+All following commands use Ubuntu 18.04 as host OS.
+
+<span style="color:yellow">1. Install LPMX</span>
 ```
-wget -O lpmx https://github.com/JasonYangShadow/lpmx/blob/master/build/linux/x86_64/Linux-x86_64-lpmx?raw=true
+# for x86_64 binary
+$ wget -O lpmx https://github.com/JasonYangShadow/lpmx/blob/master/build/linux/x86_64/Linux-x86_64-lpmx?raw=true
 
-chmod a+x lpmx && ./lpmx init
+$ chmod a+x lpmx && ./lpmx init
+```
 
-#download common Linux distro from Docker hub
-./lpmx docker download ubuntu:16.04
+<span style="color:yellow">2. Download Docker Image and Run</span>
+```
+# download common Linux distro from Docker hub
+$ ./lpmx docker download ubuntu:16.04
 
-#echo hello world
-./lpmx docker fastrun ubuntu:16.04 "echo 'hello world'"
+# echo hello world
+$ ./lpmx docker fastrun ubuntu:16.04 "echo 'hello world'"
 
-#download common genomic analysis tools from Docker hub
-./lpmx docker download evolbioinfo/minimap2:v2.17
+```
 
-#run minimap2
-./lpmx docker fastrun evolbioinfo/minimap2:v2.17 "minimap2"
+<span style="color:yellow">3. Try minimap2</span>
+```
+# download common genomic analysis tools from Docker hub
+$ ./lpmx docker download evolbioinfo/minimap2:v2.17
 
-#run executables inside host/other containers from current container
-#mapping host installed /usr/bin/vim into container /bin/vim, so that container can also run vim as if it exists, the /usr/bin/vim can also any exposed tools by LPMX
-./lpmx docker fastrun -m /usr/bin/vim=/bin/vim evolbioinfo/minimap2:v2.17 "vim"
+# run minimap2
+$ mkdir -p $PWD/share
+$ wget -O $PWD/share/human.fa https://raw.githubusercontent.com/lh3/minimap2/master/test/MT-human.fa
+$ wget -O $PWD/share/orang.fa https://raw.githubusercontent.com/lh3/minimap2/master/test/MT-orang.fa
+$ ./lpmx docker fastrun -v $PWD/share:/share evolbioinfo/minimap2:v2.17 "minimap2 -a /share/human.fa /share/orang.fa > /share/minimap2.sam"
+$ ls -al $PWD/share
+```
+
+<span style="color:yellow">4. Compose different containers</span>
+```
+# download Docker image with old versions of minimap & samtools
+$ ./lpmx docker download jasonyangshadow/example:1
+
+# show version info of old minimap & samtools
+$ ./lpmx docker fastrun jasonyangshadow/example:1 "minimap -V"
+$ ./lpmx docker fastrun jasonyangshadow/example:1 "samtools"
+
+# create minimap2 container
+$ ./lpmx docker create -n minimap2 -v $PWD/share:/share evolbioinfo/minimap2:v2.17
+
+# exit the newly created container
+$root exit
+
+# get container id
+$ container_id=`./lpmx list -n minimap2 | awk '{if (NR!=1) {print $1}}'` 
+
+# expose minimap2 to make it available to host and other containers
+$ ./lpmx expose -i $container_id -n minimap2 -p /usr/local/bin/minimap2
+$ ls -al $PWD/bin/minimap2
+
+# replace old version of minimap with newer minimap2 and keep using old version of original samtools
+$ ./lpmx docker fastrun -v $PWD/share:/share -m $PWD/bin/minimap2=/usr/bin/minimap jasonyangshadow/example:1 "minimap '-V'"
+$ ./lpmx docker fastrun -v $PWD/share:/share -m $PWD/bin/minimap2=/usr/bin/minimap jasonyangshadow/example:1 "minimap '-a /share/human.fa /share/orang.fa > /share/test.sam'"
+$ ./lpmx docker fastrun -v $PWD/share:/share jasonyangshadow/example:1 "samtools view -S -b /share/test.sam > /share/test.bam"
+$ ls -al $PWD/share
+```
+
+<span style="color:yellow">5. Try GPGPU</span>
+```
+# if you can run nvidia-smi on the host, then you can easily get access GPGPU inside container with a simple command
+$ FAKECHROOT_USE_SYS_LIB=true ./lpmx docker fastrun -m /usr/bin/nvidia-smi=/usr/bin/nvidia-smi ubuntu:16.04 "nvidia-smi"
 ```
 
 That's it!
