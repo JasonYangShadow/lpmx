@@ -164,7 +164,7 @@ If you are interested in LPMX and want an online tutorial session, please fill i
 - [Singularity](https://sylabs.io/singularity)
 
 # Preprint
-- bioRxiv (coming soon!)
+- bioRxiv https://www.biorxiv.org/content/10.1101/2021.06.04.445363v1
 - [Vagrant Box](https://app.vagrantup.com/jasonyangshadow/boxes/benchmark_ubuntu1804) containing experiment setup for reproducibility
 
 # Acknowledgements
