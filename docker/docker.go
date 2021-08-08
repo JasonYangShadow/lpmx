@@ -434,8 +434,10 @@ func DownloadLayers(username string, pass string, name string, tag string, folde
 		if FileExist(filename) {
 			if size, err := GetFileSize(filename); err == nil {
 				if size == element.Size {
-					data[filename] = element.Size
-					layer_order = append(layer_order, filename)
+					if _, ok := data[filename]; !ok {
+						data[filename] = element.Size
+						layer_order = append(layer_order, filename)
+					}
 					fmt.Println(fmt.Sprintf("File %s exists, skip...", filepath.Base(filename)))
 					continue
 				}
