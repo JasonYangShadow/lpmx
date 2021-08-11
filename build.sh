@@ -5,7 +5,7 @@ for GOOS in linux; do
      for GOARCH in x86_64; do
         mkdir -p build/$GOOS/$GOARCH
         if [ $GOARCH = "x86_64" ];then
-          env GOOS=$GOOS GOARCH="amd64" go build -v -o build/$GOOS/$GOARCH/Linux-x86_64-lpmx
+          env GOOS=$GOOS GOARCH="amd64" GO111MODULE=off go build -v -o build/$GOOS/$GOARCH/Linux-x86_64-lpmx
         #generate log first
           if [ -x "$(command -v chglog)" ];then
               chglog init
