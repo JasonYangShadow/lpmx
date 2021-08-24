@@ -20,7 +20,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-1.7.1"
+	VERSION = "alpha-1.7.2"
 )
 
 func checkCompleteness() *Error {
@@ -327,6 +327,37 @@ func main() {
 	dockerDownloadCmd.Flags().BoolVarP(&DockerDownloadMerge, "merge", "m", false, "merge all layers(optional)")
 	dockerDownloadCmd.Flags().StringVarP(&DockerDownloadUser, "user", "u", "", "optional")
 	dockerDownloadCmd.Flags().StringVarP(&DockerDownloadPass, "pass", "p", "", "optional")
+
+	var DockerMergeUser string
+	var DockerMergePass string
+	var dockerMergeCmd = &cobra.Command{
+		Use:   "merge",
+		Short: "merge local images or docker images downloaded from docker hub",
+		Long:  "docker merge sub-command is one advanced command of lpmx, which is used for merging layers of local image or downloaded from docker hub to one layer",
+		Args:  cobra.ExactArgs(1),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := checkCompleteness()
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			var err *Error
+			//then create merged image secondly
+			LOGGER.Info(fmt.Sprintf("Start merging %s", args[0]))
+			err = DockerMerge(args[0], DockerDownloadUser, DockerDownloadPass)
+			if err != nil && err != ErrExist {
+				LOGGER.Fatal(err.Error())
+				return
+			} else {
+				LOGGER.Info("DONE")
+				return
+			}
+		},
+	}
+	dockerMergeCmd.Flags().StringVarP(&DockerMergeUser, "user", "u", "", "optional")
+	dockerMergeCmd.Flags().StringVarP(&DockerMergePass, "pass", "p", "", "optional")
 
 	var dockerAddCmd = &cobra.Command{
 		Use:   "add",
@@ -646,7 +677,7 @@ func main() {
 		Short: "docker command",
 		Long:  "docker command is the advanced command of lpmx, which is used for executing docker related commands",
 	}
-	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd, dockerPackageCmd, dockerAddCmd, dockerCommitCmd, dockerLoadCmd, dockerRunCmd)
+	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd, dockerPackageCmd, dockerAddCmd, dockerCommitCmd, dockerLoadCmd, dockerRunCmd, dockerMergeCmd)
 
 	var SingularityLoadName string
 	var SingularityLoadTag string
