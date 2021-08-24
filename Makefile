@@ -1,7 +1,6 @@
 BINDDIR := /usr/bin
 
 build:
-	dep ensure
 	./build.sh
 all: build
 install:
