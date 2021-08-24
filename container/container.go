@@ -1545,6 +1545,9 @@ func DockerMerge(name, user, pass string) *Error {
 	//then we set new layer_order
 	mdata["layer_order"] = new_image_name
 
+	//add image type
+	mdata["imagetype"] = "Docker"
+
 	//add docker info file(.info)
 	if !FolderExist(mdata["rootdir"].(string)) {
 		merr := os.MkdirAll(mdata["rootdir"].(string), os.FileMode(FOLDER_MODE))
