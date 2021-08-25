@@ -53,7 +53,7 @@ $ ./lpmx docker download evolbioinfo/minimap2:v2.17
 $ mkdir -p $PWD/share
 $ wget -O $PWD/share/human.fa https://raw.githubusercontent.com/lh3/minimap2/master/test/MT-human.fa
 $ wget -O $PWD/share/orang.fa https://raw.githubusercontent.com/lh3/minimap2/master/test/MT-orang.fa
-$ ./lpmx docker fastrun -v $PWD/share:/share evolbioinfo/minimap2:v2.17 "minimap2 -a /share/human.fa /share/orang.fa > /share/minimap2.sam"
+$ ./lpmx docker fastrun -v $PWD/share=/share evolbioinfo/minimap2:v2.17 "minimap2 -a /share/human.fa /share/orang.fa > /share/minimap2.sam"
 $ ls -al $PWD/share
 ```
 
@@ -67,7 +67,7 @@ $ ./lpmx docker fastrun jasonyangshadow/example:1 "minimap -V"
 $ ./lpmx docker fastrun jasonyangshadow/example:1 "samtools"
 
 # create minimap2 container
-$ ./lpmx docker create -n minimap2 -v $PWD/share:/share evolbioinfo/minimap2:v2.17
+$ ./lpmx docker create -n minimap2 -v $PWD/share=/share evolbioinfo/minimap2:v2.17
 
 # exit the newly created container
 $root exit
@@ -80,9 +80,9 @@ $ ./lpmx expose -i $container_id -n minimap2 -p /usr/local/bin/minimap2
 $ ls -al $PWD/bin/minimap2
 
 # replace old version of minimap with newer minimap2 and keep using old version of original samtools
-$ ./lpmx docker fastrun -v $PWD/share:/share -m $PWD/bin/minimap2=/usr/bin/minimap jasonyangshadow/example:1 "minimap '-V'"
-$ ./lpmx docker fastrun -v $PWD/share:/share -m $PWD/bin/minimap2=/usr/bin/minimap jasonyangshadow/example:1 "minimap '-a /share/human.fa /share/orang.fa > /share/test.sam'"
-$ ./lpmx docker fastrun -v $PWD/share:/share jasonyangshadow/example:1 "samtools view -S -b /share/test.sam > /share/test.bam"
+$ ./lpmx docker fastrun -v $PWD/share=/share -m $PWD/bin/minimap2=/usr/bin/minimap jasonyangshadow/example:1 "minimap '-V'"
+$ ./lpmx docker fastrun -v $PWD/share=/share -m $PWD/bin/minimap2=/usr/bin/minimap jasonyangshadow/example:1 "minimap '-a /share/human.fa /share/orang.fa > /share/test.sam'"
+$ ./lpmx docker fastrun -v $PWD/share=/share jasonyangshadow/example:1 "samtools view -S -b /share/test.sam > /share/test.bam"
 $ ls -al $PWD/share
 ```
 
@@ -127,7 +127,7 @@ Below is a basic demo of using LPMX:
    ```
 3. Create container with binding volumes via Docker image
    ```
-   ./lpmx docker create -v /host_path:/container_path -n name ubuntu:16.04
+   ./lpmx docker create -v /host_path=/container_path -n name ubuntu:16.04
    ```
 4. Delete container
    ```

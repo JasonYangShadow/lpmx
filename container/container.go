@@ -3315,12 +3315,12 @@ func generateContainer(name, container_name, volume_map, engine string) (*map[st
 					}
 				}
 				if !strings.Contains(volume_map, default_sync_folder) {
-					volume_map = fmt.Sprintf("%s:/lpmx;%s", default_sync_folder, volume_map)
+					volume_map = fmt.Sprintf("%s=/lpmx:%s", default_sync_folder, volume_map)
 				}
 				//add user defined ones
-				for _, volume := range strings.Split(volume_map, ";") {
+				for _, volume := range strings.Split(volume_map, ":") {
 					if len(volume) > 0 {
-						v := strings.Split(volume, ":")
+						v := strings.Split(volume, "=")
 						if !FolderExist(v[0]) {
 							continue
 						} else {

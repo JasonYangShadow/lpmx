@@ -479,9 +479,9 @@ func main() {
 		},
 	}
 	dockerCreateCmd.Flags().StringVarP(&DockerCreateName, "name", "n", "", "optional")
-	dockerCreateCmd.Flags().StringVarP(&DockerCreateVolume, "volume", "v", "", "optional")
+	dockerCreateCmd.Flags().StringVarP(&DockerCreateVolume, "volume", "v", "", "optional, volume map, host_path1=container_path1:host_path2=container_path2")
 	dockerCreateCmd.Flags().StringVarP(&DockerCreateEngine, "engine", "e", "", "use engine(optional)")
-	dockerCreateCmd.Flags().StringVarP(&DockerCreateExecMap, "map", "m", "", "executables map, host_exec1=container_exec1:host_exec2=container_exec2(optional)")
+	dockerCreateCmd.Flags().StringVarP(&DockerCreateExecMap, "map", "m", "", "optional, executables map, host_exec1=container_exec1:host_exec2=container_exec2")
 
 	var DockerRunVolume string
 	var DockerRunMode string
@@ -514,7 +514,7 @@ func main() {
 			}
 		},
 	}
-	dockerRunCmd.Flags().StringVarP(&DockerRunVolume, "volume", "v", "", "optional")
+	dockerRunCmd.Flags().StringVarP(&DockerRunVolume, "volume", "v", "", "optional, volume map, host_path1=container_path1:host_path2=container_path2")
 	dockerRunCmd.Flags().StringVarP(&DockerRunMode, "engine", "e", "", "use engine(optional)")
 	dockerRunCmd.Flags().StringVarP(&DockerRunExecMap, "map", "m", "", "executables map, host_exec1=container_exec1:host_exec2=container_exec2(optional)")
 
@@ -744,7 +744,7 @@ func main() {
 		},
 	}
 	singularityCreateCmd.Flags().StringVarP(&SingularityCreateName, "name", "n", "", "optional")
-	singularityCreateCmd.Flags().StringVarP(&SingularityCreateVolume, "volume", "v", "", "optional")
+	singularityCreateCmd.Flags().StringVarP(&SingularityCreateVolume, "volume", "v", "", "optional, volume map, host_path1=container_path1:host_path2=container_path2")
 	singularityCreateCmd.Flags().StringVarP(&SingularityCreateEngine, "engine", "e", "", "use engine(optional)")
 	singularityCreateCmd.Flags().StringVarP(&SingularityCreateExecMap, "map", "m", "", "executables map, host_exec1=container_exec1:host_exec2=container_exec2(optional)")
 
@@ -826,7 +826,7 @@ func main() {
 			}
 		},
 	}
-	singularityRunCmd.Flags().StringVarP(&SingularityRunVolume, "volume", "v", "", "optional")
+	singularityRunCmd.Flags().StringVarP(&SingularityRunVolume, "volume", "v", "", "optional, volume map, host_path1=container_path1:host_path2=container_path2")
 	singularityRunCmd.Flags().StringVarP(&SingularityRunMode, "engine", "e", "", "use engine(optional)")
 	singularityRunCmd.Flags().StringVarP(&SingularityRunExecMap, "map", "m", "", "executables map, host_exec1=container_exec1:host_exec2=container_exec2(optional)")
 
