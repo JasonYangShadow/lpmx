@@ -2586,7 +2586,7 @@ func (con *Container) genEnv(envmap map[string]string) (map[string]string, *Erro
 	//}
 
 	//set default FAKECHROOT_EXCLUDE_PATH
-	env["FAKECHROOT_EXCLUDE_PATH"] = "/dev:/proc:/sys:/tmp"
+	env["FAKECHROOT_EXCLUDE_PATH"] = "/dev:/proc:/sys"
 
 	//set data sync folder
 	env["FAKECHROOT_DATA_SYNC"] = con.DataSyncFolder
@@ -3486,8 +3486,8 @@ func generateContainer(name, container_name, volume_map, engine string) (*map[st
 
 				//create tmp folder and create whiteout file for tmp
 				//os.MkdirAll(fmt.Sprintf("%s/tmp", configmap["dir"].(string)), os.FileMode(FOLDER_MODE))
-				//f, _ := os.Create(fmt.Sprintf("%s/.wh.tmp", configmap["dir"].(string)))
-				//f.Close()
+				f, _ := os.Create(fmt.Sprintf("%s/.wh.tmp", configmap["dir"].(string)))
+				f.Close()
 
 				//run container
 				return &configmap, nil
