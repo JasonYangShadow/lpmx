@@ -1162,9 +1162,9 @@ func DockerCommit(id, newname, newtag string) *Error {
 					}
 					//remove data symlink
 					if len(con.DataSyncMap) > 0 {
-						for _, kv := range strings.Split(con.DataSyncMap, ";") {
+						for _, kv := range strings.Split(con.DataSyncMap, ":") {
 							if len(kv) > 0 {
-								v := strings.Split(kv, ":")
+								v := strings.Split(kv, "=")
 								if len(v) == 2 && len(v[1]) > 0 {
 									s_link := fmt.Sprintf("%s%s", con.RootPath, v[1])
 									os.RemoveAll(s_link)
@@ -1272,9 +1272,9 @@ func DockerCommit(id, newname, newtag string) *Error {
 						return cerr
 					}
 					//create new data sync folder
-					for _, kv := range strings.Split(con.DataSyncMap, ";") {
+					for _, kv := range strings.Split(con.DataSyncMap, ":") {
 						if len(kv) > 0 {
-							v := strings.Split(kv, ":")
+							v := strings.Split(kv, "=")
 							derr := os.Symlink(v[0], fmt.Sprintf("%s%s", con.RootPath, v[1]))
 							if derr != nil {
 								cerr := ErrNew(derr, fmt.Sprintf("could not symlink, oldpath: %s, newpath: %s", v[0], v[1]))
@@ -2586,7 +2586,7 @@ func (con *Container) genEnv(envmap map[string]string) (map[string]string, *Erro
 	//}
 
 	//set default FAKECHROOT_EXCLUDE_PATH
-	env["FAKECHROOT_EXCLUDE_PATH"] = "/dev:/proc:/sys"
+	env["FAKECHROOT_EXCLUDE_PATH"] = "/dev:/proc:/sys:/tmp"
 
 	//set data sync folder
 	env["FAKECHROOT_DATA_SYNC"] = con.DataSyncFolder
@@ -3485,9 +3485,9 @@ func generateContainer(name, container_name, volume_map, engine string) (*map[st
 				}
 
 				//create tmp folder and create whiteout file for tmp
-				os.MkdirAll(fmt.Sprintf("%s/tmp", configmap["dir"].(string)), os.FileMode(FOLDER_MODE))
-				f, _ := os.Create(fmt.Sprintf("%s/.wh.tmp", configmap["dir"].(string)))
-				f.Close()
+				//os.MkdirAll(fmt.Sprintf("%s/tmp", configmap["dir"].(string)), os.FileMode(FOLDER_MODE))
+				//f, _ := os.Create(fmt.Sprintf("%s/.wh.tmp", configmap["dir"].(string)))
+				//f.Close()
 
 				//run container
 				return &configmap, nil
