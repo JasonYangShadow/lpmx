@@ -288,18 +288,8 @@ func RemoveFile(path string) (bool, *Error) {
 
 func Rename(old_path string, new_path string) *Error {
 	if t, terr := FileType(old_path); terr == nil {
-		if t == TYPE_DIR {
-			parent_dir := filepath.Dir(new_path)
-			if !FolderExist(parent_dir) {
-				err := os.MkdirAll(parent_dir, 0777)
-				if err != nil {
-					cerr := ErrNew(err, fmt.Sprintf("could not mkdir %s", parent_dir))
-					return cerr
-				}
-			}
-		}
-		if t == TYPE_REGULAR {
-			parent_dir := filepath.Dir(new_path)
+		parent_dir := filepath.Dir(new_path)
+		if t == TYPE_DIR || t == TYPE_REGULAR {
 			if !FolderExist(parent_dir) {
 				err := os.MkdirAll(parent_dir, 0777)
 				if err != nil {
@@ -411,6 +401,14 @@ func CopyFile(src string, dst string) (bool, *Error) {
 		return false, cerr
 	}
 	defer in.Close()
+	parent_dir := filepath.Dir(dst)
+	if !FolderExist(parent_dir) {
+		err := os.MkdirAll(parent_dir, 0777)
+		if err != nil {
+			cerr := ErrNew(err, fmt.Sprintf("could not mkdir %s", parent_dir))
+			return false, cerr
+		}
+	}
 	out, oerr := os.Create(dst)
 	if oerr != nil {
 		cerr := ErrNew(oerr, fmt.Sprintf("can't open file %s", dst))

@@ -1751,6 +1751,157 @@ func SingularityLoad(file string, name string, tag string) *Error {
 	}
 }
 
+//name -> name with tag info
+func SkopeoLoad(name, dir string) *Error {
+	currdir, err := GetConfigDir()
+	if err != nil {
+		return err
+	}
+	rootdir := fmt.Sprintf("%s/.lpmxdata", currdir)
+	sysdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	tempdir := fmt.Sprintf("%s/.temp", currdir)
+	//we delete temp dir if it exists at the end of the function
+	defer func() {
+		if FolderExist(tempdir) {
+			os.RemoveAll(tempdir)
+		}
+	}()
+
+	//check if folder exists
+	adir, derr := filepath.Abs(dir)
+	if derr!= nil {
+		cerr := ErrNew(derr, fmt.Sprintf("could not parse the absolute path: %s", adir))
+		return cerr
+	}
+	if !FolderExist(adir) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does exist", adir))
+		return cerr
+	}
+
+	//configure Docker related info locally
+	var doc Image
+	err = unmarshalObj(rootdir, &doc)
+	if err != nil && err.Err != ErrNExist {
+		return err
+	}
+
+	if err != nil && err.Err == ErrNExist {
+		ret, err := MakeDir(rootdir)
+		doc.RootDir = rootdir
+		doc.Images = make(map[string]interface{})
+		if !ret {
+			return err
+		}
+	}
+
+	image_dir := fmt.Sprintf("%s/.image", rootdir)
+	ret, layer_order, lerr := LoadSkopeoTar(adir, image_dir)
+	if lerr != nil {
+		return lerr
+	}
+	if _, ok := doc.Images[name]; ok {
+		cerr := ErrNew(ErrExist, fmt.Sprintf("%s already exists", name))
+		return cerr
+	} else {
+		tdata := strings.Split(name, ":")
+		tname := tdata[0]
+		ttag := tdata[1]
+		mdata := make(map[string]interface{})
+		mdata["rootdir"] = fmt.Sprintf("%s/%s/%s", doc.RootDir, tname, ttag)
+		mdata["config"] = fmt.Sprintf("%s/setting.yml", mdata["rootdir"].(string))
+		mdata["image"] = fmt.Sprintf("%s/.image", rootdir)
+		mdata["layer"] = ret
+		mdata["layer_order"] = strings.Join(layer_order, ":")
+		mdata["imagetype"] = "Docker"
+
+		//add docker info file(.info)
+		if !FolderExist(mdata["rootdir"].(string)) {
+			merr := os.MkdirAll(mdata["rootdir"].(string), os.FileMode(FOLDER_MODE))
+			if merr != nil {
+				cerr := ErrNew(merr, fmt.Sprintf("could not mkdir %s", mdata["rootdir"].(string)))
+				return cerr
+			}
+		}
+		var docinfo ImageInfo
+		docinfo.Name = name
+		docinfo.ImageType = "Docker"
+		// layer_order is absolute path
+		//docinfo layers map should remove absolute path of host
+		layersmap := make(map[string]int64)
+		for k, v := range ret {
+			layersmap[path.Base(k)] = v
+		}
+		docinfo.LayersMap = layersmap
+
+		var layer_sha []string
+		for _, layer := range layer_order {
+			layer_sha = append(layer_sha, path.Base(layer))
+		}
+		docinfo.Layers = strings.Join(layer_sha, ":")
+
+		LOGGER.WithFields(logrus.Fields{
+			"docinfo": docinfo,
+		}).Debug("Skopeo debug, docinfo debug")
+
+		dinfodata, _ := StructMarshal(docinfo)
+		err = WriteToFile(dinfodata, fmt.Sprintf("%s/.info", mdata["rootdir"].(string)))
+		if err != nil {
+			return err
+		}
+		//end
+
+		workspace := fmt.Sprintf("%s/workspace", mdata["rootdir"])
+		if !FolderExist(workspace) {
+			MakeDir(workspace)
+		}
+		mdata["workspace"] = workspace
+
+		//extract layers
+		base := fmt.Sprintf("%s/.base", rootdir)
+		if !FolderExist(base) {
+			MakeDir(base)
+		}
+		mdata["base"] = base
+
+		for _, k := range layer_order {
+			k = path.Base(k)
+			tar_path := fmt.Sprintf("%s/%s", image_dir, k)
+			layerfolder := fmt.Sprintf("%s/%s", mdata["base"], k)
+			if !FolderExist(layerfolder) {
+				MakeDir(layerfolder)
+			}
+
+			err := Untar(tar_path, layerfolder)
+			if err != nil {
+				return err
+			}
+		}
+
+		//download setting from github
+		rdir, _ := mdata["rootdir"].(string)
+
+		yaml := fmt.Sprintf("%s/distro.management.yml", sysdir)
+		err = DownloadFilefromGithubPlus(tname, ttag, "setting.yml", SETTING_URL, rdir, yaml)
+		if err != nil {
+			LOGGER.WithFields(logrus.Fields{
+				"err":    err,
+				"toPath": rdir,
+			}).Error("Download setting from github failure and could not rollback to default one")
+			return err
+		}
+
+		//add map to this image
+		doc.Images[name] = mdata
+
+		ddata, _ := StructMarshal(doc)
+		err = WriteToFile(ddata, fmt.Sprintf("%s/.info", doc.RootDir))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func DockerLoad(file string) *Error {
 	currdir, err := GetConfigDir()
 	if err != nil {
@@ -1767,8 +1918,13 @@ func DockerLoad(file string) *Error {
 	}()
 
 	//check if file exists
-	if !FileExist(file) {
-		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does exist", file))
+	afile, ferr := filepath.Abs(file)
+	if ferr != nil {
+		cerr := ErrNew(ferr, fmt.Sprintf("could not parse to the absolute path: %s", file))
+		return cerr
+	}
+	if !FileExist(afile) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does exist", afile))
 		return cerr
 	}
 
@@ -1795,7 +1951,7 @@ func DockerLoad(file string) *Error {
 	}
 
 	//untar tar ball
-	uerr := Untar(file, tmpdir)
+	uerr := Untar(afile, tmpdir)
 	if uerr != nil {
 		return uerr
 	}

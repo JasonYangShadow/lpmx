@@ -38,6 +38,20 @@ type DockerSaveInfo struct {
 	Layers   []string //layers included inside this image, from lower to higher layers
 }
 
+//Skopeo manifest item structure
+type SkopeoManifestItem struct {
+	MediaType string `json:"mediaType"`
+	Size uint `json:"size"`
+	Digest string `json:"digest"`
+}
+//Skopeo manifest structure
+type SkopeoManifest struct {
+	SchemaVersion int `json:"schemaVersion"`
+	MediaType string `json:"mediaType"`
+	Config SkopeoManifestItem `json:"config"`
+	Layers []SkopeoManifestItem `json:"layers"`
+}
+
 func ListRepositories(username string, pass string) ([]string, *Error) {
 	log.SetOutput(ioutil.Discard)
 	hub, err := registry.New(DOCKER_URL, username, pass)
@@ -340,6 +354,47 @@ func DeleteManifest(username string, pass string, name string, tag string) *Erro
 		return cerr
 	}
 	return nil
+}
+
+func LoadSkopeoTar(dir, imagedir string) (map[string]int64, []string, *Error) {
+	if !FolderExist(dir) {
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does not exist", dir))
+		return nil, nil, cerr
+	}
+
+	var info SkopeoManifest
+	manifest_file := fmt.Sprintf("%s/manifest.json", dir)
+	b, berr := ioutil.ReadFile(manifest_file)
+	if berr != nil {
+		cerr := ErrNew(berr, fmt.Sprintf("could not read file: %s", manifest_file))
+		return nil, nil, cerr
+	}
+
+	jerr := json.Unmarshal(b, &info)
+	if jerr != nil {
+		cerr := ErrNew(jerr, "could not unmarshal json bytes to objects")
+		return nil, nil, cerr
+	}
+
+	layer_data := make(map[string]int64)
+	var layers []string
+	for _, item := range info.Layers {
+		shavalue := strings.Split(item.Digest, ":")[1]
+		layer_path := fmt.Sprintf("%s/%s", dir, shavalue)
+		target_path := fmt.Sprintf("%s/%s.tar.gz", imagedir, shavalue)
+		_, rerr := CopyFile(layer_path, target_path)
+		if rerr != nil {
+			return nil, nil, rerr
+		}
+		file_length, ferr := GetFileLength(target_path)
+		if ferr != nil {
+			return nil, nil, ferr
+		}
+		layer_data[target_path] = file_length
+		layers = append(layers, target_path)
+	}
+
+	return layer_data, layers, nil
 }
 
 //dir is temp dir used for tarball extraction, image dir is used for the storage of image data

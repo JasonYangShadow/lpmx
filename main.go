@@ -20,7 +20,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-1.7.2"
+	VERSION = "alpha-1.8"
 )
 
 func checkCompleteness() *Error {
@@ -672,12 +672,39 @@ func main() {
 		},
 	}
 
+	var SkopeoNameTag string
+	var skopeoLoadCmd = &cobra.Command{
+		Use:   "skopeoload",
+		Short: "load the skopeo directory",
+		Long:  "skopeoload sub-command is one advanced command of lpmx, which is used for importing 'skopeo copy' generated directory to system",
+		Args:  cobra.ExactArgs(1),
+		PreRun: func(cmd *cobra.Command, args []string) {
+			err := checkCompleteness()
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			}
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			err := SkopeoLoad(SkopeoNameTag, args[0])
+			if err != nil {
+				LOGGER.Fatal(err.Error())
+				return
+			} else {
+				LOGGER.Info("DONE")
+				return
+			}
+		},
+	}
+	skopeoLoadCmd.Flags().StringVarP(&SkopeoNameTag, "nametag", "n", "", "required")
+	skopeoLoadCmd.MarkFlagRequired("nametag")
+
 	var dockerCmd = &cobra.Command{
 		Use:   "docker",
 		Short: "docker command",
 		Long:  "docker command is the advanced command of lpmx, which is used for executing docker related commands",
 	}
-	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd, dockerPackageCmd, dockerAddCmd, dockerCommitCmd, dockerLoadCmd, dockerRunCmd, dockerMergeCmd)
+	dockerCmd.AddCommand(dockerCreateCmd, dockerSearchCmd, dockerListCmd, dockerDeleteCmd, dockerDownloadCmd, dockerResetCmd, dockerPackageCmd, dockerAddCmd, dockerCommitCmd, dockerLoadCmd, dockerRunCmd, dockerMergeCmd, skopeoLoadCmd)
 
 	var SingularityLoadName string
 	var SingularityLoadTag string
