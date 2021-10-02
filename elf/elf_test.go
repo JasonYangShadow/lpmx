@@ -2,6 +2,7 @@ package elf
 
 import (
 	"flag"
+	"fmt"
 	"testing"
 )
 

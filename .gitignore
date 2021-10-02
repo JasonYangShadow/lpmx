@@ -1,3 +1,5 @@
 vendor/
 debian/
 .idea/
+.vscode/
+.project

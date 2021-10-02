@@ -2,7 +2,6 @@ package yaml
 
 import (
 	"testing"
-	"time"
 )
 
 const CONFIG string = "test"

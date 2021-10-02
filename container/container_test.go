@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"testing"
 
+	. "github.com/JasonYangShadow/lpmx/docker"
 	. "github.com/JasonYangShadow/lpmx/msgpack"
 	. "github.com/JasonYangShadow/lpmx/utils"
 )
@@ -48,7 +49,7 @@ func TestUnmarshal(t *testing.T) {
 func TestJsonUnmarshal(t *testing.T) {
 	//t.Skip("skip test")
 	tmpdir := "/tmp"
-	uerr := Untar("/tmp/ubuntu.tar", tmpdir, false)
+	uerr := Untar("/tmp/ubuntu.tar", tmpdir)
 	if uerr != nil {
 		t.Error(uerr)
 	}
