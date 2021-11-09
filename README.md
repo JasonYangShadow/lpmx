@@ -161,7 +161,7 @@ If you are interested in LPMX and want an online tutorial session, please fill i
 - [Fakechroot](https://github.com/JasonYangShadow/fakechroot)
 - [LPM](https://lpm.bio/)
 - [udocker](https://github.com/indigo-dc/udocker)
-- [Singularity](https://sylabs.io/singularity)
+- [Singularity](https://sylabs.io/singularity) & [Singularity Compose](http://singularityhub.github.io/singularity-compose)
 
 # Preprint
 - bioRxiv https://www.biorxiv.org/content/10.1101/2021.06.04.445363v1
