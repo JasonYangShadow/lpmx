@@ -148,7 +148,7 @@ func (server *RPC) RPCDelete(req Request, res *Response) error {
 	return nil
 }
 
-func Init(reset bool, deppath string) *Error {
+func Init(reset bool, deppath string, useOldGlibc bool) *Error {
 	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
@@ -157,7 +157,7 @@ func Init(reset bool, deppath string) *Error {
 	config := fmt.Sprintf("%s/.lpmxsys", currdir)
 
 	//delete everything
-	if reset {
+	if reset || useOldGlibc {
 		_, cerr := RemoveAll(config)
 		if cerr != nil {
 			return cerr
@@ -212,10 +212,19 @@ func Init(reset bool, deppath string) *Error {
 			deppath = fmt.Sprintf("%s/dependency.tar.gz", sys.RootDir)
 		}
 		if !FileExist(deppath) {
-			yaml := fmt.Sprintf("%s/distro.management.yml", sys.RootDir)
-			err = DownloadFilefromGithubPlus(dist, release, "dependency.tar.gz", SETTING_URL, sys.RootDir, yaml)
-			if err != nil {
-				return err
+			if useOldGlibc {
+				gen_url := fmt.Sprintf("%s/default.dependency.tar.gz", SETTING_URL)
+				fmt.Printf("Downloading default.dependency.tar.gz from %s\n", gen_url)
+				err = DirectDownloadFilefromGithub("dependency.tar.gz", gen_url, sys.RootDir)
+				if err != nil {
+					return err
+				}
+			} else {
+				yaml := fmt.Sprintf("%s/distro.management.yml", sys.RootDir)
+				err = DownloadFilefromGithubPlus(dist, release, "dependency.tar.gz", SETTING_URL, sys.RootDir, yaml)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -270,6 +279,72 @@ func Init(reset bool, deppath string) *Error {
 		}
 	}
 	sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", sys.RootDir)
+
+	return nil
+}
+
+func Reset(useOldGlibc bool) *Error {
+	currdir, err := GetConfigDir()
+	if err != nil {
+		return err
+	}
+	config := fmt.Sprintf("%s/.lpmxsys", currdir)
+
+	if ok, pid, _ := GetProcessIdByName("memcached"); ok {
+		fmt.Println("stopping memcached instance...")
+		err := KillProcessByPid(pid)
+		if err != nil {
+			return err
+		}
+	}
+
+	var sys Sys
+	sys.RootDir = config
+	err = unmarshalObj(sys.RootDir, &sys)
+	if err != nil {
+		return err
+	}
+
+	//download memcached related files based on host os info
+	dist, release, cerr := GetHostOSInfo()
+	if cerr != nil {
+		dist = "default"
+		release = "default"
+	}
+
+	if dist == "" {
+		dist = "default"
+	}
+
+	if release == "" {
+		release = "default"
+	}
+
+	deppath := fmt.Sprintf("%s/dependency.tar.gz", sys.RootDir)
+	if FileExist(deppath) {
+		RemoveFile(deppath)
+	}
+
+	if useOldGlibc {
+		gen_url := fmt.Sprintf("%s/default.dependency.tar.gz", SETTING_URL)
+		fmt.Printf("Downloading default.dependency.tar.gz from %s\n", gen_url)
+		err = DirectDownloadFilefromGithub("dependency.tar.gz", gen_url, sys.RootDir)
+		if err != nil {
+			return err
+		}
+	} else {
+		yaml := fmt.Sprintf("%s/distro.management.yml", sys.RootDir)
+		err = DownloadFilefromGithubPlus(dist, release, "dependency.tar.gz", SETTING_URL, sys.RootDir, yaml)
+		if err != nil {
+			return err
+		}
+	}
+
+	fmt.Println("Uncompressing downloaded dependency.tar.gz")
+	err = Untar(deppath, sys.RootDir)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -1769,7 +1844,7 @@ func SkopeoLoad(name, dir string) *Error {
 
 	//check if folder exists
 	adir, derr := filepath.Abs(dir)
-	if derr!= nil {
+	if derr != nil {
 		cerr := ErrNew(derr, fmt.Sprintf("could not parse the absolute path: %s", adir))
 		return cerr
 	}
