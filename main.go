@@ -20,7 +20,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-1.8.1"
+	VERSION = "alpha-1.8.2"
 )
 
 func checkCompleteness() *Error {
@@ -448,6 +448,7 @@ func main() {
 
 	var DockerCreateName string
 	var DockerCreateVolume string
+	var DockerMountFile string
 	var DockerCreateEngine string
 	var DockerCreateExecMap string
 	var dockerCreateCmd = &cobra.Command{
@@ -473,7 +474,7 @@ func main() {
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonCreate(args[0], DockerCreateName, DockerCreateVolume, DockerCreateEngine, DockerCreateExecMap)
+			err := CommonCreate(args[0], DockerCreateName, DockerCreateVolume, DockerCreateEngine, DockerCreateExecMap, DockerMountFile)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -484,10 +485,12 @@ func main() {
 	dockerCreateCmd.Flags().StringVarP(&DockerCreateVolume, "volume", "v", "", "optional, volume map, host_path1=container_path1:host_path2=container_path2")
 	dockerCreateCmd.Flags().StringVarP(&DockerCreateEngine, "engine", "e", "", "use engine(optional)")
 	dockerCreateCmd.Flags().StringVarP(&DockerCreateExecMap, "map", "m", "", "optional, executables map, host_exec1=container_exec1:host_exec2=container_exec2")
+	dockerCreateCmd.Flags().StringVarP(&DockerMountFile, "file", "f", "", "optional, mount file map, host_path1=container_path1:host_path2=container_path2")
 
 	var DockerRunVolume string
 	var DockerRunMode string
 	var DockerRunExecMap string
+	var DockerRunMountFile string
 	var dockerRunCmd = &cobra.Command{
 		Use:   "fastrun",
 		Short: "run container in a fast way without switching into shell",
@@ -509,7 +512,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonFastRun(args[0], DockerRunVolume, args[1], DockerRunMode, DockerRunExecMap)
+			err := CommonFastRun(args[0], DockerRunVolume, args[1], DockerRunMode, DockerRunExecMap, DockerRunMountFile)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -519,6 +522,7 @@ func main() {
 	dockerRunCmd.Flags().StringVarP(&DockerRunVolume, "volume", "v", "", "optional, volume map, host_path1=container_path1:host_path2=container_path2")
 	dockerRunCmd.Flags().StringVarP(&DockerRunMode, "engine", "e", "", "use engine(optional)")
 	dockerRunCmd.Flags().StringVarP(&DockerRunExecMap, "map", "m", "", "executables map, host_exec1=container_exec1:host_exec2=container_exec2(optional)")
+	dockerRunCmd.Flags().StringVarP(&DockerRunMountFile, "file", "f", "", "mount file map, host_exec1=container_exec1:host_exec2=container_exec2(optional)")
 
 	var DockerDeletePermernant bool
 	var dockerDeleteCmd = &cobra.Command{
@@ -742,6 +746,7 @@ func main() {
 	var SingularityCreateVolume string
 	var SingularityCreateEngine string
 	var SingularityCreateExecMap string
+	var SingularityMountFile string
 	var singularityCreateCmd = &cobra.Command{
 		Use:   "create",
 		Short: "initialize the local singularity images",
@@ -765,7 +770,7 @@ func main() {
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonCreate(args[0], SingularityCreateName, SingularityCreateVolume, SingularityCreateEngine, SingularityCreateExecMap)
+			err := CommonCreate(args[0], SingularityCreateName, SingularityCreateVolume, SingularityCreateEngine, SingularityCreateExecMap, SingularityMountFile)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -776,6 +781,7 @@ func main() {
 	singularityCreateCmd.Flags().StringVarP(&SingularityCreateVolume, "volume", "v", "", "optional, volume map, host_path1=container_path1:host_path2=container_path2")
 	singularityCreateCmd.Flags().StringVarP(&SingularityCreateEngine, "engine", "e", "", "use engine(optional)")
 	singularityCreateCmd.Flags().StringVarP(&SingularityCreateExecMap, "map", "m", "", "executables map, host_exec1=container_exec1:host_exec2=container_exec2(optional)")
+	singularityCreateCmd.Flags().StringVarP(&SingularityMountFile, "file", "f", "", "mount file map, host_exec1=container_exec1:host_exec2=container_exec2(optional)")
 
 	var SingularityDeletePermernant bool
 	var singularityDeleteCmd = &cobra.Command{
@@ -827,6 +833,7 @@ func main() {
 	var SingularityRunVolume string
 	var SingularityRunMode string
 	var SingularityRunExecMap string
+	var SingularityRunMountFile string
 	var singularityRunCmd = &cobra.Command{
 		Use:   "fastrun",
 		Short: "run container in a fast way without switching into shell",
@@ -848,7 +855,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonFastRun(args[0], DockerRunVolume, args[1], SingularityRunMode, SingularityRunExecMap)
+			err := CommonFastRun(args[0], DockerRunVolume, args[1], SingularityRunMode, SingularityRunExecMap, SingularityMountFile)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -858,6 +865,7 @@ func main() {
 	singularityRunCmd.Flags().StringVarP(&SingularityRunVolume, "volume", "v", "", "optional, volume map, host_path1=container_path1:host_path2=container_path2")
 	singularityRunCmd.Flags().StringVarP(&SingularityRunMode, "engine", "e", "", "use engine(optional)")
 	singularityRunCmd.Flags().StringVarP(&SingularityRunExecMap, "map", "m", "", "executables map, host_exec1=container_exec1:host_exec2=container_exec2(optional)")
+	singularityRunCmd.Flags().StringVarP(&SingularityRunMountFile, "file", "f", "", "mounted file map, host_exec1=container_exec1:host_exec2=container_exec2(optional)")
 
 	var singularityCmd = &cobra.Command{
 		Use:   "singularity",

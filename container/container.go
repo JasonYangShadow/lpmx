@@ -80,6 +80,7 @@ type Container struct {
 	DataSyncMap         string //sync folder mapping info(host:contain)
 	Engine              string //engine type used on the host
 	Execmaps            string //executables mapping info
+	FileSyncMap         string //mount separated files from host to container (host1=container1:host2=container2)
 }
 
 type RPC struct {
@@ -619,6 +620,7 @@ func Resume(id string, engine bool, args ...string) *Error {
 					configmap["sync_ori_folder"] = con.DataSyncMap
 					configmap["imagetype"] = con.BaseType
 					configmap["engine"] = con.Engine
+					configmap["mountfile"] = con.FileSyncMap
 
 					//only if the user explicitly set enable_engine, then we skip enabling it
 					if engine {
@@ -736,6 +738,12 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 	if _, eok := (*configmap)["execmaps"]; eok {
 		con.Execmaps = (*configmap)["execmaps"].(string)
 		envmap["execmaps"] = (*configmap)["execmaps"].(string)
+	}
+
+	//save mountfile maps
+	if _, fok := (*configmap)["mountfile"]; fok {
+		con.FileSyncMap = (*configmap)["mountfile"].(string)
+		envmap["mountfile"] = (*configmap)["mountfile"].(string)
 	}
 
 	//enable batch engine if needed
@@ -2495,8 +2503,8 @@ func DockerReset(name string) *Error {
 	return err
 }
 
-func CommonFastRun(name, volume_map, command, engine, execmaps string) *Error {
-	configmap, err := generateContainer(name, "", volume_map, engine)
+func CommonFastRun(name, volume_map, command, engine, execmaps, mountfile string) *Error {
+	configmap, err := generateContainer(name, "", volume_map, engine, mountfile)
 	if err != nil {
 		return err
 	}
@@ -2515,8 +2523,8 @@ func CommonFastRun(name, volume_map, command, engine, execmaps string) *Error {
 }
 
 //create container based on images
-func CommonCreate(name, container_name, volume_map, engine, execmaps string) *Error {
-	configmap, err := generateContainer(name, container_name, volume_map, engine)
+func CommonCreate(name, container_name, volume_map, engine, execmaps, mountfile string) *Error {
+	configmap, err := generateContainer(name, container_name, volume_map, engine, mountfile)
 	if err != nil {
 		return err
 	}
@@ -2779,6 +2787,9 @@ func (con *Container) genEnv(envmap map[string]string) (map[string]string, *Erro
 	env["ContainerConfigPath"] = con.ConfigPath
 	if len(con.Execmaps) > 0 {
 		env["FAKECHROOT_EXEC_SWITCH"] = "true"
+	}
+	if len(con.FileSyncMap) > 0 {
+		env["FAKECHROOT_MOUNT_FILE"] = con.FileSyncMap
 	}
 
 	//set default LD_LIBRARY_LPMX
@@ -3190,6 +3201,7 @@ func (con *Container) appendToSys() *Error {
 			cmap["DataSyncMap"] = con.DataSyncMap
 			cmap["BaseType"] = con.BaseType
 			cmap["Engine"] = con.Engine
+			cmap["MountFile"] = con.FileSyncMap
 			sys.Containers[con.Id] = cmap
 		} else {
 			vvalue, vok := value.(map[string]interface{})
@@ -3462,7 +3474,7 @@ container_name: optional container name
 volume_map: a volume map for container
 command: command to run inside container
 **/
-func generateContainer(name, container_name, volume_map, engine string) (*map[string]interface{}, *Error) {
+func generateContainer(name, container_name, volume_map, engine, mountfile string) (*map[string]interface{}, *Error) {
 	currdir, err := GetConfigDir()
 	if err != nil {
 		return nil, err
@@ -3527,11 +3539,40 @@ func generateContainer(name, container_name, volume_map, engine string) (*map[st
 				configmap["layers"] = strings.Join(reverse_keys, ":")
 				configmap["baselayerpath"] = base
 				configmap["container_name"] = container_name
-				if _, fok := FindStrinArray(engine, ENGINE_TYPE); fok {
+				if _, fok := FindStringArray(engine, ENGINE_TYPE); fok {
 					//set engine type
 					configmap["engine"] = strings.ToUpper(engine)
 					//enable engine
 					configmap["enable_engine"] = "True"
+				}
+
+				//dealing with separated mounted files
+				if len(mountfile) > 0 {
+					for _, item := range strings.Split(mountfile, ":") {
+						if len(item) > 0 {
+							f := strings.Split(item, "=")
+							if !FileExist(f[0]) {
+								continue
+							} else {
+								f_abs := fmt.Sprintf("%s/rw%s", rootfolder, f[1])
+								f_parent_abs := path.Dir(f_abs)
+								if !FolderExist(f_parent_abs) {
+									oerr := os.MkdirAll(f_parent_abs, os.FileMode(FOLDER_MODE))
+									if oerr != nil {
+										cerr := ErrNew(oerr, fmt.Sprintf("could not mkdir %s", f_parent_abs))
+										return nil, cerr
+									}
+								}
+
+								serr := os.Symlink(f[0], f_abs)
+								if serr != nil {
+									cerr := ErrNew(serr, fmt.Sprintf("could not symlink, oldpath: %s, newpath: %s", f[0], f_abs))
+									return nil, cerr
+								}
+							}
+						}
+					}
+					configmap["mountfile"] = mountfile
 				}
 
 				//dealing with sync folder/volume problem

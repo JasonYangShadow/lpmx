@@ -1371,7 +1371,7 @@ func CopyMap(m map[string]interface{}) map[string]interface{} {
 	return cp
 }
 
-func FindStrinArray(s string, arr []string) (int, bool) {
+func FindStringArray(s string, arr []string) (int, bool) {
 	for i, item := range arr {
 		if strings.ToUpper(item) == strings.ToUpper(item) {
 			return i, true
