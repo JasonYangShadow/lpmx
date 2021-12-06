@@ -3015,8 +3015,8 @@ func (con *Container) bashShell(envmap map[string]string, args ...string) *Error
 				return ferr
 			}
 			faked_str := strings.Split(foutput, ":")
-			env["FAKEROOTKEY"] = faked_str[0]
-			env["FAKEROOTPID"] = faked_str[1]
+			env["FAKEROOTKEY"] = strings.TrimSuffix(faked_str[0], "\n")
+			env["FAKEROOTPID"] = strings.TrimSuffix(faked_str[1], "\n")
 
 			//only when we created faked-sysv instance then we need to kill it, otherwise we wait
 			defer func() {
@@ -3024,8 +3024,8 @@ func (con *Container) bashShell(envmap map[string]string, args ...string) *Error
 				KillProcessByPid(faked_str[1])
 			}()
 		} else {
-			env["FAKEROOTKEY"] = fakerootkey
-			env["FAKEROOTPID"] = os.Getenv("FAKEROOTPID")
+			env["FAKEROOTKEY"] = strings.TrimSuffix(fakerootkey, "\n")
+			env["FAKEROOTPID"] = strings.TrimSuffix(os.Getenv("FAKEROOTPID"), "\n")
 		}
 
 		LOGGER.WithFields(logrus.Fields{
