@@ -16,11 +16,11 @@ import (
 )
 
 var (
-	checklist = []string{"faked-sysv", "libfakechroot.so", "libfakeroot.so", "libmemcached"}
+	checklist = []string{"faked-sysv", "libfakechroot.so", "libfakeroot.so"}
 )
 
 const (
-	VERSION = "alpha-1.8.2"
+	VERSION = "alpha-1.8.3"
 )
 
 func checkCompleteness() *Error {
@@ -109,12 +109,6 @@ func main() {
 				LOGGER.Fatal(err.Error())
 				return
 			}
-
-			err = CheckAndStartMemcache()
-			if err != nil {
-				LOGGER.Fatal(err.Error())
-				return
-			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			err := Get(GetId, GetName, GetMode)
@@ -179,15 +173,6 @@ func main() {
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
-			}
-			err = CheckAndStartMemcache()
-			if err != nil && err.Err != ErrNExist {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-
-			if err != nil && err.Err == ErrNExist {
-				LOGGER.Warn("memcached related components are missing, functions may not work properly")
 			}
 		},
 
@@ -462,15 +447,6 @@ func main() {
 				LOGGER.Fatal(err.Error())
 				return
 			}
-			err = CheckAndStartMemcache()
-			if err != nil && err.Err != ErrNExist {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-
-			if err != nil && err.Err == ErrNExist {
-				LOGGER.Warn("memcached related components are missing, functions may not work properly")
-			}
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
@@ -501,14 +477,6 @@ func main() {
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
-			}
-			err = CheckAndStartMemcache()
-			if err != nil && err.Err != ErrNExist {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-			if err != nil && err.Err == ErrNExist {
-				LOGGER.Warn("memcached related components are missing, functions may not work properly")
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
@@ -758,15 +726,6 @@ func main() {
 				LOGGER.Fatal(err.Error())
 				return
 			}
-			err = CheckAndStartMemcache()
-			if err != nil && err.Err != ErrNExist {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-
-			if err != nil && err.Err == ErrNExist {
-				LOGGER.Warn("memcached related components are missing, functions may not work properly")
-			}
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
@@ -845,14 +804,6 @@ func main() {
 				LOGGER.Fatal(err.Error())
 				return
 			}
-			err = CheckAndStartMemcache()
-			if err != nil && err.Err != ErrNExist {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-			if err != nil && err.Err == ErrNExist {
-				LOGGER.Warn("memcached related components are missing, functions may not work properly")
-			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			err := CommonFastRun(args[0], DockerRunVolume, args[1], SingularityRunMode, SingularityRunExecMap, SingularityMountFile)
@@ -919,15 +870,6 @@ func main() {
 				LOGGER.Fatal(err.Error())
 				return
 			}
-			err = CheckAndStartMemcache()
-			if err != nil && err.Err != ErrNExist {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-
-			if err != nil && err.Err == ErrNExist {
-				LOGGER.Warn("memcached related components are missing, functions may not work properly")
-			}
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
@@ -978,11 +920,6 @@ func main() {
 		Args:  cobra.ExactArgs(0),
 		PreRun: func(cmd *cobra.Command, args []string) {
 			err := checkCompleteness()
-			if err != nil {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-			err = CheckAndStartMemcache()
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return

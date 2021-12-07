@@ -18,7 +18,6 @@ import (
 	. "github.com/JasonYangShadow/lpmx/error"
 	. "github.com/JasonYangShadow/lpmx/filecache"
 	. "github.com/JasonYangShadow/lpmx/log"
-	. "github.com/JasonYangShadow/lpmx/memcache"
 	. "github.com/JasonYangShadow/lpmx/msgpack"
 	. "github.com/JasonYangShadow/lpmx/paeudo"
 	. "github.com/JasonYangShadow/lpmx/pid"
@@ -272,13 +271,6 @@ func Init(reset bool, deppath string, useOldGlibc bool) *Error {
 		os.Setenv("LD_LIBRARY_PATH", host_ld_env)
 	}
 
-	if ok, _, _ := GetProcessIdByName("memcached"); !ok {
-		fmt.Println("starting memcached process")
-		cerr := CheckAndStartMemcache()
-		if cerr != nil {
-			return cerr
-		}
-	}
 	sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", sys.RootDir)
 
 	return nil
@@ -791,7 +783,7 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 		for _, item := range strings.Split(con.Execmaps, ":") {
 			k := strings.Split(item, "=")[0]
 			v := strings.Split(item, "=")[1]
-			setExec(con.Id, ELFOP[6], v, k, "", false)
+			setExec(con.Id, ELFOP[6], v, k)
 		}
 	}
 
@@ -833,12 +825,10 @@ func Get(id string, name string, mode bool) *Error {
 
 	if err == nil {
 		if _, ok := sys.Containers[id]; ok {
-			fmt.Println(fmt.Sprintf("|%-s|%-30s|%-20s|%-20s|%-10s|%-20s|", "ContainerID", "PROGRAM", "ALLOW_PRIVILEGES", "DENY_PRIVILEGES", "REMAP", "ExecMap"))
-			a_val, _ := getPrivilege(id, name, sys.MemcachedPid, true)
-			d_val, _ := getPrivilege(id, name, sys.MemcachedPid, false)
-			m_val, _ := getMap(id, name, sys.MemcachedPid, mode)
-			e_val, _ := getExec(id, name, sys.MemcachedPid, mode)
-			fmt.Println(fmt.Sprintf("|%-s|%-30s|%-20s|%-20s|%-10s|%-20s|", id, name, a_val, d_val, m_val, e_val))
+			fmt.Println(fmt.Sprintf("|%-s|%-30s|%-30s|%-30s|", "ContainerID", "PROGRAM", "REMAP", "ExecMap"))
+			m_val, _ := getMap(id, name)
+			e_val, _ := getExec(id, name)
+			fmt.Println(fmt.Sprintf("|%-s|%-30s|%-30s|%-30s|", id, name, m_val, e_val))
 		} else {
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("conatiner with id: %s doesn't exist", id))
 			return cerr
@@ -867,28 +857,14 @@ func Set(id string, tp string, name string, value string, mode bool) *Error {
 				switch tp {
 				case ELFOP[6], ELFOP[7]:
 					{
-						err := setExec(id, tp, name, value, sys.MemcachedPid, mode)
+						err := setExec(id, tp, name, value)
 						if err != nil {
 							return err
 						}
 					}
 				case ELFOP[4], ELFOP[5]:
 					{
-						err := setMap(id, tp, name, value, sys.MemcachedPid, mode)
-						if err != nil {
-							return err
-						}
-					}
-				case ELFOP[0], ELFOP[1]:
-					{
-						err := setPrivilege(id, tp, name, value, sys.MemcachedPid, true)
-						if err != nil {
-							return err
-						}
-					}
-				case ELFOP[2], ELFOP[3]:
-					{
-						err := setPrivilege(id, tp, name, value, sys.MemcachedPid, false)
+						err := setMap(id, tp, name, value)
 						if err != nil {
 							return err
 						}
@@ -2717,10 +2693,6 @@ func (con *Container) setupContainer() *Error {
 	if err != nil {
 		return err
 	}
-	err = con.setProgPrivileges()
-	if err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -3230,219 +3202,6 @@ func (con *Container) appendToSys() *Error {
 	return err
 }
 
-func (con *Container) setProgPrivileges() *Error {
-	var mem *MemcacheInst
-	var err *Error
-	if len(con.MemcachedServerList) > 0 {
-		mem, err = MInitServers(con.MemcachedServerList[0:]...)
-		if err != nil {
-			return err
-		}
-	} else {
-		mem, err = MInitServer()
-		if err != nil {
-			return err
-		}
-	}
-	if err == nil {
-
-		//set allow_list env
-		if ac, ac_ok := con.SettingConf["allow_list"]; ac_ok {
-			if aca, aca_ok := ac.([]interface{}); aca_ok {
-				for _, ace := range aca {
-					if acm, acm_ok := ace.(map[interface{}]interface{}); acm_ok {
-						for k, v := range acm {
-							k, err := GuessPath(con.RootPath, k.(string), true)
-							if err != nil {
-								return err
-							}
-							switch v.(type) {
-							case string:
-								v_path, v_err := GuessPath(con.RootPath, v.(string), false)
-								if v_err != nil {
-									LOGGER.WithFields(logrus.Fields{
-										"key":   k,
-										"value": v.(string),
-										"err":   v_err,
-										"type":  "string",
-									}).Error("allow list parse error")
-									continue
-								}
-								mem_err := mem.MUpdateStrValue(fmt.Sprintf("allow:%s:%s", con.Id, k), v_path)
-								if mem_err != nil {
-									return mem_err
-								}
-							case interface{}:
-								if acs, acs_ok := v.([]interface{}); acs_ok {
-									value := ""
-									for _, acl := range acs {
-										v_path, v_err := GuessPath(con.RootPath, acl.(string), false)
-										if v_err != nil {
-											LOGGER.WithFields(logrus.Fields{
-												"key":   k,
-												"value": acl.(string),
-												"err":   v_err,
-												"type":  "interface",
-											}).Error("allow list parse error")
-											continue
-										}
-										value = fmt.Sprintf("%s;%s", v_path, value)
-									}
-									mem_err := mem.MUpdateStrValue(fmt.Sprintf("allow:%s:%s", con.Id, k), value)
-									if mem_err != nil {
-										return mem_err
-									}
-								}
-							default:
-								acm_err := ErrNew(ErrType, fmt.Sprintf("allow_list: type is not right, assume: map[interfacer{}]interface{}, real: %v", ace))
-								return acm_err
-							}
-						}
-					} else {
-						acm_err := ErrNew(ErrType, fmt.Sprintf("allow_list: type is not right, assume: map[string]interface{}, real: %v", ac))
-						return acm_err
-					}
-				}
-			} else {
-				aca_err := ErrNew(ErrType, fmt.Sprintf("allow_list: type is not right, assume: []interface{}, real: %v", ac))
-				return aca_err
-			}
-		}
-
-		//set deny_list env
-		if ac, ac_ok := con.SettingConf["deny_list"]; ac_ok {
-			if aca, aca_ok := ac.([]interface{}); aca_ok {
-				for _, ace := range aca {
-					if acm, acm_ok := ace.(map[interface{}]interface{}); acm_ok {
-						for k, v := range acm {
-							k, err := GuessPath(con.RootPath, k.(string), true)
-							if err != nil {
-								return err
-							}
-							switch v.(type) {
-							case string:
-								v_path, v_err := GuessPath(con.RootPath, v.(string), false)
-								if v_err != nil {
-									LOGGER.WithFields(logrus.Fields{
-										"key":   k,
-										"value": v.(string),
-										"err":   v_err,
-										"type":  "string",
-									}).Error("deny list parse error")
-									continue
-								}
-								mem_err := mem.MUpdateStrValue(fmt.Sprintf("deny:%s:%s", con.Id, k), v_path)
-								if mem_err != nil {
-									return mem_err
-								}
-							case interface{}:
-								if acs, acs_ok := v.([]interface{}); acs_ok {
-									value := ""
-									for _, acl := range acs {
-										v_path, v_err := GuessPath(con.RootPath, acl.(string), false)
-										if v_err != nil {
-											LOGGER.WithFields(logrus.Fields{
-												"key":   k,
-												"value": acl.(string),
-												"err":   v_err,
-												"type":  "interface",
-											}).Error("deny list parse error")
-											continue
-										}
-										value = fmt.Sprintf("%s;%s", v_path, value)
-									}
-									mem_err := mem.MUpdateStrValue(fmt.Sprintf("deny:%s:%s", con.Id, k), value)
-									if mem_err != nil {
-										return mem_err
-									}
-								}
-							default:
-								acm_err := ErrNew(ErrType, fmt.Sprintf("deny_list: type is not right, assume: map[interfacer{}]interface{}, real: %v", ace))
-								return acm_err
-							}
-						}
-					} else {
-						acm_err := ErrNew(ErrType, fmt.Sprintf("deny_list: type is not right, assume: map[string]interface{}, real: %v", ac))
-						return acm_err
-					}
-				}
-			} else {
-				aca_err := ErrNew(ErrType, fmt.Sprintf("deny_list: type is not right, assume: []interface{}, real: %v", ac))
-				return aca_err
-			}
-		}
-
-		//set add_map
-		if ac, ac_ok := con.SettingConf["add_map"]; ac_ok {
-			if aca, aca_ok := ac.([]interface{}); aca_ok {
-				for _, ace := range aca {
-					if acm, acm_ok := ace.(map[interface{}]interface{}); acm_ok {
-						for k, v := range acm {
-							k, err := GuessPath(con.RootPath, k.(string), true)
-							if err != nil {
-								return err
-							}
-							switch v.(type) {
-							case string:
-								v_path, v_err := GuessPath(con.RootPath, v.(string), false)
-								if v_err != nil {
-									LOGGER.WithFields(logrus.Fields{
-										"key":   k,
-										"value": v.(string),
-										"err":   v_err,
-										"type":  "string",
-									}).Error("add map parse error")
-									continue
-								}
-								mem_err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), v_path)
-								if mem_err != nil {
-									return mem_err
-								}
-							case interface{}:
-								if acs, acs_ok := v.([]interface{}); acs_ok {
-									value := ""
-									for _, acl := range acs {
-										v_path, v_err := GuessPath(con.RootPath, acl.(string), false)
-										if v_err != nil {
-											LOGGER.WithFields(logrus.Fields{
-												"key":   k,
-												"value": acl.(string),
-												"err":   v_err,
-												"type":  "interface",
-											}).Error("add map parse error")
-											continue
-										}
-										value = fmt.Sprintf("%s;%s", v_path, value)
-									}
-									mem_err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", con.Id, k), value)
-									if mem_err != nil {
-										return mem_err
-									}
-								}
-							default:
-								acm_err := ErrNew(ErrType, fmt.Sprintf("add_map: type is not right, assume: map[interfacer{}]interface{}, real: %v", ace))
-								return acm_err
-							}
-						}
-					} else {
-						acm_err := ErrNew(ErrType, fmt.Sprintf("add_map: type is not right, assume: map[string]interface{}, real: %v", ac))
-						return acm_err
-					}
-				}
-			} else {
-				aca_err := ErrNew(ErrType, fmt.Sprintf("add_map: type is not right, assume: []interface{}, real: %v", ac))
-				return aca_err
-			}
-		}
-
-		return nil
-	} else {
-		mem_err := ErrNew(err, "memcache server init error")
-		return mem_err
-	}
-	return err
-}
-
 func (con *Container) startRPCService(port int) *Error {
 	con.RPCMap = make(map[int]string)
 	conn, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
@@ -3927,268 +3686,144 @@ func unmarshalObj(rootdir string, inf interface{}) *Error {
 	return nil
 }
 
-func setPrivilege(id string, tp string, name string, value string, server string, allow bool) *Error {
-	mem, err := MInitServers(server)
+func setExec(id, tp, name, value string) *Error {
+	//read config location
+	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
 	}
-
-	if allow {
-		if tp == ELFOP[0] {
-			err := mem.MUpdateStrValue(fmt.Sprintf("allow:%s:%s", id, name), value)
-			if err != nil {
-				return err
-			}
-		}
-		if tp == ELFOP[1] {
-			err := mem.MDeleteByKey(fmt.Sprintf("allow:%s:%s", id, name))
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		if tp == ELFOP[2] {
-			err := mem.MUpdateStrValue(fmt.Sprintf("deny:%s:%s", id, name), value)
-			if err != nil {
-				return err
-			}
-		}
-		if tp == ELFOP[3] {
-			err := mem.MDeleteByKey(fmt.Sprintf("deny:%s:%s", id, name))
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-func getPrivilege(id string, name string, server string, allow bool) (string, *Error) {
-	mem, err := MInitServers(server)
+	var sys Sys
+	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	err = unmarshalObj(rootdir, &sys)
 	if err != nil {
-		return "", err
+		return err
 	}
+	if v, ok := sys.Containers[id]; ok {
+		if vval, vok := v.(map[string]interface{}); vok {
+			configpath := vval["ConfigPath"].(string)
+			filepath := fmt.Sprintf("%s/.execmap", configpath)
+			fc, ferr := FInitServer(filepath)
+			if ferr != nil {
+				return ferr
+			}
 
-	var str string
-	if allow {
-		str, err = mem.MGetStrValue(fmt.Sprintf("allow:%s:%s", id, name))
-	} else {
-		str, err = mem.MGetStrValue(fmt.Sprintf("deny:%s:%s", id, name))
-	}
-	if err != nil {
-		return "", err
-	}
-	return str, nil
-}
-
-func setExec(id, tp, name, value, server string, mode bool) *Error {
-	if !mode {
-		//read config location
-		currdir, err := GetConfigDir()
-		if err != nil {
-			return err
-		}
-		var sys Sys
-		rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-		err = unmarshalObj(rootdir, &sys)
-		if err != nil {
-			return err
-		}
-		if v, ok := sys.Containers[id]; ok {
-			if vval, vok := v.(map[string]interface{}); vok {
-				configpath := vval["ConfigPath"].(string)
-				filepath := fmt.Sprintf("%s/.execmap", configpath)
-				fc, ferr := FInitServer(filepath)
+			if tp == ELFOP[6] {
+				ferr = fc.FSetValue(name, value)
 				if ferr != nil {
 					return ferr
 				}
+			}
 
-				if tp == ELFOP[6] {
-					ferr = fc.FSetValue(name, value)
-					if ferr != nil {
-						return ferr
-					}
+			if tp == ELFOP[7] {
+				ferr = fc.FDeleteByKey(name)
+				if ferr != nil {
+					return ferr
 				}
-
-				if tp == ELFOP[7] {
-					ferr = fc.FDeleteByKey(name)
-					if ferr != nil {
-						return ferr
-					}
-				}
-
 			}
-		}
-	} else {
-		mem, err := MInitServers(server)
-		if err != nil {
-			return err
-		}
 
-		if tp == ELFOP[6] {
-			err := mem.MUpdateStrValue(fmt.Sprintf("exec:%s:%s", id, name), value)
-			if err != nil {
-				return err
-			}
-		}
-
-		if tp == ELFOP[7] {
-			err := mem.MDeleteByKey(fmt.Sprintf("exec:%s:%s", id, name))
-			if err != nil {
-				return err
-			}
 		}
 	}
 	return nil
 }
 
-func getExec(id, name, server string, mode bool) (string, *Error) {
-	if mode {
-		//read config location
-		currdir, err := GetConfigDir()
-		if err != nil {
-			return "", err
-		}
-		var sys Sys
-		rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-		err = unmarshalObj(rootdir, &sys)
-		if err != nil {
-			return "", err
-		}
-		if v, ok := sys.Containers[id]; ok {
-			if vval, vok := v.(map[string]interface{}); vok {
-				configpath := vval["ConfigPath"].(string)
-				filepath := fmt.Sprintf("%s/.execmap", configpath)
-				fc, ferr := FInitServer(filepath)
-				if ferr != nil {
-					return "", ferr
-				}
-
-				str, serr := fc.FGetStrValue(name)
-				if serr != nil {
-					return "", serr
-				}
-				return str, nil
-			}
-		}
-	} else {
-		mem, err := MInitServers(server)
-		if err != nil {
-			return "", err
-		}
-
-		str, err := mem.MGetStrValue(fmt.Sprintf("exec:%s:%s", id, name))
-		if err != nil {
-			return "", err
-		}
-		return str, nil
+func getExec(id, name string) (string, *Error) {
+	//read config location
+	currdir, err := GetConfigDir()
+	if err != nil {
+		return "", err
 	}
+	var sys Sys
+	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	err = unmarshalObj(rootdir, &sys)
+	if err != nil {
+		return "", err
+	}
+	if v, ok := sys.Containers[id]; ok {
+		if vval, vok := v.(map[string]interface{}); vok {
+			configpath := vval["ConfigPath"].(string)
+			filepath := fmt.Sprintf("%s/.execmap", configpath)
+			fc, ferr := FInitServer(filepath)
+			if ferr != nil {
+				return "", ferr
+			}
 
+			str, serr := fc.FGetStrValue(name)
+			if serr != nil {
+				return "", serr
+			}
+			return str, nil
+		}
+	}
 	return "", nil
 }
 
-func setMap(id string, tp string, name string, value string, server string, mode bool) *Error {
-	if !mode {
-		//read config location
-		currdir, err := GetConfigDir()
-		if err != nil {
-			return err
-		}
-		var sys Sys
-		rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-		err = unmarshalObj(rootdir, &sys)
-		if err != nil {
-			return err
-		}
-		if v, ok := sys.Containers[id]; ok {
-			if vval, vok := v.(map[string]interface{}); vok {
-				configpath := vval["ConfigPath"].(string)
-				filepath := fmt.Sprintf("%s/.mapmap", configpath)
-				fc, ferr := FInitServer(filepath)
+func setMap(id string, tp string, name string, value string) *Error {
+	//read config location
+	currdir, err := GetConfigDir()
+	if err != nil {
+		return err
+	}
+	var sys Sys
+	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	err = unmarshalObj(rootdir, &sys)
+	if err != nil {
+		return err
+	}
+	if v, ok := sys.Containers[id]; ok {
+		if vval, vok := v.(map[string]interface{}); vok {
+			configpath := vval["ConfigPath"].(string)
+			filepath := fmt.Sprintf("%s/.mapmap", configpath)
+			fc, ferr := FInitServer(filepath)
+			if ferr != nil {
+				return ferr
+			}
+
+			if tp == ELFOP[4] {
+				ferr = fc.FSetValue(name, value)
 				if ferr != nil {
 					return ferr
 				}
+			}
 
-				if tp == ELFOP[4] {
-					ferr = fc.FSetValue(name, value)
-					if ferr != nil {
-						return ferr
-					}
+			if tp == ELFOP[5] {
+				ferr = fc.FDeleteByKey(name)
+				if ferr != nil {
+					return ferr
 				}
-
-				if tp == ELFOP[5] {
-					ferr = fc.FDeleteByKey(name)
-					if ferr != nil {
-						return ferr
-					}
-				}
-
 			}
-		}
-	} else {
-		mem, err := MInitServers(server)
-		if err != nil {
-			return err
-		}
 
-		if tp == ELFOP[4] {
-			err := mem.MUpdateStrValue(fmt.Sprintf("map:%s:%s", id, name), value)
-			if err != nil {
-				return err
-			}
-		}
-
-		if tp == ELFOP[5] {
-			err := mem.MDeleteByKey(fmt.Sprintf("map:%s:%s", id, name))
-			if err != nil {
-				return err
-			}
 		}
 	}
 	return nil
 }
 
-func getMap(id string, name string, server string, mode bool) (string, *Error) {
-	if mode {
-		//read config location
-		currdir, err := GetConfigDir()
-		if err != nil {
-			return "", err
-		}
-		var sys Sys
-		rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
-		err = unmarshalObj(rootdir, &sys)
-		if err != nil {
-			return "", err
-		}
-		if v, ok := sys.Containers[id]; ok {
-			if vval, vok := v.(map[string]interface{}); vok {
-				configpath := vval["ConfigPath"].(string)
-				filepath := fmt.Sprintf("%s/.mapmap", configpath)
-				fc, ferr := FInitServer(filepath)
-				if ferr != nil {
-					return "", ferr
-				}
-
-				str, serr := fc.FGetStrValue(name)
-				if serr != nil {
-					return "", serr
-				}
-				return str, nil
+func getMap(id string, name string) (string, *Error) {
+	//read config location
+	currdir, err := GetConfigDir()
+	if err != nil {
+		return "", err
+	}
+	var sys Sys
+	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
+	err = unmarshalObj(rootdir, &sys)
+	if err != nil {
+		return "", err
+	}
+	if v, ok := sys.Containers[id]; ok {
+		if vval, vok := v.(map[string]interface{}); vok {
+			configpath := vval["ConfigPath"].(string)
+			filepath := fmt.Sprintf("%s/.mapmap", configpath)
+			fc, ferr := FInitServer(filepath)
+			if ferr != nil {
+				return "", ferr
 			}
-		}
-	} else {
-		mem, err := MInitServers(server)
-		if err != nil {
-			return "", err
-		}
 
-		str, err := mem.MGetStrValue(fmt.Sprintf("map:%s:%s", id, name))
-		if err != nil {
-			return "", err
+			str, serr := fc.FGetStrValue(name)
+			if serr != nil {
+				return "", serr
+			}
+			return str, nil
 		}
-		return str, nil
 	}
 	return "", nil
 }

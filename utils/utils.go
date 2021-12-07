@@ -42,10 +42,9 @@ const (
 )
 
 var (
-	memcached_checklist = []string{"memcached", "libevent"}
-	time_sleep          = 2
-	gdrive_prefix       = "https://drive.google.com/file/d/"
-	FOLDER_MODE         = 0755
+	time_sleep    = 2
+	gdrive_prefix = "https://drive.google.com/file/d/"
+	FOLDER_MODE   = 0755
 )
 
 func FileExist(file string) bool {
@@ -1215,34 +1214,6 @@ func CheckCompleteness(folder string, checklist []string) *Error {
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("necessary file %s does not exist", checklist[idx]))
 			return cerr
 		}
-	}
-	return nil
-}
-
-func CheckAndStartMemcache() *Error {
-	if ok, _, _ := GetProcessIdByName("memcached"); !ok {
-		currdir, err := GetConfigDir()
-		if err != nil {
-			return err
-		}
-		currdir = fmt.Sprintf("%s/.lpmxsys", currdir)
-
-		cerr := CheckCompleteness(currdir, memcached_checklist)
-		if cerr == nil {
-			_, cerr := CommandBash(fmt.Sprintf("LD_PRELOAD=%s/libevent.so %s/memcached -s %s/.memcached.pid -a 600 -d", currdir, currdir, currdir))
-			if cerr != nil {
-				cerr.AddMsg(fmt.Sprintf("can not start memcached process from %s", currdir))
-				return cerr
-			}
-			memcached_pid_path := fmt.Sprintf("%s/.memcached.pid", currdir)
-			//delay several seconds to detect .memcached.pid exists
-			time.Sleep(time.Duration(time_sleep) * time.Second)
-			if !FileExist(memcached_pid_path) {
-				cerr = ErrNew(ErrNExist, fmt.Sprintf("could not find pid file: %s, memcached starts failure", memcached_pid_path))
-				return cerr
-			}
-		}
-		return cerr
 	}
 	return nil
 }
