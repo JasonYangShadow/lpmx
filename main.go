@@ -97,7 +97,6 @@ func main() {
 
 	var GetId string
 	var GetName string
-	var GetMode bool
 	var getCmd = &cobra.Command{
 		Use:   "get",
 		Short: "get settings",
@@ -111,7 +110,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Get(GetId, GetName, GetMode)
+			err := Get(GetId, GetName)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -122,7 +121,6 @@ func main() {
 	getCmd.MarkFlagRequired("id")
 	getCmd.Flags().StringVarP(&GetName, "name", "n", "", "required")
 	getCmd.MarkFlagRequired("name")
-	getCmd.Flags().BoolVarP(&GetMode, "filecache", "c", false, "use FileCache rather than Memcached(optional)")
 
 	var DownloadSource string
 	var downloadCmd = &cobra.Command{
@@ -912,7 +910,6 @@ func main() {
 	var SetType string
 	var SetProg string
 	var SetVal string
-	var SetMode bool
 	var setCmd = &cobra.Command{
 		Use:   "set",
 		Short: "set environment variables for container",
@@ -927,7 +924,7 @@ func main() {
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Set(SetId, SetType, SetProg, SetVal, SetMode)
+			err := Set(SetId, SetType, SetProg, SetVal)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -946,7 +943,6 @@ func main() {
 	setCmd.Flags().StringVarP(&SetProg, "name", "n", "", "required(should be the name of libc 'system calls wrapper' or mapped program path)")
 	setCmd.MarkFlagRequired("name")
 	setCmd.Flags().StringVarP(&SetVal, "value", "v", "", "required in add mode(value(file1:replace_file1;file2:repalce_file2;) or a mapped path) while optional in remove mode")
-	setCmd.Flags().BoolVarP(&SetMode, "memcached", "c", false, "use Memcached rather than Filecache(optional)")
 
 	var uninstallCmd = &cobra.Command{
 		Use:   "uninstall",

@@ -43,43 +43,41 @@ var (
 
 //located inside $/.lpmxsys/.info
 type Sys struct {
-	RootDir      string // the abs path of folder .lpmxsys
-	Containers   map[string]interface{}
-	LogPath      string
-	MemcachedPid string
+	RootDir    string // the abs path of folder .lpmxsys
+	Containers map[string]interface{}
+	LogPath    string
 }
 
 //located inside $/.lpmxdata/image/tag/workspace/.lpmx/.info
 type Container struct {
-	Id                  string
-	RootPath            string
-	ConfigPath          string
-	ImageBase           string
-	BaseType            string
-	Layers              string //e.g, rw:layer1:layer2
-	BaseLayerPath       string
-	LogPath             string
-	ElfPatcherPath      string
-	PatchedELFLoader    string
-	SettingConf         map[string]interface{}
-	SettingPath         string
-	SysDir              string //dir of lpmx set by appendToSys function, the directory containing dependencies
-	StartTime           string
-	ContainerName       string
-	CreateUser          string
-	CurrentUser         string
-	MemcachedServerList []string
-	ExposeExe           string
-	UserShell           string
-	RPCPort             int
-	RPCMap              map[int]string
-	PidFile             string
-	Pid                 int
-	DataSyncFolder      string //sync folder with host
-	DataSyncMap         string //sync folder mapping info(host:contain)
-	Engine              string //engine type used on the host
-	Execmaps            string //executables mapping info
-	FileSyncMap         string //mount separated files from host to container (host1=container1:host2=container2)
+	Id               string
+	RootPath         string
+	ConfigPath       string
+	ImageBase        string
+	BaseType         string
+	Layers           string //e.g, rw:layer1:layer2
+	BaseLayerPath    string
+	LogPath          string
+	ElfPatcherPath   string
+	PatchedELFLoader string
+	SettingConf      map[string]interface{}
+	SettingPath      string
+	SysDir           string //dir of lpmx set by appendToSys function, the directory containing dependencies
+	StartTime        string
+	ContainerName    string
+	CreateUser       string
+	CurrentUser      string
+	ExposeExe        string
+	UserShell        string
+	RPCPort          int
+	RPCMap           map[int]string
+	PidFile          string
+	Pid              int
+	DataSyncFolder   string //sync folder with host
+	DataSyncMap      string //sync folder mapping info(host:contain)
+	Engine           string //engine type used on the host
+	Execmaps         string //executables mapping info
+	FileSyncMap      string //mount separated files from host to container (host1=container1:host2=container2)
 }
 
 type RPC struct {
@@ -193,7 +191,6 @@ func Init(reset bool, deppath string, useOldGlibc bool) *Error {
 		}
 		sys.Containers = make(map[string]interface{})
 
-		//download memcached related files based on host os info
 		dist, release, cerr := GetHostOSInfo()
 		if cerr != nil {
 			dist = "default"
@@ -271,8 +268,6 @@ func Init(reset bool, deppath string, useOldGlibc bool) *Error {
 		os.Setenv("LD_LIBRARY_PATH", host_ld_env)
 	}
 
-	sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", sys.RootDir)
-
 	return nil
 }
 
@@ -283,14 +278,6 @@ func Reset(useOldGlibc bool) *Error {
 	}
 	config := fmt.Sprintf("%s/.lpmxsys", currdir)
 
-	if ok, pid, _ := GetProcessIdByName("memcached"); ok {
-		fmt.Println("stopping memcached instance...")
-		err := KillProcessByPid(pid)
-		if err != nil {
-			return err
-		}
-	}
-
 	var sys Sys
 	sys.RootDir = config
 	err = unmarshalObj(sys.RootDir, &sys)
@@ -298,7 +285,6 @@ func Reset(useOldGlibc bool) *Error {
 		return err
 	}
 
-	//download memcached related files based on host os info
 	dist, release, cerr := GetHostOSInfo()
 	if cerr != nil {
 		dist = "default"
@@ -346,13 +332,6 @@ func Uninstall() *Error {
 	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
-	}
-	if ok, pid, _ := GetProcessIdByName("memcached"); ok {
-		fmt.Println("stopping memcached instance...")
-		err := KillProcessByPid(pid)
-		if err != nil {
-			return err
-		}
 	}
 
 	for _, i := range UNSTALL_FOLDER {
@@ -814,7 +793,7 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 	return nil
 }
 
-func Get(id string, name string, mode bool) *Error {
+func Get(id string, name string) *Error {
 	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
@@ -841,7 +820,7 @@ func Get(id string, name string, mode bool) *Error {
 	return err
 }
 
-func Set(id string, tp string, name string, value string, mode bool) *Error {
+func Set(id string, tp string, name string, value string) *Error {
 	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
@@ -2745,7 +2724,6 @@ func (con *Container) genEnv(envmap map[string]string) (map[string]string, *Erro
 	env["ContainerId"] = con.Id
 	env["ContainerRoot"] = con.RootPath
 	env["LD_PRELOAD"] = fmt.Sprintf("%s/libfakechroot.so %s/libfakeroot.so", con.SysDir, con.SysDir)
-	env["MEMCACHED_PID"] = con.MemcachedServerList[0]
 	env["TERM"] = "xterm"
 	env["SHELL"] = con.UserShell
 	env["ContainerLayers"] = con.Layers
@@ -2766,7 +2744,6 @@ func (con *Container) genEnv(envmap map[string]string) (map[string]string, *Erro
 
 	//set default LD_LIBRARY_LPMX
 	var libs []string
-	//add libmemcached and other libs
 	currdir, err := GetConfigDir()
 	if err != nil {
 		return nil, err
@@ -3049,13 +3026,6 @@ func (con *Container) createContainer() *Error {
 
 	con.CurrentUser = "root"
 
-	if mem, mok := con.SettingConf["memcache_list"]; mok {
-		if mems, mems_ok := mem.([]interface{}); mems_ok {
-			for _, memc := range mems {
-				con.MemcachedServerList = append(con.MemcachedServerList, memc.(string))
-			}
-		}
-	}
 	_, err = MakeDir(con.LogPath)
 	if err != nil {
 		return err
@@ -3188,9 +3158,6 @@ func (con *Container) appendToSys() *Error {
 			vvalue["BaseType"] = con.BaseType
 			sys.Containers[con.Id] = vvalue
 		}
-		sys.MemcachedPid = fmt.Sprintf("%s/.memcached.pid", sys.RootDir)
-		servers := []string{sys.MemcachedPid}
-		con.MemcachedServerList = servers
 		con.SysDir = rootdir
 		data, _ := StructMarshal(&sys)
 		err := WriteToFile(data, fmt.Sprintf("%s/.info", sys.RootDir))
