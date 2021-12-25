@@ -3,7 +3,7 @@ module github.com/JasonYangShadow/lpmx
 go 1.16
 
 require (
-	github.com/bradfitz/gomemcache v0.0.0-20180710155616-bc664df96737
+	github.com/bradfitz/gomemcache v0.0.0-20180710155616-bc664df96737 // indirect
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7
 	github.com/gorilla/mux v1.8.0 // indirect

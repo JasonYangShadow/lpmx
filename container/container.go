@@ -2458,7 +2458,7 @@ func DockerReset(name string) *Error {
 	return err
 }
 
-func CommonFastRun(name, volume_map, command, engine, execmaps, mountfile string) *Error {
+func CommonFastRun(name, volume_map, engine, execmaps, mountfile string, args ...string) *Error {
 	configmap, err := generateContainer(name, "", volume_map, engine, mountfile)
 	if err != nil {
 		return err
@@ -2467,7 +2467,7 @@ func CommonFastRun(name, volume_map, command, engine, execmaps, mountfile string
 	if len(execmaps) > 0 {
 		(*configmap)["execmaps"] = execmaps
 	}
-	err = Run(configmap, command)
+	err = Run(configmap, args...)
 	//remove container
 	if err != nil {
 		err = Destroy(id)
@@ -2623,7 +2623,7 @@ func Expose(id string, ipath string, name string) *Error {
 						ppath := fmt.Sprintf("%s/%s", currdir, os.Args[0])
 						ppath = path.Clean(ppath)
 						code := "#!/bin/bash\n" + ppath +
-							" resume " + id + " \"" + ipath + " " + "$@\"" +
+							" resume " + id + " -- " + ipath + " " + "\"$@\"" +
 							"\n"
 
 						fmt.Fprintf(f, code)
@@ -2977,12 +2977,6 @@ func (con *Container) bashShell(envmap map[string]string, args ...string) *Error
 			env["FAKEROOTPID"] = strings.TrimSuffix(os.Getenv("FAKEROOTPID"), "\n")
 		}
 
-		LOGGER.WithFields(logrus.Fields{
-			"shell":    con.UserShell,
-			"env":      env,
-			"rootpath": con.RootPath,
-			"args":     args,
-		}).Debug("bashShell debug, before shellenvpid is called")
 		cerr := ShellEnvPid(con.UserShell, env, con.RootPath, args...)
 		if cerr != nil {
 			return cerr

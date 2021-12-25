@@ -77,9 +77,8 @@ func ShellEnvPid(sh string, env map[string]string, dir string, arg ...string) *E
 	var args []string
 	if len(arg) > 0 {
 		args = append(args, "-c")
-		for _, ar := range arg {
-			args = append(args, ar)
-		}
+		//here we need to merge all other arg as a string
+		args = append(args, strings.Join(arg, " "))
 	}
 
 	cmd := exec.Command(shpath, args...)
@@ -102,7 +101,10 @@ func ShellEnvPid(sh string, env map[string]string, dir string, arg ...string) *E
 	cmd.Stdout = os.Stdout
 
 	LOGGER.WithFields(logrus.Fields{
-		"env": envstrs,
+		"env":    envstrs,
+		"shpath": shpath,
+		"args":   args,
+		"length": len(args),
 	}).Debug("shell env debug")
 	err = cmd.Start()
 	if err != nil {

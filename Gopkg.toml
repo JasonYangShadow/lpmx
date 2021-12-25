@@ -24,11 +24,6 @@
 #   go-tests = true
 #   unused-packages = true
 
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/bradfitz/gomemcache"
-
 [[constraint]]
   name = "github.com/docker/distribution"
   version = "2.7.1"

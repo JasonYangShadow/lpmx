@@ -20,7 +20,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-1.8.3"
+	VERSION = "alpha-1.9.0"
 )
 
 func checkCompleteness() *Error {
@@ -469,7 +469,7 @@ func main() {
 		Use:   "fastrun",
 		Short: "run container in a fast way without switching into shell",
 		Long:  "docker run sub-command is the advanced command of lpmx, which is used for fast running the container created from Docker image",
-		Args:  cobra.ExactArgs(2),
+		Args:  cobra.MinimumNArgs(1),
 		PreRun: func(cmd *cobra.Command, args []string) {
 			err := checkCompleteness()
 			if err != nil {
@@ -478,7 +478,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonFastRun(args[0], DockerRunVolume, args[1], DockerRunMode, DockerRunExecMap, DockerRunMountFile)
+			err := CommonFastRun(args[0], DockerRunVolume, DockerRunMode, DockerRunExecMap, DockerRunMountFile, args[1:]...)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -795,7 +795,7 @@ func main() {
 		Use:   "fastrun",
 		Short: "run container in a fast way without switching into shell",
 		Long:  "singularity run sub-command is the advanced command of lpmx, which is used for fast running the container created from singularity image",
-		Args:  cobra.ExactArgs(2),
+		Args:  cobra.MinimumNArgs(1),
 		PreRun: func(cmd *cobra.Command, args []string) {
 			err := checkCompleteness()
 			if err != nil {
@@ -804,7 +804,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonFastRun(args[0], DockerRunVolume, args[1], SingularityRunMode, SingularityRunExecMap, SingularityMountFile)
+			err := CommonFastRun(args[0], DockerRunVolume, SingularityRunMode, SingularityRunExecMap, SingularityMountFile, args[1:]...)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
