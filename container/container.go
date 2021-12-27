@@ -146,7 +146,7 @@ func (server *RPC) RPCDelete(req Request, res *Response) error {
 	return nil
 }
 
-func Init(reset bool, deppath string, useOldGlibc bool) *Error {
+func Init(reset bool, deppath string, useNewGlibc bool) *Error {
 	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
@@ -155,7 +155,7 @@ func Init(reset bool, deppath string, useOldGlibc bool) *Error {
 	config := fmt.Sprintf("%s/.lpmxsys", currdir)
 
 	//delete everything
-	if reset || useOldGlibc {
+	if reset || useNewGlibc {
 		_, cerr := RemoveAll(config)
 		if cerr != nil {
 			return cerr
@@ -209,7 +209,7 @@ func Init(reset bool, deppath string, useOldGlibc bool) *Error {
 			deppath = fmt.Sprintf("%s/dependency.tar.gz", sys.RootDir)
 		}
 		if !FileExist(deppath) {
-			if useOldGlibc {
+			if !useNewGlibc {
 				gen_url := fmt.Sprintf("%s/default.dependency.tar.gz", SETTING_URL)
 				fmt.Printf("Downloading default.dependency.tar.gz from %s\n", gen_url)
 				err = DirectDownloadFilefromGithub("dependency.tar.gz", gen_url, sys.RootDir)
@@ -271,7 +271,7 @@ func Init(reset bool, deppath string, useOldGlibc bool) *Error {
 	return nil
 }
 
-func Reset(useOldGlibc bool) *Error {
+func Reset(useNewGlibc bool) *Error {
 	currdir, err := GetConfigDir()
 	if err != nil {
 		return err
@@ -304,7 +304,7 @@ func Reset(useOldGlibc bool) *Error {
 		RemoveFile(deppath)
 	}
 
-	if useOldGlibc {
+	if !useNewGlibc {
 		gen_url := fmt.Sprintf("%s/default.dependency.tar.gz", SETTING_URL)
 		fmt.Printf("Downloading default.dependency.tar.gz from %s\n", gen_url)
 		err = DirectDownloadFilefromGithub("dependency.tar.gz", gen_url, sys.RootDir)

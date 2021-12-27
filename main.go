@@ -49,14 +49,14 @@ func checkCompleteness() *Error {
 func main() {
 	var InitReset bool
 	var InitDep string
-	var InitUseOldGlibc bool
+	var InitUseNewGlibc bool
 	var initCmd = &cobra.Command{
 		Use:   "init",
 		Short: "init the lpmx itself",
 		Long:  "init command is the basic command of lpmx, which is used for initializing lpmx system",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Init(InitReset, InitDep, InitUseOldGlibc)
+			err := Init(InitReset, InitDep, InitUseNewGlibc)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -70,7 +70,7 @@ func main() {
 	}
 	initCmd.Flags().BoolVarP(&InitReset, "reset", "r", false, "initialize by force(optional)")
 	initCmd.Flags().StringVarP(&InitDep, "dependency", "d", "", "dependency tar ball(optional)")
-	initCmd.Flags().BoolVarP(&InitUseOldGlibc, "use-old-glibc", "g", false, "use old glibc veresion(optional)")
+	initCmd.Flags().BoolVarP(&InitUseNewGlibc, "use-new-glibc", "g", false, "use new glibc veresion(optional)")
 
 	var ListName string
 	var listCmd = &cobra.Command{
@@ -974,14 +974,14 @@ func main() {
 		},
 	}
 
-	var ResetUseOldGlibc bool
+	var ResetUseNewGlibc bool
 	var resetCmd = &cobra.Command{
 		Use:   "reset",
 		Short: "reset dependencies",
 		Long:  "reset necessary libraries of lpmx",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Reset(ResetUseOldGlibc)
+			err := Reset(ResetUseNewGlibc)
 			if err != nil {
 				LOGGER.Error(err.Error())
 				return
@@ -990,7 +990,7 @@ func main() {
 			}
 		},
 	}
-	resetCmd.Flags().BoolVarP(&ResetUseOldGlibc, "use-old-glibc", "g", false, "use old glibc veresion(optional)")
+	resetCmd.Flags().BoolVarP(&ResetUseNewGlibc, "use-new-glibc", "g", false, "use new glibc veresion(optional)")
 
 	var versionCmd = &cobra.Command{
 		Use:   "version",
