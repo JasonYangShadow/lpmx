@@ -987,7 +987,44 @@ func Untar(file string, folder string) *Error {
 		case tar.TypeLink:
 			//fmt.Printf("-----hardlink---- %s, %s, %s\n", header.Linkname, folder, target)
 			//only works on linking to the file inside the same folder
-			os.Symlink(header.Linkname, target)
+
+			//here we need to add a patch for specific bin/arch, for debian 10, all binaries are hardlinked to bin/arch
+			if strings.Compare(header.Linkname, "bin/arch") == 0 {
+				//if it is bin/arch, then we need to copy it to binaries
+				t_file_mode := os.FileMode(header.Mode)
+				//here we check file mode, if file does not have at least rw mode, we change it
+				//fixing "permission denied" error on cluster
+				permission := permbits.FileMode(t_file_mode)
+				if !(permission.UserRead() && permission.UserWrite()) {
+					permission.SetUserRead(true)
+					permission.SetUserWrite(true)
+					permbits.UpdateFileMode(&t_file_mode, permission)
+				}
+
+				//write target
+				f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, t_file_mode)
+				if err != nil {
+					cerr := ErrNew(err, fmt.Sprintf("untar create file %s error", target))
+					return cerr
+				}
+
+				// copy over contents
+				source_file := fmt.Sprintf("%s%s", folder, header.Linkname)
+				sf, err := os.Open(source_file)
+				if err != nil {
+					cerr := ErrNew(err, fmt.Sprintf("untar read source file %s error", source_file))
+					return cerr
+				}
+				if _, err := io.Copy(f, sf); err != nil {
+					cerr := ErrNew(err, "untar copying file content error")
+					return cerr
+				}
+
+				f.Close()
+				sf.Close()
+			} else {
+				os.Symlink(header.Linkname, target)
+			}
 		}
 	}
 }
