@@ -116,6 +116,9 @@ Below is a basic demo of using LPMX:
 
 [![LPMX DEMO](http://img.youtube.com/vi/_1XOLa1cKX4/0.jpg)](http://www.youtube.com/watch?v=_1XOLa1cKX4 "LPMX simple demo")
 
+# X11 APP also works
+![X11](figures/x11.png)
+
 # Common commands
 1. List existing containers with their container ids, status and other info(also with name filter)
    ```
