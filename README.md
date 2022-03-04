@@ -157,7 +157,7 @@ Below is a basic demo of using LPMX:
 9. **(We need supports from community!)** Only several host OS are supported currently in this [repository](https://github.com/JasonYangShadow/LPMXSettingRepository) (Ubuntu 12.04/14.04/16.04/18.04/19.04, Centos 5.11/6/6.7/7), we compiled fakechroot against common Linux distros, but still there might be incompatability issues among different glibc versions. Common container image types are supported, such as Ubuntu and CentOS. 
 
 # Incompatible Images
-https://github.com/JasonYangShadow/lpmx/wiki/incompatible-image
+https://github.com/JasonYangShadow/lpmx/wiki/incompatible-images
 
 # Online Tutorial Session
 If you are interested in LPMX and want an online tutorial session, please fill in this [Online Tutorial Request Form](https://forms.gle/6tUYdMmMSo6nDv916), I will contact you. (English will be used).:w
