@@ -169,8 +169,11 @@ If you are interested in LPMX and want an online tutorial session, please fill i
 - [udocker](https://github.com/indigo-dc/udocker)
 - [Singularity](https://sylabs.io/singularity) & [Singularity Compose](http://singularityhub.github.io/singularity-compose)
 
-# Preprint
-- bioRxiv https://www.biorxiv.org/content/10.1101/2021.06.04.445363v1
+# Reference
+- Please cite our work
+  ```
+  Yang, X., Kasahara, M. LPMX: a pure rootless composable container system. BMC Bioinformatics 23, 112 (2022). https://doi.org/10.1186/s12859-022-04649-3
+  ```
 - [Vagrant Box](https://app.vagrantup.com/jasonyangshadow/boxes/benchmark_ubuntu1804) containing experiment environment and [experiment attachments](https://github.com/JasonYangShadow/experiment_attachments) containing necessary scripts for reproducibility
 
 # Acknowledgements
