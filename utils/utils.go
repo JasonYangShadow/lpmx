@@ -42,10 +42,9 @@ const (
 )
 
 var (
-	memcached_checklist = []string{"memcached", "libevent"}
-	time_sleep          = 2
-	gdrive_prefix       = "https://drive.google.com/file/d/"
-	FOLDER_MODE         = 0755
+	time_sleep    = 2
+	gdrive_prefix = "https://drive.google.com/file/d/"
+	FOLDER_MODE   = 0755
 )
 
 func FileExist(file string) bool {
@@ -988,7 +987,44 @@ func Untar(file string, folder string) *Error {
 		case tar.TypeLink:
 			//fmt.Printf("-----hardlink---- %s, %s, %s\n", header.Linkname, folder, target)
 			//only works on linking to the file inside the same folder
-			os.Symlink(header.Linkname, target)
+
+			//here we need to add a patch for specific bin/arch, for debian 10, all binaries are hardlinked to bin/arch
+			if strings.Compare(header.Linkname, "bin/arch") == 0 {
+				//if it is bin/arch, then we need to copy it to binaries
+				t_file_mode := os.FileMode(header.Mode)
+				//here we check file mode, if file does not have at least rw mode, we change it
+				//fixing "permission denied" error on cluster
+				permission := permbits.FileMode(t_file_mode)
+				if !(permission.UserRead() && permission.UserWrite()) {
+					permission.SetUserRead(true)
+					permission.SetUserWrite(true)
+					permbits.UpdateFileMode(&t_file_mode, permission)
+				}
+
+				//write target
+				f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, t_file_mode)
+				if err != nil {
+					cerr := ErrNew(err, fmt.Sprintf("untar create file %s error", target))
+					return cerr
+				}
+
+				// copy over contents
+				source_file := fmt.Sprintf("%s%s", folder, header.Linkname)
+				sf, err := os.Open(source_file)
+				if err != nil {
+					cerr := ErrNew(err, fmt.Sprintf("untar read source file %s error", source_file))
+					return cerr
+				}
+				if _, err := io.Copy(f, sf); err != nil {
+					cerr := ErrNew(err, "untar copying file content error")
+					return cerr
+				}
+
+				f.Close()
+				sf.Close()
+			} else {
+				os.Symlink(header.Linkname, target)
+			}
 		}
 	}
 }
@@ -1215,34 +1251,6 @@ func CheckCompleteness(folder string, checklist []string) *Error {
 			cerr := ErrNew(ErrNExist, fmt.Sprintf("necessary file %s does not exist", checklist[idx]))
 			return cerr
 		}
-	}
-	return nil
-}
-
-func CheckAndStartMemcache() *Error {
-	if ok, _, _ := GetProcessIdByName("memcached"); !ok {
-		currdir, err := GetConfigDir()
-		if err != nil {
-			return err
-		}
-		currdir = fmt.Sprintf("%s/.lpmxsys", currdir)
-
-		cerr := CheckCompleteness(currdir, memcached_checklist)
-		if cerr == nil {
-			_, cerr := CommandBash(fmt.Sprintf("LD_PRELOAD=%s/libevent.so %s/memcached -s %s/.memcached.pid -a 600 -d", currdir, currdir, currdir))
-			if cerr != nil {
-				cerr.AddMsg(fmt.Sprintf("can not start memcached process from %s", currdir))
-				return cerr
-			}
-			memcached_pid_path := fmt.Sprintf("%s/.memcached.pid", currdir)
-			//delay several seconds to detect .memcached.pid exists
-			time.Sleep(time.Duration(time_sleep) * time.Second)
-			if !FileExist(memcached_pid_path) {
-				cerr = ErrNew(ErrNExist, fmt.Sprintf("could not find pid file: %s, memcached starts failure", memcached_pid_path))
-				return cerr
-			}
-		}
-		return cerr
 	}
 	return nil
 }

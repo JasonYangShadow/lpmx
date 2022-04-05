@@ -2,14 +2,6 @@
 
 
 [[projects]]
-  branch = "master"
-  digest = "1:f98385a9b77f6cacae716a59c04e6ac374d101466d4369c4e8cc706a39c4bb2e"
-  name = "github.com/bradfitz/gomemcache"
-  packages = ["memcache"]
-  pruneopts = "UT"
-  revision = "bc664df9673713a0ccf26e3b55a673ec7301088b"
-
-[[projects]]
   digest = "1:4165002b6f20cdd11994d0ec9d3265969179ee03415106b95b500ca021e01347"
   name = "github.com/docker/distribution"
   packages = [
@@ -292,7 +284,6 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
-    "github.com/bradfitz/gomemcache/memcache",
     "github.com/docker/distribution",
     "github.com/docker/distribution/manifest",
     "github.com/docker/distribution/manifest/schema1",

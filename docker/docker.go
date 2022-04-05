@@ -28,7 +28,7 @@ import (
 
 const (
 	DOCKER_URL  = "https://registry-1.docker.io"
-	SETTING_URL = "https://raw.githubusercontent.com/JasonYangShadow/LPMXSettingRepository/master"
+	SETTING_URL = "https://raw.githubusercontent.com/JasonYangShadow/LPMXSettingRepository/master/v1.9"
 )
 
 //Docker load image structure
@@ -41,15 +41,16 @@ type DockerSaveInfo struct {
 //Skopeo manifest item structure
 type SkopeoManifestItem struct {
 	MediaType string `json:"mediaType"`
-	Size uint `json:"size"`
-	Digest string `json:"digest"`
+	Size      uint   `json:"size"`
+	Digest    string `json:"digest"`
 }
+
 //Skopeo manifest structure
 type SkopeoManifest struct {
-	SchemaVersion int `json:"schemaVersion"`
-	MediaType string `json:"mediaType"`
-	Config SkopeoManifestItem `json:"config"`
-	Layers []SkopeoManifestItem `json:"layers"`
+	SchemaVersion int                  `json:"schemaVersion"`
+	MediaType     string               `json:"mediaType"`
+	Config        SkopeoManifestItem   `json:"config"`
+	Layers        []SkopeoManifestItem `json:"layers"`
 }
 
 func ListRepositories(username string, pass string) ([]string, *Error) {

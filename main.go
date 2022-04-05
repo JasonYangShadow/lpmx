@@ -16,11 +16,11 @@ import (
 )
 
 var (
-	checklist = []string{"faked-sysv", "libfakechroot.so", "libfakeroot.so", "libmemcached"}
+	checklist = []string{"faked-sysv", "libfakechroot.so", "libfakeroot.so"}
 )
 
 const (
-	VERSION = "alpha-1.8.2"
+	VERSION = "alpha-1.9.1"
 )
 
 func checkCompleteness() *Error {
@@ -49,14 +49,14 @@ func checkCompleteness() *Error {
 func main() {
 	var InitReset bool
 	var InitDep string
-	var InitUseOldGlibc bool
+	var InitUseNewGlibc bool
 	var initCmd = &cobra.Command{
 		Use:   "init",
 		Short: "init the lpmx itself",
 		Long:  "init command is the basic command of lpmx, which is used for initializing lpmx system",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Init(InitReset, InitDep, InitUseOldGlibc)
+			err := Init(InitReset, InitDep, InitUseNewGlibc)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -70,7 +70,7 @@ func main() {
 	}
 	initCmd.Flags().BoolVarP(&InitReset, "reset", "r", false, "initialize by force(optional)")
 	initCmd.Flags().StringVarP(&InitDep, "dependency", "d", "", "dependency tar ball(optional)")
-	initCmd.Flags().BoolVarP(&InitUseOldGlibc, "use-old-glibc", "g", false, "use old glibc veresion(optional)")
+	initCmd.Flags().BoolVarP(&InitUseNewGlibc, "use-new-glibc", "g", false, "use new glibc veresion(optional)")
 
 	var ListName string
 	var listCmd = &cobra.Command{
@@ -97,7 +97,6 @@ func main() {
 
 	var GetId string
 	var GetName string
-	var GetMode bool
 	var getCmd = &cobra.Command{
 		Use:   "get",
 		Short: "get settings",
@@ -109,15 +108,9 @@ func main() {
 				LOGGER.Fatal(err.Error())
 				return
 			}
-
-			err = CheckAndStartMemcache()
-			if err != nil {
-				LOGGER.Fatal(err.Error())
-				return
-			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Get(GetId, GetName, GetMode)
+			err := Get(GetId, GetName)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -128,7 +121,6 @@ func main() {
 	getCmd.MarkFlagRequired("id")
 	getCmd.Flags().StringVarP(&GetName, "name", "n", "", "required")
 	getCmd.MarkFlagRequired("name")
-	getCmd.Flags().BoolVarP(&GetMode, "filecache", "c", false, "use FileCache rather than Memcached(optional)")
 
 	var DownloadSource string
 	var downloadCmd = &cobra.Command{
@@ -179,15 +171,6 @@ func main() {
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
-			}
-			err = CheckAndStartMemcache()
-			if err != nil && err.Err != ErrNExist {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-
-			if err != nil && err.Err == ErrNExist {
-				LOGGER.Warn("memcached related components are missing, functions may not work properly")
 			}
 		},
 
@@ -462,15 +445,6 @@ func main() {
 				LOGGER.Fatal(err.Error())
 				return
 			}
-			err = CheckAndStartMemcache()
-			if err != nil && err.Err != ErrNExist {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-
-			if err != nil && err.Err == ErrNExist {
-				LOGGER.Warn("memcached related components are missing, functions may not work properly")
-			}
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
@@ -495,24 +469,16 @@ func main() {
 		Use:   "fastrun",
 		Short: "run container in a fast way without switching into shell",
 		Long:  "docker run sub-command is the advanced command of lpmx, which is used for fast running the container created from Docker image",
-		Args:  cobra.ExactArgs(2),
+		Args:  cobra.MinimumNArgs(1),
 		PreRun: func(cmd *cobra.Command, args []string) {
 			err := checkCompleteness()
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
 			}
-			err = CheckAndStartMemcache()
-			if err != nil && err.Err != ErrNExist {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-			if err != nil && err.Err == ErrNExist {
-				LOGGER.Warn("memcached related components are missing, functions may not work properly")
-			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonFastRun(args[0], DockerRunVolume, args[1], DockerRunMode, DockerRunExecMap, DockerRunMountFile)
+			err := CommonFastRun(args[0], DockerRunVolume, DockerRunMode, DockerRunExecMap, DockerRunMountFile, args[1:]...)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -758,15 +724,6 @@ func main() {
 				LOGGER.Fatal(err.Error())
 				return
 			}
-			err = CheckAndStartMemcache()
-			if err != nil && err.Err != ErrNExist {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-
-			if err != nil && err.Err == ErrNExist {
-				LOGGER.Warn("memcached related components are missing, functions may not work properly")
-			}
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
@@ -838,24 +795,16 @@ func main() {
 		Use:   "fastrun",
 		Short: "run container in a fast way without switching into shell",
 		Long:  "singularity run sub-command is the advanced command of lpmx, which is used for fast running the container created from singularity image",
-		Args:  cobra.ExactArgs(2),
+		Args:  cobra.MinimumNArgs(1),
 		PreRun: func(cmd *cobra.Command, args []string) {
 			err := checkCompleteness()
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
 			}
-			err = CheckAndStartMemcache()
-			if err != nil && err.Err != ErrNExist {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-			if err != nil && err.Err == ErrNExist {
-				LOGGER.Warn("memcached related components are missing, functions may not work properly")
-			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonFastRun(args[0], DockerRunVolume, args[1], SingularityRunMode, SingularityRunExecMap, SingularityMountFile)
+			err := CommonFastRun(args[0], DockerRunVolume, SingularityRunMode, SingularityRunExecMap, SingularityMountFile, args[1:]...)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -919,15 +868,6 @@ func main() {
 				LOGGER.Fatal(err.Error())
 				return
 			}
-			err = CheckAndStartMemcache()
-			if err != nil && err.Err != ErrNExist {
-				LOGGER.Fatal(err.Error())
-				return
-			}
-
-			if err != nil && err.Err == ErrNExist {
-				LOGGER.Warn("memcached related components are missing, functions may not work properly")
-			}
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
@@ -970,7 +910,6 @@ func main() {
 	var SetType string
 	var SetProg string
 	var SetVal string
-	var SetMode bool
 	var setCmd = &cobra.Command{
 		Use:   "set",
 		Short: "set environment variables for container",
@@ -982,15 +921,10 @@ func main() {
 				LOGGER.Fatal(err.Error())
 				return
 			}
-			err = CheckAndStartMemcache()
-			if err != nil {
-				LOGGER.Fatal(err.Error())
-				return
-			}
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Set(SetId, SetType, SetProg, SetVal, SetMode)
+			err := Set(SetId, SetType, SetProg, SetVal)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -1009,7 +943,6 @@ func main() {
 	setCmd.Flags().StringVarP(&SetProg, "name", "n", "", "required(should be the name of libc 'system calls wrapper' or mapped program path)")
 	setCmd.MarkFlagRequired("name")
 	setCmd.Flags().StringVarP(&SetVal, "value", "v", "", "required in add mode(value(file1:replace_file1;file2:repalce_file2;) or a mapped path) while optional in remove mode")
-	setCmd.Flags().BoolVarP(&SetMode, "memcached", "c", false, "use Memcached rather than Filecache(optional)")
 
 	var uninstallCmd = &cobra.Command{
 		Use:   "uninstall",
@@ -1041,14 +974,14 @@ func main() {
 		},
 	}
 
-	var ResetUseOldGlibc bool
+	var ResetUseNewGlibc bool
 	var resetCmd = &cobra.Command{
 		Use:   "reset",
 		Short: "reset dependencies",
 		Long:  "reset necessary libraries of lpmx",
 		Args:  cobra.ExactArgs(0),
 		Run: func(cmd *cobra.Command, args []string) {
-			err := Reset(ResetUseOldGlibc)
+			err := Reset(ResetUseNewGlibc)
 			if err != nil {
 				LOGGER.Error(err.Error())
 				return
@@ -1057,7 +990,7 @@ func main() {
 			}
 		},
 	}
-	resetCmd.Flags().BoolVarP(&ResetUseOldGlibc, "use-old-glibc", "g", false, "use old glibc veresion(optional)")
+	resetCmd.Flags().BoolVarP(&ResetUseNewGlibc, "use-new-glibc", "g", false, "use new glibc veresion(optional)")
 
 	var versionCmd = &cobra.Command{
 		Use:   "version",
