@@ -245,12 +245,12 @@ func Init(reset bool, deppath string, useNewGlibc bool) *Error {
 		path = fmt.Sprintf("%s:%s", exposed_bin, path)
 	}
 
-	path_var := fmt.Sprintf("PATH=%s", path)
-	bashrc := fmt.Sprintf("%s/.bashrc", os.Getenv("HOME"))
-	ferr := AddVartoFile(path_var, bashrc)
-	if ferr != nil {
-		return ferr
-	}
+	//path_var := fmt.Sprintf("PATH=%s", path)
+	//bashrc := fmt.Sprintf("%s/.bashrc", os.Getenv("HOME"))
+	//ferr := AddVartoFile(path_var, bashrc)
+	//if ferr != nil {
+	//	return ferr
+	//}
 	os.Setenv("PATH", path)
 
 	host_ld_env := os.Getenv("LD_LIBRARY_PATH")
@@ -260,11 +260,11 @@ func Init(reset bool, deppath string, useNewGlibc bool) *Error {
 		} else {
 			host_ld_env = sys.RootDir
 		}
-		ld_var := fmt.Sprintf("LD_LIBRARY_PATH=%s", host_ld_env)
-		ferr = AddVartoFile(ld_var, bashrc)
-		if ferr != nil {
-			return ferr
-		}
+		//ld_var := fmt.Sprintf("LD_LIBRARY_PATH=%s", host_ld_env)
+		//ferr = AddVartoFile(ld_var, bashrc)
+		//if ferr != nil {
+		//	return ferr
+		//}
 		os.Setenv("LD_LIBRARY_PATH", host_ld_env)
 	}
 
