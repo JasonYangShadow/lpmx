@@ -25,12 +25,37 @@
   revision = "aabc10ec26b754e797f9028f4589c5b7bd90dc20"
 
 [[projects]]
+  digest = "1:7fed610d7d2ccf4249025003d66c0195c9c61b5004cdc189e0b8e690d8737047"
+  name = "github.com/fatih/color"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "a05da93ebe62ca9fc6791d3376ec4dad01196448"
+  version = "v1.13.0"
+
+[[projects]]
   digest = "1:abeb38ade3f32a92943e5be54f55ed6d6e3b6602761d74b4aab4c9dd45c18abd"
   name = "github.com/fsnotify/fsnotify"
   packages = ["."]
   pruneopts = "UT"
   revision = "c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9"
   version = "v1.4.7"
+
+[[projects]]
+  digest = "1:8dd740e43f2b03e50425ee625b3f062ea1708837a7b7b1ce4e9523de82e6ac1d"
+  name = "github.com/goccy/go-yaml"
+  packages = [
+    ".",
+    "ast",
+    "internal/errors",
+    "lexer",
+    "parser",
+    "printer",
+    "scanner",
+    "token",
+  ]
+  pruneopts = "UT"
+  revision = "e4f32a26722ce33ac79a7b4ad88c26fd0b9c2995"
+  version = "v1.9.5"
 
 [[projects]]
   digest = "1:97df918963298c287643883209a2c3f642e6593379f97ab400c2a2e219ab647d"
@@ -82,6 +107,22 @@
   pruneopts = "UT"
   revision = "c2353362d570a7bfa228149c62842019201cfb71"
   version = "v1.8.0"
+
+[[projects]]
+  digest = "1:bfd19f00967e10367aaaf4b09545873750ac3cb9762d66243e9b7954327cc113"
+  name = "github.com/mattn/go-colorable"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "e1bb79c8d53c38a60962ad4b8f658226cc983710"
+  version = "v0.1.12"
+
+[[projects]]
+  digest = "1:e66bb4fe1fb8b48e9bed410b198498cef8fa6701a5e3eb0ee7f07b74153a7fbc"
+  name = "github.com/mattn/go-isatty"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "504425e14f742f1f517c4586048b49b37f829c8e"
+  version = "v0.0.14"
 
 [[projects]]
   digest = "1:53bc4cd4914cd7cd52139990d5170d6dc99067ae31c56530621b18b35fc30318"
@@ -255,6 +296,17 @@
   version = "v0.3.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:24b50a4fdc2e80b81f3914510ebd910b07385bcf1796f3be7c7da1190d51e26e"
+  name = "golang.org/x/xerrors"
+  packages = [
+    ".",
+    "internal",
+  ]
+  pruneopts = "UT"
+  revision = "2f41105eb62f341cfe208d06de4ee3bdd3a083da"
+
+[[projects]]
   digest = "1:56dfffc6e6ceeaebb6db73e02a846a92a850c53130078682993bd028a2ef717d"
   name = "google.golang.org/appengine"
   packages = [
@@ -289,6 +341,7 @@
     "github.com/docker/distribution/manifest/schema1",
     "github.com/docker/distribution/manifest/schema2",
     "github.com/docker/libtrust",
+    "github.com/goccy/go-yaml",
     "github.com/opencontainers/go-digest",
     "github.com/phayes/permbits",
     "github.com/sirupsen/logrus",
