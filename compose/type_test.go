@@ -9,7 +9,7 @@ import (
 )
 
 func TestLoadSimpleYamlSuccess(t *testing.T) {
-	yamlFile, err := ioutil.ReadFile("simple_success.yaml")
+	yamlFile, err := ioutil.ReadFile("test_data/simple_success.yaml")
 	if err != nil {
 		t.Error(err)
 		return
@@ -27,7 +27,7 @@ func TestLoadSimpleYamlSuccess(t *testing.T) {
 }
 
 func TestLoadSimpleYamlFailure(t *testing.T) {
-	yamlFile, err := ioutil.ReadFile("simple_failure.yaml")
+	yamlFile, err := ioutil.ReadFile("test_data/simple_failure.yaml")
 	if err != nil {
 		t.Error(err)
 		return
@@ -40,7 +40,27 @@ func TestLoadSimpleYamlFailure(t *testing.T) {
 		return
 	}
 
-	verr := topLevel.validate()
+	_, _, verr := topLevel.validate()
 	assert.NotNil(t, verr, "expected error occurs")
 	assert.Equal(t, verr.Err, error2.ErrMismatch, "should be mismatch error")
+}
+
+func TestLoadDependYamlSuccess(t *testing.T) {
+	yamlFile, err := ioutil.ReadFile("test_data/depend_test_success.yaml")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var topLevel TopLevel
+	err = yaml.Unmarshal(yamlFile, &topLevel)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	keys, appMap, verr := topLevel.validate()
+	assert.Equal(t, len(keys), 2, "should have 2 apps")
+	assert.Nil(t, verr)
+	t.Log(appMap)
 }
