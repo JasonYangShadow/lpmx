@@ -26,10 +26,12 @@ type AppLevel struct {
 	ImageType string   `yaml:"type"`
 	Expose    []string `yaml:"expose"`
 	Port      []string `yaml:"port"`
+	Share     []string `yaml:"share"`
+	Inject    []string `yaml:"inject"`
 	DependsOn []string `yaml:"depends"`
 }
 
-func (topLevel *TopLevel) validate() ([]string, *map[string]AppLevel, *Error) {
+func (topLevel *TopLevel) Validate() ([]string, *map[string]AppLevel, *Error) {
 	if stringUtils.IsEmpty(topLevel.Version) || strings.TrimSpace(topLevel.Version) != Version {
 		err := ErrNew(ErrNExist, "version in yaml file does not exist or is not correct")
 		return nil, nil, err
@@ -72,6 +74,24 @@ func (topLevel *TopLevel) validate() ([]string, *map[string]AppLevel, *Error) {
 			for _, port := range element.Port {
 				if !stringUtils.Contains(port, ":") {
 					err := ErrNew(ErrNExist, "port should contain ':'")
+					return nil, nil, err
+				}
+			}
+		}
+
+		if len(element.Share) > 0 {
+			for _, share := range element.Share {
+				if !stringUtils.Contains(share, ":") {
+					err := ErrNew(ErrNExist, "share should contain ':'")
+					return nil, nil, err
+				}
+			}
+		}
+
+		if len(element.Inject) > 0 {
+			for _, inject := range element.Inject {
+				if !stringUtils.Contains(inject, ":") {
+					err := ErrNew(ErrNExist, "inject should contain ':'")
 					return nil, nil, err
 				}
 			}

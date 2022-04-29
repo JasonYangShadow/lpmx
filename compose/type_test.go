@@ -40,7 +40,7 @@ func TestLoadSimpleYamlFailure(t *testing.T) {
 		return
 	}
 
-	_, _, verr := topLevel.validate()
+	_, _, verr := topLevel.Validate()
 	assert.NotNil(t, verr, "expected error occurs")
 	assert.Equal(t, verr.Err, error2.ErrMismatch, "should be mismatch error")
 }
@@ -59,7 +59,7 @@ func TestLoadDependYamlSuccess(t *testing.T) {
 		return
 	}
 
-	keys, appMap, verr := topLevel.validate()
+	keys, appMap, verr := topLevel.Validate()
 	assert.Equal(t, len(keys), 2, "should have 2 apps")
 	assert.Nil(t, verr)
 	t.Log(appMap)
