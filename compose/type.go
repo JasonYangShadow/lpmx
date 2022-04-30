@@ -62,11 +62,6 @@ func (topLevel *TopLevel) Validate() ([]string, []string, *map[string]AppLevel, 
 			return nil, nil, nil, err
 		}
 
-		if stringUtils.IsEmpty(element.Command) {
-			err := ErrNew(ErrNExist, "command type is a mandatory field")
-			return nil, nil, nil,err
-		}
-
 		if len(element.Expose) > 0 {
 			for _, expose := range element.Expose {
 				if !stringUtils.Contains(expose, ":") {

@@ -3891,11 +3891,12 @@ func autoDownload(name string) *Error {
 }
 
 func convertMapValue (values []string) string {
+	var retValues []string
 	if len(values) > 0 {
 		for _, value := range values {
-			strings.ReplaceAll(value, ":", "=")
+			retValues = append(retValues, strings.ReplaceAll(value, ":", "="))
 		}
-		return strings.Join(values, ":")
+		return strings.Join(retValues, ":")
 	}
 	return ""
 }
@@ -3907,6 +3908,7 @@ func runComposeApp (targetApp AppLevel) *Error {
 	exec_map := convertMapValue(targetApp.Inject)
 	mountfile := ""
 	command := targetApp.Command
+
 	container_id, cerr := CommonComposeRun(name, container_name, volume_map, exec_map, mountfile, command)
 	if cerr != nil{
 		return cerr
