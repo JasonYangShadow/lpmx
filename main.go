@@ -20,7 +20,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-1.9.1"
+	VERSION = "alpha-2.0.0"
 )
 
 func checkCompleteness() *Error {
@@ -1002,10 +1002,33 @@ func main() {
 		},
 	}
 
+	var ComposeFile string
+	var composeCmd = &cobra.Command{
+		Use:   "compose",
+		Short: "use yaml file to compose run",
+		Long:  "composing containers using yaml definition file",
+		Args:  cobra.ExactArgs(0),
+		Run: func(cmd *cobra.Command, args []string) {
+			err := checkCompleteness()
+			if err != nil {
+				LOGGER.Error(err.Error())
+				return
+			}
+
+			err = Compose(ComposeFile)
+			if err != nil {
+				LOGGER.Error(err.Error())
+				return
+			}
+		},
+	}
+	composeCmd.Flags().StringVarP(&ComposeFile, "file", "f", "", "required(compose yaml file)")
+	composeCmd.MarkFlagRequired("file")
+
 	var rootCmd = &cobra.Command{
 		Use:   "lpmx",
 		Short: "lpmx rootless container",
 	}
-	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, setCmd, resumeCmd, getCmd, dockerCmd, singularityCmd, exposeCmd, uninstallCmd, versionCmd, downloadCmd, updateCmd, resetCmd)
+	rootCmd.AddCommand(initCmd, destroyCmd, listCmd, setCmd, resumeCmd, getCmd, dockerCmd, singularityCmd, exposeCmd, uninstallCmd, versionCmd, downloadCmd, updateCmd, resetCmd, composeCmd)
 	rootCmd.Execute()
 }

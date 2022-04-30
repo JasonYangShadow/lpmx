@@ -3,6 +3,8 @@ package container
 import (
 	"bufio"
 	"fmt"
+	"github.com/goccy/go-yaml"
+	"io/ioutil"
 	"net"
 	"net/rpc"
 	"os"
@@ -25,6 +27,7 @@ import (
 	. "github.com/JasonYangShadow/lpmx/singularity"
 	. "github.com/JasonYangShadow/lpmx/utils"
 	. "github.com/JasonYangShadow/lpmx/yaml"
+	. "github.com/JasonYangShadow/lpmx/compose"
 	"github.com/sirupsen/logrus"
 )
 
@@ -674,6 +677,50 @@ func Destroy(id string) *Error {
 
 }
 
+func Compose(file string) *Error {
+	yamlFile, err := ioutil.ReadFile(file)
+	if err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("could not read %s", file))
+		return cerr
+	}
+
+	var topLevel TopLevel
+	err = yaml.Unmarshal(yamlFile, &topLevel)
+	if err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("could not unmarshal file %s", file))
+		return cerr
+	}
+
+	depends, remains, appMap, validateErr := topLevel.Validate()
+	if validateErr != nil {
+		return validateErr
+	}
+
+	if len(depends) > 0 {
+		for _, depend := range depends {
+			if targetApp, tok := (*appMap)[depend]; tok {
+				terr := runComposeApp(targetApp)
+				if terr != nil {
+					return terr
+				}
+			}
+		}
+	}
+
+	if len(remains) > 0 {
+		for _, remain := range remains {
+			if targetApp, tok := (*appMap)[remain]; tok {
+				terr := runComposeApp(targetApp)
+				if terr != nil {
+					return terr
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func Run(configmap *map[string]interface{}, args ...string) *Error {
 	//this map is used for dynamically controlling the generation of env vars
 	envmap := make(map[string]string)
@@ -689,6 +736,10 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 
 	var con Container
 	con.Id = (*configmap)["id"].(string)
+	if con.Id == "" || len(con.Id) == 0 {
+		con.Id = RandomString(IDLENGTH)
+		(*configmap)["id"] = con.Id
+	}
 	con.BaseType = (*configmap)["imagetype"].(string)
 	con.ImageBase = (*configmap)["image"].(string)
 	con.Layers = (*configmap)["layers"].(string)
@@ -699,6 +750,9 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 	con.RootPath = dir
 	con.ConfigPath = rootdir
 	con.SettingPath = config
+	if (*configmap)["engine"] == nil {
+		(*configmap)["engine"] = ""
+	}
 	con.Engine = (*configmap)["engine"].(string)
 	if (*configmap)["container_name"] == nil {
 		(*configmap)["container_name"] = ""
@@ -2459,6 +2513,10 @@ func DockerReset(name string) *Error {
 }
 
 func CommonFastRun(name, volume_map, engine, execmaps, mountfile string, args ...string) *Error {
+	autoErr := autoDownload(name)
+	if autoErr != nil {
+		return autoErr
+	}
 	configmap, err := generateContainer(name, "", volume_map, engine, mountfile)
 	if err != nil {
 		return err
@@ -2477,8 +2535,30 @@ func CommonFastRun(name, volume_map, engine, execmaps, mountfile string, args ..
 	return err
 }
 
+func CommonComposeRun(name, container_name, volume_map, execmaps, mountfile, command string) (string, *Error) {
+	autoErr := autoDownload(name)
+	if autoErr != nil {
+		return "", autoErr
+	}
+
+	configmap, err := generateContainer(name, container_name, volume_map, "", mountfile)
+	if err != nil {
+		return "", err
+	}
+	if len(execmaps) > 0 {
+		(*configmap)["execmaps"] = execmaps
+	}
+
+	err = Run(configmap, strings.Split(command," ")...)
+	return (*configmap)["id"].(string), nil
+}
+
 //create container based on images
 func CommonCreate(name, container_name, volume_map, engine, execmaps, mountfile string) *Error {
+	autoErr := autoDownload(name)
+	if autoErr != nil {
+		return autoErr
+	}
 	configmap, err := generateContainer(name, container_name, volume_map, engine, mountfile)
 	if err != nil {
 		return err
@@ -2988,9 +3068,6 @@ func (con *Container) bashShell(envmap map[string]string, args ...string) *Error
 }
 
 func (con *Container) createContainer() *Error {
-	if con.Id == "" || len(con.Id) == 0 {
-		con.Id = RandomString(IDLENGTH)
-	}
 	con.LogPath = fmt.Sprintf("%s/log", con.ConfigPath)
 	con.ElfPatcherPath = con.SysDir
 	user, err := Command("whoami")
@@ -3787,4 +3864,62 @@ func getMap(id string, name string) (string, *Error) {
 		}
 	}
 	return "", nil
+}
+
+func autoDownload(name string) *Error {
+	currdir, err := GetConfigDir()
+	if err != nil {
+		return err
+	}
+	rootdir := fmt.Sprintf("%s/.lpmxdata", currdir)
+	var doc Image
+	err = unmarshalObj(rootdir, &doc)
+	if err == nil {
+		if _, ok := doc.Images[name]; !ok {
+			LOGGER.WithFields(logrus.Fields{
+				"name": name,
+			}).Info("could not find the image, will download it from repo")
+			return DockerDownload(name, "", "")
+		}
+	} else {
+		LOGGER.WithFields(logrus.Fields{
+			"name": name,
+		}).Info("could not find the image, will download it from repo")
+		return DockerDownload(name, "", "")
+	}
+	return err
+}
+
+func convertMapValue (values []string) string {
+	if len(values) > 0 {
+		for _, value := range values {
+			strings.ReplaceAll(value, ":", "=")
+		}
+		return strings.Join(values, ":")
+	}
+	return ""
+}
+
+func runComposeApp (targetApp AppLevel) *Error {
+	container_name := targetApp.Name
+	name := targetApp.Image
+	volume_map := convertMapValue(targetApp.Share)
+	exec_map := convertMapValue(targetApp.Inject)
+	mountfile := ""
+	command := targetApp.Command
+	container_id, cerr := CommonComposeRun(name, container_name, volume_map, exec_map, mountfile, command)
+	if cerr != nil{
+		return cerr
+	}
+
+	if len(targetApp.Expose) > 0 {
+		for _, expose := range targetApp.Expose {
+			eerr := Expose(container_id, strings.Split(expose, ":")[0], strings.Split(expose, ":")[1])
+			if eerr != nil {
+				return eerr
+			}
+		}
+	}
+
+	return nil
 }

@@ -29,43 +29,49 @@ type AppLevel struct {
 	Share     []string `yaml:"share"`
 	Inject    []string `yaml:"inject"`
 	DependsOn []string `yaml:"depends"`
+	Command   string `yaml:"command"`
 }
 
-func (topLevel *TopLevel) Validate() ([]string, *map[string]AppLevel, *Error) {
+func (topLevel *TopLevel) Validate() ([]string, []string, *map[string]AppLevel, *Error) {
 	if stringUtils.IsEmpty(topLevel.Version) || strings.TrimSpace(topLevel.Version) != Version {
 		err := ErrNew(ErrNExist, "version in yaml file does not exist or is not correct")
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	nameSet := mapset.NewSet()
+	nameSet := mapset.NewSet[string]()
 	dependMap := make(map[string]int8)
 	appsMap := make(map[string]AppLevel)
 	for idx, element := range topLevel.Apps {
 		if stringUtils.IsEmpty(element.Name) {
 			err := ErrNew(ErrNExist, "name is a mandatory field")
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		if stringUtils.IsEmpty(element.Image) {
 			err := ErrNew(ErrNExist, "image is a mandatory field")
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		if stringUtils.IsEmpty(element.ImageType) {
 			err := ErrNew(ErrNExist, "image type is a mandatory field")
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
-		if element.ImageType != TypeDocker && element.ImageType != TypeSingularity {
-			err := ErrNew(ErrMismatch, "image type should be either 'docker' or 'singularity'")
-			return nil, nil, err
+		if element.ImageType != TypeDocker {
+			err := ErrNew(ErrMismatch, "image type should be 'docker'")
+			return nil, nil, nil, err
+		}
+
+		if stringUtils.IsEmpty(element.Command) {
+			err := ErrNew(ErrNExist, "command type is a mandatory field")
+			return nil, nil, nil,err
 		}
 
 		if len(element.Expose) > 0 {
 			for _, expose := range element.Expose {
 				if !stringUtils.Contains(expose, ":") {
 					err := ErrNew(ErrNExist, "expose should contain ':'")
-					return nil, nil, err
+					return nil, nil, nil,err
 				}
 			}
 		}
@@ -74,7 +80,7 @@ func (topLevel *TopLevel) Validate() ([]string, *map[string]AppLevel, *Error) {
 			for _, port := range element.Port {
 				if !stringUtils.Contains(port, ":") {
 					err := ErrNew(ErrNExist, "port should contain ':'")
-					return nil, nil, err
+					return nil, nil, nil, err
 				}
 			}
 		}
@@ -83,7 +89,7 @@ func (topLevel *TopLevel) Validate() ([]string, *map[string]AppLevel, *Error) {
 			for _, share := range element.Share {
 				if !stringUtils.Contains(share, ":") {
 					err := ErrNew(ErrNExist, "share should contain ':'")
-					return nil, nil, err
+					return nil, nil, nil, err
 				}
 			}
 		}
@@ -92,14 +98,14 @@ func (topLevel *TopLevel) Validate() ([]string, *map[string]AppLevel, *Error) {
 			for _, inject := range element.Inject {
 				if !stringUtils.Contains(inject, ":") {
 					err := ErrNew(ErrNExist, "inject should contain ':'")
-					return nil, nil, err
+					return nil, nil, nil, err
 				}
 			}
 		}
 
 		if nameSet.Contains(element.Name) {
 			err := ErrNew(ErrExist, fmt.Sprintf("%s is already defined in yaml, should not have duplicated name", element.Name))
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		nameSet.Add(element.Name)
@@ -112,7 +118,7 @@ func (topLevel *TopLevel) Validate() ([]string, *map[string]AppLevel, *Error) {
 			for _, dependItem := range element.DependsOn {
 				if !nameSet.Contains(dependItem) {
 					err := ErrNew(ErrMismatch, fmt.Sprintf("%s is not defined in yaml file", dependItem))
-					return nil, nil, err
+					return nil, nil, nil, err
 				}
 
 				if v, ok := dependMap[dependItem]; ok {
@@ -125,15 +131,27 @@ func (topLevel *TopLevel) Validate() ([]string, *map[string]AppLevel, *Error) {
 	}
 
 	if len(dependMap) > 0 {
+		orderSet := mapset.NewSet[string]()
 		keys := make([]string, 0, len(dependMap))
 		for key := range dependMap {
 			keys = append(keys, key)
+			orderSet.Add(key)
 		}
 		sort.Slice(keys, func(i, j int) bool {
 			return dependMap[keys[i]] > dependMap[keys[j]]
 		})
-		return keys, &appsMap, nil
+
+		remainSet := nameSet.Difference(orderSet)
+		remainKeys := make([]string, 0, len(remainSet.ToSlice()))
+		for _, key := range remainSet.ToSlice() {
+			remainKeys = append(remainKeys, key)
+		}
+		return keys, remainKeys, &appsMap, nil
 	}
 
-	return nil, &appsMap, nil
+	remainKeys := make([]string, 0, len(nameSet.ToSlice()))
+	for _, key := range nameSet.ToSlice() {
+		remainKeys = append(remainKeys, key)
+	}
+	return nil, remainKeys, &appsMap, nil
 }
