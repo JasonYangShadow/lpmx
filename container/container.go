@@ -453,8 +453,9 @@ func List(ListName string) *Error {
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err = unmarshalObj(rootdir, &sys)
+	format := "%s%30s%30s%15s%15s%15s%30s"
 	if err == nil {
-		fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", "ContainerID", "ContainerName", "Status", "PID", "RPC", "BaseType", "Image"))
+		fmt.Println(fmt.Sprintf(format, "ContainerID", "ContainerName", "Status", "PID", "RPC", "BaseType", "Image"))
 		for k, v := range sys.Containers {
 			if cmap, ok := v.(map[string]interface{}); ok {
 				//filter with name
@@ -476,16 +477,16 @@ func List(ListName string) *Error {
 					if err == nil && conn != nil {
 						conn.Close()
 						if pid != -1 {
-							fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "RUNNING", strconv.Itoa(pid), cmap["RPC"].(string), cmap["BaseType"].(string), cmap["Image"].(string)))
+							fmt.Println(fmt.Sprintf(format, k, cmap["ContainerName"].(string), "RUNNING", strconv.Itoa(pid), cmap["RPC"].(string), cmap["BaseType"].(string), cmap["Image"].(string)))
 						} else {
-							fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "STOPPED", "NA", cmap["RPC"].(string), cmap["BaseType"].(string), cmap["Image"].(string)))
+							fmt.Println(fmt.Sprintf(format, k, cmap["ContainerName"].(string), "STOPPED", "NA", cmap["RPC"].(string), cmap["BaseType"].(string), cmap["Image"].(string)))
 						}
 					}
 				} else {
 					if pid != -1 {
-						fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "RUNNING", strconv.Itoa(pid), "NA", cmap["BaseType"].(string), cmap["Image"].(string)))
+						fmt.Println(fmt.Sprintf(format, k, cmap["ContainerName"].(string), "RUNNING", strconv.Itoa(pid), "NA", cmap["BaseType"].(string), cmap["Image"].(string)))
 					} else {
-						fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "STOPPED", "NA", "NA", cmap["BaseType"].(string), cmap["Image"].(string)))
+						fmt.Println(fmt.Sprintf(format, k, cmap["ContainerName"].(string), "STOPPED", "NA", "NA", cmap["BaseType"].(string), cmap["Image"].(string)))
 					}
 				}
 			} else {
@@ -600,7 +601,7 @@ func Resume(id string, engine bool, args ...string) *Error {
 					if engine {
 						configmap["enable_engine"] = "true"
 					}
-					err := Run(&configmap, args...)
+					err := Run(&configmap, nil, args...)
 					if err != nil {
 						return err
 					}
@@ -721,9 +722,14 @@ func Compose(file string) *Error {
 	return nil
 }
 
-func Run(configmap *map[string]interface{}, args ...string) *Error {
-	//this map is used for dynamically controlling the generation of env vars
+func Run(configmap *map[string]interface{}, env *map[string]string, args ...string) *Error {
 	envmap := make(map[string]string)
+
+	if env != nil && len(*env) > 0 {
+		for k, v := range *env {
+			envmap[k] = v
+		}
+	}
 
 	//dir is rw folder of container
 	dir, _ := (*configmap)["dir"].(string)
@@ -1702,7 +1708,7 @@ func SingularityLoad(file string, name string, tag string) *Error {
 
 	//check if file exists
 	if !FileExist(file) {
-		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does exist", file))
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does not exist", file))
 		return cerr
 	}
 
@@ -2512,11 +2518,7 @@ func DockerReset(name string) *Error {
 	return err
 }
 
-func CommonFastRun(name, volume_map, engine, execmaps, mountfile string, args ...string) *Error {
-	autoErr := autoDownload(name)
-	if autoErr != nil {
-		return autoErr
-	}
+func CommonFastRun(name, volume_map, engine, execmaps, mountfile string, env *map[string]string, args ...string) *Error {
 	configmap, err := generateContainer(name, "", volume_map, engine, mountfile)
 	if err != nil {
 		return err
@@ -2525,7 +2527,7 @@ func CommonFastRun(name, volume_map, engine, execmaps, mountfile string, args ..
 	if len(execmaps) > 0 {
 		(*configmap)["execmaps"] = execmaps
 	}
-	err = Run(configmap, args...)
+	err = Run(configmap, env, args...)
 	//remove container
 	if err != nil {
 		err = Destroy(id)
@@ -2535,12 +2537,7 @@ func CommonFastRun(name, volume_map, engine, execmaps, mountfile string, args ..
 	return err
 }
 
-func CommonComposeRun(name, container_name, volume_map, execmaps, mountfile, command string) (string, *Error) {
-	autoErr := autoDownload(name)
-	if autoErr != nil {
-		return "", autoErr
-	}
-
+func CommonComposeRun(name, container_name, volume_map, execmaps, mountfile, command string, env *map[string]string) (string, *Error) {
 	configmap, err := generateContainer(name, container_name, volume_map, "", mountfile)
 	if err != nil {
 		return "", err
@@ -2549,16 +2546,12 @@ func CommonComposeRun(name, container_name, volume_map, execmaps, mountfile, com
 		(*configmap)["execmaps"] = execmaps
 	}
 
-	err = Run(configmap, strings.Split(command," ")...)
+	err = Run(configmap, env, strings.Split(command," ")...)
 	return (*configmap)["id"].(string), nil
 }
 
 //create container based on images
-func CommonCreate(name, container_name, volume_map, engine, execmaps, mountfile string) *Error {
-	autoErr := autoDownload(name)
-	if autoErr != nil {
-		return autoErr
-	}
+func CommonCreate(name, container_name, volume_map, engine, execmaps, mountfile string, env *map[string]string) *Error {
 	configmap, err := generateContainer(name, container_name, volume_map, engine, mountfile)
 	if err != nil {
 		return err
@@ -2566,7 +2559,7 @@ func CommonCreate(name, container_name, volume_map, engine, execmaps, mountfile 
 	if len(execmaps) > 0 {
 		(*configmap)["execmaps"] = execmaps
 	}
-	err = Run(configmap)
+	err = Run(configmap, env)
 	return err
 }
 
@@ -3017,6 +3010,15 @@ func (con *Container) genEnv(envmap map[string]string) (map[string]string, *Erro
 		if sk, sok := os.LookupEnv(fmt.Sprintf("%s_ROOT", con.Engine)); sok {
 			paths = append(paths, sk)
 			env["FAKECHROOT_EXCLUDE_PATH"] = strings.Join(paths, ":")
+		}
+	}
+
+	//add all other k v in envmap
+	if envmap != nil && len(envmap) > 0 {
+		for k, v := range envmap {
+			if k != "engine" {
+				env[k] = v
+			}
 		}
 	}
 	return env, nil
@@ -3866,28 +3868,44 @@ func getMap(id string, name string) (string, *Error) {
 	return "", nil
 }
 
-func autoDownload(name string) *Error {
+func autoDownload(targetApp AppLevel) (string, *Error) {
+	image := targetApp.Image
+	imageType := targetApp.ImageType
 	currdir, err := GetConfigDir()
 	if err != nil {
-		return err
+		return "", err
 	}
 	rootdir := fmt.Sprintf("%s/.lpmxdata", currdir)
 	var doc Image
 	err = unmarshalObj(rootdir, &doc)
 	if err == nil {
-		if _, ok := doc.Images[name]; !ok {
-			LOGGER.WithFields(logrus.Fields{
-				"name": name,
-			}).Info("could not find the image, will download it from repo")
-			return DockerDownload(name, "", "")
+		if _, ok := doc.Images[image]; !ok {
+			if strings.Compare(imageType, TypeDocker) == 0 {
+				LOGGER.WithFields(logrus.Fields{
+					"name": image,
+				}).Info("could not find the image, will download it from repo")
+				return image, DockerDownload(image, "", "")
+			} else if strings.Compare(imageType, TypeSingularity) == 0 {
+				LOGGER.WithFields(logrus.Fields{
+					"name": image,
+				}).Info("could not find the image, will extract it from the file")
+				return fmt.Sprintf("%s:latest", targetApp.Name), SingularityLoad(image, targetApp.Name, "latest")
+			}
 		}
 	} else {
-		LOGGER.WithFields(logrus.Fields{
-			"name": name,
-		}).Info("could not find the image, will download it from repo")
-		return DockerDownload(name, "", "")
+		if strings.Compare(imageType, TypeDocker) == 0 {
+			LOGGER.WithFields(logrus.Fields{
+				"name": image,
+			}).Info("could not find the image, will download it from repo")
+			return image, DockerDownload(image, "", "")
+		} else if strings.Compare(imageType, TypeSingularity) == 0 {
+			LOGGER.WithFields(logrus.Fields{
+				"name": image,
+			}).Info("could not find the image, will extract it from the file")
+			return fmt.Sprintf("%s:latest", targetApp.Name), SingularityLoad(image, targetApp.Name, "latest")
+		}
 	}
-	return err
+	return "", err
 }
 
 func convertMapValue (values []string) string {
@@ -3903,13 +3921,24 @@ func convertMapValue (values []string) string {
 
 func runComposeApp (targetApp AppLevel) *Error {
 	container_name := targetApp.Name
-	name := targetApp.Image
 	volume_map := convertMapValue(targetApp.Share)
 	exec_map := convertMapValue(targetApp.Inject)
 	mountfile := ""
 	command := targetApp.Command
+	envmap := make(map[string]string)
+	if targetApp.Env != nil && len(targetApp.Env) > 0 {
+		for _, env := range targetApp.Env {
+			k, v := strings.Split(env, "=")[0], strings.Split(env, "=")[1]
+			envmap[k] = v
+		}
+	}
 
-	container_id, cerr := CommonComposeRun(name, container_name, volume_map, exec_map, mountfile, command)
+	name, cerr := autoDownload(targetApp)
+	if cerr != nil {
+		return cerr
+	}
+
+	container_id, cerr := CommonComposeRun(name, container_name, volume_map, exec_map, mountfile, command, &envmap)
 	if cerr != nil{
 		return cerr
 	}

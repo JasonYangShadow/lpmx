@@ -29,6 +29,7 @@ type AppLevel struct {
 	Share     []string `yaml:"share"`
 	Inject    []string `yaml:"inject"`
 	DependsOn []string `yaml:"depends"`
+	Env 	  []string `yaml:"envs"`
 	Command   string `yaml:"command"`
 }
 
@@ -57,8 +58,8 @@ func (topLevel *TopLevel) Validate() ([]string, []string, *map[string]AppLevel, 
 			return nil, nil, nil, err
 		}
 
-		if element.ImageType != TypeDocker {
-			err := ErrNew(ErrMismatch, "image type should be 'docker'")
+		if element.ImageType != TypeDocker && element.ImageType != TypeSingularity{
+			err := ErrNew(ErrMismatch, "image type should be 'docker' or 'singularity'")
 			return nil, nil, nil, err
 		}
 
@@ -93,6 +94,15 @@ func (topLevel *TopLevel) Validate() ([]string, []string, *map[string]AppLevel, 
 			for _, inject := range element.Inject {
 				if !stringUtils.Contains(inject, ":") {
 					err := ErrNew(ErrNExist, "inject should contain ':'")
+					return nil, nil, nil, err
+				}
+			}
+		}
+
+		if len(element.Env) > 0 {
+			for _, env := range element.Env {
+				if !stringUtils.Contains(env, "=") {
+					err := ErrNew(ErrNExist, "env should contain '=")
 					return nil, nil, nil, err
 				}
 			}

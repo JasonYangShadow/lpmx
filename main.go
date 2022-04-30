@@ -20,7 +20,7 @@ var (
 )
 
 const (
-	VERSION = "alpha-2.0.0"
+	VERSION = "alpha-2.0.1"
 )
 
 func checkCompleteness() *Error {
@@ -448,7 +448,7 @@ func main() {
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonCreate(args[0], DockerCreateName, DockerCreateVolume, DockerCreateEngine, DockerCreateExecMap, DockerMountFile)
+			err := CommonCreate(args[0], DockerCreateName, DockerCreateVolume, DockerCreateEngine, DockerCreateExecMap, DockerMountFile, nil)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -478,7 +478,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonFastRun(args[0], DockerRunVolume, DockerRunMode, DockerRunExecMap, DockerRunMountFile, args[1:]...)
+			err := CommonFastRun(args[0], DockerRunVolume, DockerRunMode, DockerRunExecMap, DockerRunMountFile, nil, args[1:]...)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -727,7 +727,7 @@ func main() {
 		},
 
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonCreate(args[0], SingularityCreateName, SingularityCreateVolume, SingularityCreateEngine, SingularityCreateExecMap, SingularityMountFile)
+			err := CommonCreate(args[0], SingularityCreateName, SingularityCreateVolume, SingularityCreateEngine, SingularityCreateExecMap, SingularityMountFile, nil)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
@@ -804,7 +804,7 @@ func main() {
 			}
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := CommonFastRun(args[0], DockerRunVolume, SingularityRunMode, SingularityRunExecMap, SingularityMountFile, args[1:]...)
+			err := CommonFastRun(args[0], DockerRunVolume, SingularityRunMode, SingularityRunExecMap, SingularityMountFile, nil, args[1:]...)
 			if err != nil {
 				LOGGER.Fatal(err.Error())
 				return
