@@ -3,6 +3,8 @@ package container
 import (
 	"bufio"
 	"fmt"
+	"github.com/goccy/go-yaml"
+	"io/ioutil"
 	"net"
 	"net/rpc"
 	"os"
@@ -25,6 +27,7 @@ import (
 	. "github.com/JasonYangShadow/lpmx/singularity"
 	. "github.com/JasonYangShadow/lpmx/utils"
 	. "github.com/JasonYangShadow/lpmx/yaml"
+	. "github.com/JasonYangShadow/lpmx/compose"
 	"github.com/sirupsen/logrus"
 )
 
@@ -450,8 +453,9 @@ func List(ListName string) *Error {
 	var sys Sys
 	rootdir := fmt.Sprintf("%s/.lpmxsys", currdir)
 	err = unmarshalObj(rootdir, &sys)
+	format := "%s%30s%30s%15s%15s%15s%30s"
 	if err == nil {
-		fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", "ContainerID", "ContainerName", "Status", "PID", "RPC", "BaseType", "Image"))
+		fmt.Println(fmt.Sprintf(format, "ContainerID", "ContainerName", "Status", "PID", "RPC", "BaseType", "Image"))
 		for k, v := range sys.Containers {
 			if cmap, ok := v.(map[string]interface{}); ok {
 				//filter with name
@@ -473,16 +477,16 @@ func List(ListName string) *Error {
 					if err == nil && conn != nil {
 						conn.Close()
 						if pid != -1 {
-							fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "RUNNING", strconv.Itoa(pid), cmap["RPC"].(string), cmap["BaseType"].(string), cmap["Image"].(string)))
+							fmt.Println(fmt.Sprintf(format, k, cmap["ContainerName"].(string), "RUNNING", strconv.Itoa(pid), cmap["RPC"].(string), cmap["BaseType"].(string), cmap["Image"].(string)))
 						} else {
-							fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "STOPPED", "NA", cmap["RPC"].(string), cmap["BaseType"].(string), cmap["Image"].(string)))
+							fmt.Println(fmt.Sprintf(format, k, cmap["ContainerName"].(string), "STOPPED", "NA", cmap["RPC"].(string), cmap["BaseType"].(string), cmap["Image"].(string)))
 						}
 					}
 				} else {
 					if pid != -1 {
-						fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "RUNNING", strconv.Itoa(pid), "NA", cmap["BaseType"].(string), cmap["Image"].(string)))
+						fmt.Println(fmt.Sprintf(format, k, cmap["ContainerName"].(string), "RUNNING", strconv.Itoa(pid), "NA", cmap["BaseType"].(string), cmap["Image"].(string)))
 					} else {
-						fmt.Println(fmt.Sprintf("%s%15s%15s%15s%15s%15s%15s", k, cmap["ContainerName"].(string), "STOPPED", "NA", "NA", cmap["BaseType"].(string), cmap["Image"].(string)))
+						fmt.Println(fmt.Sprintf(format, k, cmap["ContainerName"].(string), "STOPPED", "NA", "NA", cmap["BaseType"].(string), cmap["Image"].(string)))
 					}
 				}
 			} else {
@@ -597,7 +601,7 @@ func Resume(id string, engine bool, args ...string) *Error {
 					if engine {
 						configmap["enable_engine"] = "true"
 					}
-					err := Run(&configmap, args...)
+					err := Run(&configmap, nil, args...)
 					if err != nil {
 						return err
 					}
@@ -674,9 +678,58 @@ func Destroy(id string) *Error {
 
 }
 
-func Run(configmap *map[string]interface{}, args ...string) *Error {
-	//this map is used for dynamically controlling the generation of env vars
+func Compose(file string) *Error {
+	yamlFile, err := ioutil.ReadFile(file)
+	if err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("could not read %s", file))
+		return cerr
+	}
+
+	var topLevel TopLevel
+	err = yaml.Unmarshal(yamlFile, &topLevel)
+	if err != nil {
+		cerr := ErrNew(err, fmt.Sprintf("could not unmarshal file %s", file))
+		return cerr
+	}
+
+	depends, remains, appMap, validateErr := topLevel.Validate()
+	if validateErr != nil {
+		return validateErr
+	}
+
+	if len(depends) > 0 {
+		for _, depend := range depends {
+			if targetApp, tok := (*appMap)[depend]; tok {
+				terr := runComposeApp(targetApp)
+				if terr != nil {
+					return terr
+				}
+			}
+		}
+	}
+
+	if len(remains) > 0 {
+		for _, remain := range remains {
+			if targetApp, tok := (*appMap)[remain]; tok {
+				terr := runComposeApp(targetApp)
+				if terr != nil {
+					return terr
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func Run(configmap *map[string]interface{}, env *map[string]string, args ...string) *Error {
 	envmap := make(map[string]string)
+
+	if env != nil && len(*env) > 0 {
+		for k, v := range *env {
+			envmap[k] = v
+		}
+	}
 
 	//dir is rw folder of container
 	dir, _ := (*configmap)["dir"].(string)
@@ -689,6 +742,10 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 
 	var con Container
 	con.Id = (*configmap)["id"].(string)
+	if con.Id == "" || len(con.Id) == 0 {
+		con.Id = RandomString(IDLENGTH)
+		(*configmap)["id"] = con.Id
+	}
 	con.BaseType = (*configmap)["imagetype"].(string)
 	con.ImageBase = (*configmap)["image"].(string)
 	con.Layers = (*configmap)["layers"].(string)
@@ -699,6 +756,9 @@ func Run(configmap *map[string]interface{}, args ...string) *Error {
 	con.RootPath = dir
 	con.ConfigPath = rootdir
 	con.SettingPath = config
+	if (*configmap)["engine"] == nil {
+		(*configmap)["engine"] = ""
+	}
 	con.Engine = (*configmap)["engine"].(string)
 	if (*configmap)["container_name"] == nil {
 		(*configmap)["container_name"] = ""
@@ -1648,7 +1708,7 @@ func SingularityLoad(file string, name string, tag string) *Error {
 
 	//check if file exists
 	if !FileExist(file) {
-		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does exist", file))
+		cerr := ErrNew(ErrNExist, fmt.Sprintf("%s does not exist", file))
 		return cerr
 	}
 
@@ -2458,7 +2518,7 @@ func DockerReset(name string) *Error {
 	return err
 }
 
-func CommonFastRun(name, volume_map, engine, execmaps, mountfile string, args ...string) *Error {
+func CommonFastRun(name, volume_map, engine, execmaps, mountfile string, env *map[string]string, args ...string) *Error {
 	configmap, err := generateContainer(name, "", volume_map, engine, mountfile)
 	if err != nil {
 		return err
@@ -2467,7 +2527,7 @@ func CommonFastRun(name, volume_map, engine, execmaps, mountfile string, args ..
 	if len(execmaps) > 0 {
 		(*configmap)["execmaps"] = execmaps
 	}
-	err = Run(configmap, args...)
+	err = Run(configmap, env, args...)
 	//remove container
 	if err != nil {
 		err = Destroy(id)
@@ -2477,8 +2537,21 @@ func CommonFastRun(name, volume_map, engine, execmaps, mountfile string, args ..
 	return err
 }
 
+func CommonComposeRun(name, container_name, volume_map, execmaps, mountfile, command string, env *map[string]string) (string, *Error) {
+	configmap, err := generateContainer(name, container_name, volume_map, "", mountfile)
+	if err != nil {
+		return "", err
+	}
+	if len(execmaps) > 0 {
+		(*configmap)["execmaps"] = execmaps
+	}
+
+	err = Run(configmap, env, strings.Split(command," ")...)
+	return (*configmap)["id"].(string), nil
+}
+
 //create container based on images
-func CommonCreate(name, container_name, volume_map, engine, execmaps, mountfile string) *Error {
+func CommonCreate(name, container_name, volume_map, engine, execmaps, mountfile string, env *map[string]string) *Error {
 	configmap, err := generateContainer(name, container_name, volume_map, engine, mountfile)
 	if err != nil {
 		return err
@@ -2486,7 +2559,7 @@ func CommonCreate(name, container_name, volume_map, engine, execmaps, mountfile 
 	if len(execmaps) > 0 {
 		(*configmap)["execmaps"] = execmaps
 	}
-	err = Run(configmap)
+	err = Run(configmap, env)
 	return err
 }
 
@@ -2939,6 +3012,15 @@ func (con *Container) genEnv(envmap map[string]string) (map[string]string, *Erro
 			env["FAKECHROOT_EXCLUDE_PATH"] = strings.Join(paths, ":")
 		}
 	}
+
+	//add all other k v in envmap
+	if envmap != nil && len(envmap) > 0 {
+		for k, v := range envmap {
+			if k != "engine" {
+				env[k] = v
+			}
+		}
+	}
 	return env, nil
 }
 
@@ -2988,9 +3070,6 @@ func (con *Container) bashShell(envmap map[string]string, args ...string) *Error
 }
 
 func (con *Container) createContainer() *Error {
-	if con.Id == "" || len(con.Id) == 0 {
-		con.Id = RandomString(IDLENGTH)
-	}
 	con.LogPath = fmt.Sprintf("%s/log", con.ConfigPath)
 	con.ElfPatcherPath = con.SysDir
 	user, err := Command("whoami")
@@ -3787,4 +3866,91 @@ func getMap(id string, name string) (string, *Error) {
 		}
 	}
 	return "", nil
+}
+
+func autoDownload(targetApp AppLevel) (string, *Error) {
+	image := targetApp.Image
+	imageType := targetApp.ImageType
+	currdir, err := GetConfigDir()
+	if err != nil {
+		return "", err
+	}
+	rootdir := fmt.Sprintf("%s/.lpmxdata", currdir)
+	var doc Image
+	err = unmarshalObj(rootdir, &doc)
+	if err == nil {
+		if _, ok := doc.Images[image]; !ok {
+			if strings.Compare(imageType, TypeDocker) == 0 {
+				LOGGER.WithFields(logrus.Fields{
+					"name": image,
+				}).Info("could not find the image, will download it from repo")
+				return image, DockerDownload(image, "", "")
+			} else if strings.Compare(imageType, TypeSingularity) == 0 {
+				LOGGER.WithFields(logrus.Fields{
+					"name": image,
+				}).Info("could not find the image, will extract it from the file")
+				return fmt.Sprintf("%s:latest", targetApp.Name), SingularityLoad(image, targetApp.Name, "latest")
+			}
+		}
+	} else {
+		if strings.Compare(imageType, TypeDocker) == 0 {
+			LOGGER.WithFields(logrus.Fields{
+				"name": image,
+			}).Info("could not find the image, will download it from repo")
+			return image, DockerDownload(image, "", "")
+		} else if strings.Compare(imageType, TypeSingularity) == 0 {
+			LOGGER.WithFields(logrus.Fields{
+				"name": image,
+			}).Info("could not find the image, will extract it from the file")
+			return fmt.Sprintf("%s:latest", targetApp.Name), SingularityLoad(image, targetApp.Name, "latest")
+		}
+	}
+	return "", err
+}
+
+func convertMapValue (values []string) string {
+	var retValues []string
+	if len(values) > 0 {
+		for _, value := range values {
+			retValues = append(retValues, strings.ReplaceAll(value, ":", "="))
+		}
+		return strings.Join(retValues, ":")
+	}
+	return ""
+}
+
+func runComposeApp (targetApp AppLevel) *Error {
+	container_name := targetApp.Name
+	volume_map := convertMapValue(targetApp.Share)
+	exec_map := convertMapValue(targetApp.Inject)
+	mountfile := ""
+	command := targetApp.Command
+	envmap := make(map[string]string)
+	if targetApp.Env != nil && len(targetApp.Env) > 0 {
+		for _, env := range targetApp.Env {
+			k, v := strings.Split(env, "=")[0], strings.Split(env, "=")[1]
+			envmap[k] = v
+		}
+	}
+
+	name, cerr := autoDownload(targetApp)
+	if cerr != nil {
+		return cerr
+	}
+
+	container_id, cerr := CommonComposeRun(name, container_name, volume_map, exec_map, mountfile, command, &envmap)
+	if cerr != nil{
+		return cerr
+	}
+
+	if len(targetApp.Expose) > 0 {
+		for _, expose := range targetApp.Expose {
+			eerr := Expose(container_id, strings.Split(expose, ":")[0], strings.Split(expose, ":")[1])
+			if eerr != nil {
+				return eerr
+			}
+		}
+	}
+
+	return nil
 }
