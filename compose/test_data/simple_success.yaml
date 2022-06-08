@@ -1,0 +1,12 @@
+version: 1
+apps:
+  - name: "test1"
+    image: "image1"
+    type: "docker"
+    expose:
+      - "t1:t2"
+    depends:
+      - "test2"
+  - name: "test2"
+    image: "image2"
+    type: "docker"

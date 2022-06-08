@@ -2,6 +2,30 @@
 
 
 [[projects]]
+  branch = "master"
+  digest = "1:8c0b4135cf493c355d9a2566e5f669d9703a090ba4c1f05a5f77bfcf395005e5"
+  name = "github.com/agrison/go-commons-lang"
+  packages = ["stringUtils"]
+  pruneopts = "UT"
+  revision = "58e9fcb95174848d1af23b09773f7fef5bcf5dfa"
+
+[[projects]]
+  digest = "1:ffe9824d294da03b391f44e1ae8281281b4afc1bdaa9588c9097785e3af10cec"
+  name = "github.com/davecgh/go-spew"
+  packages = ["spew"]
+  pruneopts = "UT"
+  revision = "8991bc29aa16c548c550c7ff78260e27b9ab7c73"
+  version = "v1.1.1"
+
+[[projects]]
+  digest = "1:357062cef2645c9e3b1722d57dd5f6d56c587e0bd4ec5dd2b18cc88a1210b720"
+  name = "github.com/deckarep/golang-set"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "29bd72cb4a51042805cf60aaecd2585a64d357de"
+  version = "v2.1.0"
+
+[[projects]]
   digest = "1:4165002b6f20cdd11994d0ec9d3265969179ee03415106b95b500ca021e01347"
   name = "github.com/docker/distribution"
   packages = [
@@ -25,12 +49,37 @@
   revision = "aabc10ec26b754e797f9028f4589c5b7bd90dc20"
 
 [[projects]]
+  digest = "1:7fed610d7d2ccf4249025003d66c0195c9c61b5004cdc189e0b8e690d8737047"
+  name = "github.com/fatih/color"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "a05da93ebe62ca9fc6791d3376ec4dad01196448"
+  version = "v1.13.0"
+
+[[projects]]
   digest = "1:abeb38ade3f32a92943e5be54f55ed6d6e3b6602761d74b4aab4c9dd45c18abd"
   name = "github.com/fsnotify/fsnotify"
   packages = ["."]
   pruneopts = "UT"
   revision = "c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9"
   version = "v1.4.7"
+
+[[projects]]
+  digest = "1:8dd740e43f2b03e50425ee625b3f062ea1708837a7b7b1ce4e9523de82e6ac1d"
+  name = "github.com/goccy/go-yaml"
+  packages = [
+    ".",
+    "ast",
+    "internal/errors",
+    "lexer",
+    "parser",
+    "printer",
+    "scanner",
+    "token",
+  ]
+  pruneopts = "UT"
+  revision = "e4f32a26722ce33ac79a7b4ad88c26fd0b9c2995"
+  version = "v1.9.5"
 
 [[projects]]
   digest = "1:97df918963298c287643883209a2c3f642e6593379f97ab400c2a2e219ab647d"
@@ -84,6 +133,22 @@
   version = "v1.8.0"
 
 [[projects]]
+  digest = "1:bfd19f00967e10367aaaf4b09545873750ac3cb9762d66243e9b7954327cc113"
+  name = "github.com/mattn/go-colorable"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "e1bb79c8d53c38a60962ad4b8f658226cc983710"
+  version = "v0.1.12"
+
+[[projects]]
+  digest = "1:e66bb4fe1fb8b48e9bed410b198498cef8fa6701a5e3eb0ee7f07b74153a7fbc"
+  name = "github.com/mattn/go-isatty"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "504425e14f742f1f517c4586048b49b37f829c8e"
+  version = "v0.0.14"
+
+[[projects]]
   digest = "1:53bc4cd4914cd7cd52139990d5170d6dc99067ae31c56530621b18b35fc30318"
   name = "github.com/mitchellh/mapstructure"
   packages = ["."]
@@ -125,6 +190,14 @@
   packages = ["."]
   pruneopts = "UT"
   revision = "1efae4548023f60d7a172fead76cccf194cf45de"
+
+[[projects]]
+  digest = "1:0028cb19b2e4c3112225cd871870f2d9cf49b9b4276531f03438a88e94be86fe"
+  name = "github.com/pmezard/go-difflib"
+  packages = ["difflib"]
+  pruneopts = "UT"
+  revision = "792786c7400a136282c1664665ae0a8db921c6c2"
+  version = "v1.0.0"
 
 [[projects]]
   digest = "1:274f67cb6fed9588ea2521ecdac05a6d62a8c51c074c1fccc6a49a40ba80e925"
@@ -194,6 +267,14 @@
   version = "v1.3.1"
 
 [[projects]]
+  digest = "1:f6962ab82ef6c3416526a193862181cfa297e952aad6e64589b7d29193036894"
+  name = "github.com/stretchr/testify"
+  packages = ["assert"]
+  pruneopts = "UT"
+  revision = "083ff1c0449867d0d8d456483ee5fab8e0c0e1e6"
+  version = "v1.7.1"
+
+[[projects]]
   digest = "1:e5cbb07a17113f2fd6b8d0b0af9a0cadb16fc2c76d97ae91801fc1f12ea18dde"
   name = "github.com/sylabs/sif"
   packages = ["pkg/sif"]
@@ -255,6 +336,17 @@
   version = "v0.3.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:24b50a4fdc2e80b81f3914510ebd910b07385bcf1796f3be7c7da1190d51e26e"
+  name = "golang.org/x/xerrors"
+  packages = [
+    ".",
+    "internal",
+  ]
+  pruneopts = "UT"
+  revision = "2f41105eb62f341cfe208d06de4ee3bdd3a083da"
+
+[[projects]]
   digest = "1:56dfffc6e6ceeaebb6db73e02a846a92a850c53130078682993bd028a2ef717d"
   name = "google.golang.org/appengine"
   packages = [
@@ -280,20 +372,32 @@
   revision = "51d6538a90f86fe93ac480b35f37b2be17fef232"
   version = "v2.2.2"
 
+[[projects]]
+  branch = "v3"
+  digest = "1:107a619d3c3bcca214b2b7db810a5dffcd74b5d0262813cb2986e063fae2722f"
+  name = "gopkg.in/yaml.v3"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "496545a6307b2a7d7a710fd516e5e16e8ab62dbc"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/agrison/go-commons-lang/stringUtils",
+    "github.com/deckarep/golang-set",
     "github.com/docker/distribution",
     "github.com/docker/distribution/manifest",
     "github.com/docker/distribution/manifest/schema1",
     "github.com/docker/distribution/manifest/schema2",
     "github.com/docker/libtrust",
+    "github.com/goccy/go-yaml",
     "github.com/opencontainers/go-digest",
     "github.com/phayes/permbits",
     "github.com/sirupsen/logrus",
     "github.com/spf13/cobra",
     "github.com/spf13/viper",
+    "github.com/stretchr/testify/assert",
     "github.com/sylabs/sif/pkg/sif",
     "github.com/vmihailenco/msgpack",
   ]
